@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "cd ../client && npm install && npm run build && cd ../server && tsc",
+    "build": "cd ../client && npm install && npm run build && cd ../server && rm -rf public && cp -r ../client/dist ./public && tsc",
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

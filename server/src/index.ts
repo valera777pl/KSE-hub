@@ -45,12 +45,16 @@ api.route('/notifications', notificationRoutes);
 
 app.route('/api', api);
 
+import fs from 'fs';
 import { serveStatic } from '@hono/node-server/serve-static';
 
 // ─── Serve Frontend Static Files (Production SPA) ───
-const clientDistPath = path.resolve(process.cwd(), '../client/dist');
-app.use('/*', serveStatic({ root: '../client/dist' }));
-app.get('*', serveStatic({ path: '../client/dist/index.html' }));
+const staticRoot = fs.existsSync(path.resolve(process.cwd(), 'public'))
+  ? './public'
+  : (fs.existsSync(path.resolve(process.cwd(), '../client/dist')) ? '../client/dist' : './public');
+
+app.use('/*', serveStatic({ root: staticRoot }));
+app.get('*', serveStatic({ path: `${staticRoot}/index.html` }));
 
 // ─── Start Server ───
 const port = parseInt(process.env.PORT || '3001');
