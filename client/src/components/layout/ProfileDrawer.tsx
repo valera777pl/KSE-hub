@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
 import { useMoodleStore } from '../../stores/moodleStore';
+import { useThemeStore } from '../../stores/themeStore';
 
 interface ProfileDrawerProps {
   onClose: () => void;
@@ -11,6 +12,7 @@ export function ProfileDrawer({ onClose }: ProfileDrawerProps) {
   const { t, i18n } = useTranslation();
   const { user, updateUser } = useAuthStore();
   const { syncCalendar } = useMoodleStore();
+  const { theme, setTheme } = useThemeStore();
   const [formData, setFormData] = useState({
     fullName: user?.fullName || '',
     faculty: user?.faculty || '',
@@ -147,6 +149,25 @@ export function ProfileDrawer({ onClose }: ProfileDrawerProps) {
                   {lang === 'uk' ? '🇺🇦 Українська' : '🇬🇧 English'}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Theme Switcher */}
+          <div className="profile-section">
+            <h3 className="profile-section__title">🎨 Тема оформлення</h3>
+            <div className="tabs">
+              <button
+                className={`tab ${theme === 'light' ? 'tab--active' : ''}`}
+                onClick={() => setTheme('light')}
+              >
+                ☀️ Світла
+              </button>
+              <button
+                className={`tab ${theme === 'dark' ? 'tab--active' : ''}`}
+                onClick={() => setTheme('dark')}
+              >
+                🌙 Темна
+              </button>
             </div>
           </div>
 

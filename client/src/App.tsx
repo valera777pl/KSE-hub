@@ -4,6 +4,7 @@ import './i18n/config';
 import './index.css';
 import { useAuthStore } from './stores/authStore';
 import { useNotificationStore } from './stores/notificationStore';
+import { useThemeStore } from './stores/themeStore';
 import { TopBar } from './components/layout/TopBar';
 import { BottomNav } from './components/layout/BottomNav';
 import { ProfileDrawer } from './components/layout/ProfileDrawer';
@@ -25,6 +26,9 @@ export default function App() {
   useEffect(() => {
     fetchUser();
     fetchNotifications();
+
+    // Apply theme from store
+    document.documentElement.setAttribute('data-theme', useThemeStore.getState().theme);
 
     // Apply Telegram theme
     try {
