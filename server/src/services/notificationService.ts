@@ -1,6 +1,7 @@
 import { db } from '../db/connection.js';
-import { notifications } from '../db/schema.js';
+import { notifications, users } from '../db/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
+import { escapeHtml, sendToUser } from '../bot/send.js';
 
 // SSE connections store
 const connections = new Map<number, Set<ReadableStreamDefaultController>>();
@@ -26,6 +27,17 @@ export class NotificationService {
       type: 'notification',
       data: notification,
     });
+
+    // And to the Telegram chat
+    const [user] = await db
+      .select({ telegramId: users.telegramId, botBlocked: users.botBlocked })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (user && !user.botBlocked) {
+      const body = message ? `\n${escapeHtml(message)}` : '';
+      await sendToUser(user.telegramId, `<b>${escapeHtml(title)}</b>${body}`);
+    }
 
     return notification;
   }

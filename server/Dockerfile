@@ -20,4 +20,4 @@ COPY --from=builder /app/src/db ./src/db
 
 EXPOSE 3001
 
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/dev.js"]

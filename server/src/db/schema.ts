@@ -45,10 +45,30 @@ export const users = pgTable('users', {
   faculty: varchar('faculty', { length: 255 }),
   year: integer('year'),
   languagePref: languageEnum('language_pref').default('uk'),
+  // Telegram bot: which sources go into the digest and at what hour (Europe/Kyiv)
+  digestSources: jsonb('digest_sources').$type<DigestSource[]>().default(['moodle', 'gmail', 'slack']).notNull(),
+  digestHour: integer('digest_hour').default(20).notNull(),
+  lastDigestAt: timestamp('last_digest_at'),
+  calendarSyncedAt: timestamp('calendar_synced_at'),
+  botBlocked: boolean('bot_blocked').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
   uniqueIndex('users_telegram_id_idx').on(table.telegramId),
+]);
+
+export type DigestSource = 'moodle' | 'gmail' | 'slack';
+
+/* ───────────── DEADLINE REMINDERS ───────────── */
+
+// One row per (assignment, kind) so the cron never sends the same reminder twice
+export const deadlineReminders = pgTable('deadline_reminders', {
+  id: serial('id').primaryKey(),
+  assignmentId: integer('assignment_id').notNull().references(() => moodleAssignments.id, { onDelete: 'cascade' }),
+  kind: varchar('kind', { length: 10 }).notNull(),
+  sentAt: timestamp('sent_at').defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('deadline_reminders_assignment_kind_idx').on(table.assignmentId, table.kind),
 ]);
 
 /* ───────────── ROOMS ───────────── */

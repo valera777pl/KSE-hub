@@ -11,10 +11,15 @@ import * as schema from './schema.js';
 const connectionString = process.env.DATABASE_URL || 
   'postgresql://kse_hub:kse_hub_secret@localhost:5432/kse_hub';
 
+// On Vercel every function instance opens its own pool, so keep it to one
+// connection and skip prepared statements (Neon's pooler doesn't keep them).
+const isServerless = !!process.env.VERCEL;
+
 const queryClient = postgres(connectionString, {
-  max: 10,
+  max: isServerless ? 1 : 10,
   idle_timeout: 20,
   connect_timeout: 10,
+  prepare: !isServerless,
 });
 
 export const db = drizzle(queryClient, { schema });

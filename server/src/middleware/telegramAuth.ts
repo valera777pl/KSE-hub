@@ -62,7 +62,7 @@ export async function telegramAuth(c: Context, next: Next) {
   return next();
 }
 
-async function upsertUser(tgUser: TelegramUser) {
+export async function upsertUser(tgUser: TelegramUser) {
   const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
 
   const existing = await db

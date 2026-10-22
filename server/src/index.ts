@@ -4,7 +4,6 @@ import dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -17,6 +16,7 @@ import { careerRoutes } from './routes/careers.js';
 import { copilotRoutes } from './routes/copilot.js';
 import { userRoutes } from './routes/users.js';
 import { notificationRoutes } from './routes/notifications.js';
+import { botRoutes, cronRoutes } from './routes/bot.js';
 
 const app = new Hono();
 
@@ -30,6 +30,10 @@ app.use('*', errorHandler);
 
 // ─── Health Check ───
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
+
+// ─── Telegram bot webhook & scheduled jobs (own auth, no initData) ───
+app.route('/bot', botRoutes);
+app.route('/cron', cronRoutes);
 
 // ─── Protected Routes (Telegram Auth required) ───
 const api = new Hono();
@@ -45,25 +49,4 @@ api.route('/notifications', notificationRoutes);
 
 app.route('/api', api);
 
-import fs from 'fs';
-import { serveStatic } from '@hono/node-server/serve-static';
-
-// ─── Serve Frontend Static Files (Production SPA) ───
-const staticRoot = fs.existsSync(path.resolve(process.cwd(), 'public'))
-  ? './public'
-  : (fs.existsSync(path.resolve(process.cwd(), '../client/dist')) ? '../client/dist' : './public');
-
-app.use('/*', serveStatic({ root: staticRoot }));
-app.get('*', serveStatic({ path: `${staticRoot}/index.html` }));
-
-// ─── Start Server ───
-const port = parseInt(process.env.PORT || '3001');
-
-console.log(`
-╔═══════════════════════════════════════╗
-║         🎓 KSE Hub API Server        ║
-║       Running on port ${port}           ║
-╚═══════════════════════════════════════╝
-`);
-
-serve({ fetch: app.fetch, port });
+export default app;
