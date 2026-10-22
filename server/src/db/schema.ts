@@ -71,6 +71,54 @@ export const deadlineReminders = pgTable('deadline_reminders', {
   uniqueIndex('deadline_reminders_assignment_kind_idx').on(table.assignmentId, table.kind),
 ]);
 
+/* ───────────── GOOGLE (Gmail + Calendar) ───────────── */
+
+export const googleAccounts = pgTable('google_accounts', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
+  email: varchar('email', { length: 255 }).notNull(),
+  // AES-256-GCM encrypted (utils/crypto.ts), never stored in plain text
+  refreshTokenEnc: text('refresh_token_enc').notNull(),
+  scopes: text('scopes'),
+  lastSyncAt: timestamp('last_sync_at'),
+  syncError: text('sync_error'),
+  connectedAt: timestamp('connected_at').defaultNow().notNull(),
+});
+
+export type EmailSource = 'gmail' | 'slack' | 'moodle';
+export type EmailCategory =
+  | 'deadline' | 'event' | 'internship' | 'job' | 'startup' | 'admin' | 'newsletter' | 'other';
+
+/**
+ * One summary per distinct piece of content. The same mailing sent to many
+ * students (same Message-ID, or same normalized body) is summarized once.
+ */
+export const summaries = pgTable('summaries', {
+  id: serial('id').primaryKey(),
+  messageIdHeader: varchar('message_id_header', { length: 500 }).unique(),
+  bodyHash: varchar('body_hash', { length: 64 }).notNull().unique(),
+  summary: text('summary').notNull(),
+  category: varchar('category', { length: 20 }).$type<EmailCategory>().notNull(),
+  important: boolean('important').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const emails = pgTable('emails', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  gmailId: varchar('gmail_id', { length: 100 }).notNull(),
+  source: varchar('source', { length: 10 }).$type<EmailSource>().default('gmail').notNull(),
+  fromName: varchar('from_name', { length: 255 }),
+  subject: text('subject'),
+  receivedAt: timestamp('received_at').notNull(),
+  summaryId: integer('summary_id').references(() => summaries.id, { onDelete: 'set null' }),
+  digestedAt: timestamp('digested_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('emails_user_gmail_idx').on(table.userId, table.gmailId),
+  index('emails_user_digest_idx').on(table.userId, table.digestedAt),
+]);
+
 /* ───────────── ROOMS ───────────── */
 
 export const rooms = pgTable('rooms', {

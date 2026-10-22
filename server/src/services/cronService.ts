@@ -1,14 +1,17 @@
 import { db } from '../db/connection.js';
-import { deadlineReminders, moodleAssignments, moodleCourses, users } from '../db/schema.js';
-import { and, asc, eq, gt, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import { deadlineReminders, googleAccounts, moodleAssignments, moodleCourses, users } from '../db/schema.js';
+import { and, asc, eq, gt, isNotNull, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 import { MoodleService } from './moodleService.js';
 import { DigestService } from './digestService.js';
+import { GmailService } from './gmailService.js';
 import { escapeHtml, openAppKeyboard, sendToUser } from '../bot/send.js';
 import { formatKyiv, kyivHour } from '../utils/kyivTime.js';
 
 const HOUR = 3_600_000;
 const CALENDAR_SYNC_EVERY = 3 * HOUR;
 const CALENDARS_PER_TICK = 10;
+const GMAIL_SYNC_EVERY = 10 * 60_000;
+const GMAIL_ACCOUNTS_PER_TICK = 5;
 
 /**
  * One cron "tick" (an external scheduler calls it every ~10 minutes).
@@ -17,9 +20,37 @@ const CALENDARS_PER_TICK = 10;
 export class CronService {
   static async tick() {
     const calendars = await this.syncCalendars();
+    const emails = await this.syncGmail();
     const reminders = await this.sendDeadlineReminders();
     const digests = await this.sendDigests();
-    return { calendars, reminders, digests };
+    return { calendars, emails, reminders, digests };
+  }
+
+  /** Pull new mail for the accounts synced longest ago. Revoked accounts wait for a reconnect. */
+  static async syncGmail() {
+    if (!process.env.GOOGLE_CLIENT_ID) return 0;
+    const staleBefore = new Date(Date.now() - GMAIL_SYNC_EVERY);
+    const due = await db
+      .select()
+      .from(googleAccounts)
+      .where(
+        and(
+          or(isNull(googleAccounts.syncError), ne(googleAccounts.syncError, 'invalid_grant')),
+          or(isNull(googleAccounts.lastSyncAt), lt(googleAccounts.lastSyncAt, staleBefore))
+        )
+      )
+      .orderBy(sql`${googleAccounts.lastSyncAt} asc nulls first`)
+      .limit(GMAIL_ACCOUNTS_PER_TICK);
+
+    let stored = 0;
+    for (const account of due) {
+      try {
+        stored += await GmailService.sync(account);
+      } catch (err) {
+        console.error(`Gmail sync failed for ${account.email}:`, err);
+      }
+    }
+    return stored;
   }
 
   /** Re-sync the Moodle calendars that are the most out of date. */
@@ -117,7 +148,7 @@ export class CronService {
     for (const user of due) {
       // Stamp first: a crash mid-send must not turn into a duplicate digest
       await db.update(users).set({ lastDigestAt: new Date() }).where(eq(users.id, user.id));
-      const text = await DigestService.build(user);
+      const text = await DigestService.build(user, { markDigested: true });
       if (text && (await sendToUser(user.telegramId, text, openAppKeyboard()))) sent++;
     }
     return sent;

@@ -27,9 +27,30 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+const TELEGRAM_LIMIT = 4096;
+
+/** Split at blank lines so no chunk exceeds Telegram's limit (tags never span paragraphs here). */
+export function chunkHtml(html: string, limit = TELEGRAM_LIMIT - 96): string[] {
+  const chunks: string[] = [];
+  let current = '';
+  // An oversized paragraph is split into its lines; each line keeps its own tags closed
+  const pieces = html.split('\n\n').flatMap((para) => (para.length > limit ? para.split('\n') : [para]));
+  for (const piece of pieces) {
+    if (current && current.length + piece.length + 2 > limit) {
+      chunks.push(current);
+      current = piece;
+    } else {
+      current = current ? `${current}\n\n${piece}` : piece;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
 /**
- * Send an HTML message to a user. If the user blocked the bot, remember it
- * so the cron stops trying; other errors are logged and swallowed.
+ * Send an HTML message to a user, split into several if it's too long.
+ * If the user blocked the bot, remember it so the cron stops trying;
+ * other errors are logged and swallowed.
  */
 export async function sendToUser(
   telegramId: number,
@@ -37,11 +58,15 @@ export async function sendToUser(
   keyboard?: InlineKeyboard
 ): Promise<boolean> {
   try {
-    await botApi().sendMessage(telegramId, html, {
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true },
-      reply_markup: keyboard,
-    });
+    const chunks = chunkHtml(html);
+    for (const [i, chunk] of chunks.entries()) {
+      await botApi().sendMessage(telegramId, chunk, {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        // Buttons go under the last part
+        reply_markup: i === chunks.length - 1 ? keyboard : undefined,
+      });
+    }
     return true;
   } catch (err) {
     if (err instanceof GrammyError && err.error_code === 403) {

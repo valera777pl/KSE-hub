@@ -17,6 +17,7 @@ import { copilotRoutes } from './routes/copilot.js';
 import { userRoutes } from './routes/users.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { botRoutes, cronRoutes } from './routes/bot.js';
+import { googleCallback, googleRoutes } from './routes/google.js';
 
 const app = new Hono();
 
@@ -26,7 +27,7 @@ app.use('*', cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,
 }));
-app.use('*', errorHandler);
+app.onError(errorHandler);
 
 // ─── Health Check ───
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
@@ -34,6 +35,9 @@ app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOStri
 // ─── Telegram bot webhook & scheduled jobs (own auth, no initData) ───
 app.route('/bot', botRoutes);
 app.route('/cron', cronRoutes);
+
+// Google redirects the browser here without Telegram initData; must be mounted before /api auth
+app.route('/api/google', googleCallback);
 
 // ─── Protected Routes (Telegram Auth required) ───
 const api = new Hono();
@@ -46,6 +50,7 @@ api.route('/careers', careerRoutes);
 api.route('/copilot', copilotRoutes);
 api.route('/users', userRoutes);
 api.route('/notifications', notificationRoutes);
+api.route('/google', googleRoutes);
 
 app.route('/api', api);
 

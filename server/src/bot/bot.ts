@@ -4,7 +4,8 @@ import { users, type DigestSource } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { upsertUser } from '../middleware/telegramAuth.js';
 import { DigestService, SOURCE_LABELS } from '../services/digestService.js';
-import { appUrl, escapeHtml, openAppKeyboard } from './send.js';
+import { GoogleService } from '../services/googleService.js';
+import { appUrl, chunkHtml, escapeHtml, openAppKeyboard } from './send.js';
 import { formatKyiv, timeLeft } from '../utils/kyivTime.js';
 
 type DbUser = typeof users.$inferSelect;
@@ -18,6 +19,7 @@ export const BOT_COMMANDS = [
   { command: 'deadlines', description: 'Дедлайни на тиждень' },
   { command: 'digest', description: 'Дайджест зараз' },
   { command: 'settings', description: 'Що і коли надсилати' },
+  { command: 'connect_google', description: 'Підключити пошту @kse.org.ua' },
   { command: 'help', description: 'Що вміє бот' },
   { command: 'delete_my_data', description: 'Видалити мої дані' },
 ];
@@ -78,12 +80,16 @@ export function getBot(): Bot<BotContext> {
       const course = courseName ? `\n  <i>${escapeHtml(courseName)}</i>` : '';
       return `• <b>${escapeHtml(assignment.title)}</b>${course}\n  ⏰ ${formatKyiv(due)} (${timeLeft(due, now)})`;
     });
-    await ctx.reply(`📚 <b>Дедлайни на тиждень</b>\n\n${lines.join('\n\n')}`, { parse_mode: 'HTML' });
+    for (const chunk of chunkHtml(`📚 <b>Дедлайни на тиждень</b>\n\n${lines.join('\n\n')}`)) {
+      await ctx.reply(chunk, { parse_mode: 'HTML' });
+    }
   });
 
   bot.command('digest', async (ctx) => {
     const text = await DigestService.build(ctx.dbUser);
-    await ctx.reply(text ?? 'Поки нічого нового в обраних джерелах ✨', { parse_mode: 'HTML' });
+    for (const chunk of chunkHtml(text ?? 'Поки нічого нового в обраних джерелах ✨')) {
+      await ctx.reply(chunk, { parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+    }
   });
 
   bot.command('settings', async (ctx) => {
@@ -103,14 +109,30 @@ export function getBot(): Bot<BotContext> {
     await updateSettings(ctx, { digestHour: parseInt(ctx.match[1], 10) });
   });
 
+  bot.command('connect_google', async (ctx) => {
+    const account = await GoogleService.getAccount(ctx.dbUser.id);
+    const status = account
+      ? account.syncError === 'invalid_grant'
+        ? `⚠️ Доступ до <b>${escapeHtml(account.email)}</b> відкликано — підключи знову.`
+        : `Зараз підключено <b>${escapeHtml(account.email)}</b>. Можна перепідключити або змінити акаунт.`
+      : 'Підключи корпоративну пошту, щоб отримувати короткий зміст листів у дайджесті.';
+    await ctx.reply(
+      `${status}
+
+Ми бачимо лише листи (тільки читання) і календар. Відключити — /delete_my_data.`,
+      { parse_mode: 'HTML', reply_markup: new InlineKeyboard().url('📧 Підключити @kse.org.ua', GoogleService.authUrl(ctx.dbUser.id)) }
+    );
+  });
+
   bot.command('delete_my_data', async (ctx) => {
     await ctx.reply(
-      'Видалити всі твої дані з KSE Hub? Це прибере підключення Moodle, дедлайни, профіль VentureMatch і бронювання. Скасувати не можна.',
+      'Видалити всі твої дані з KSE Hub? Це прибере підключення Moodle і пошти, листи, дедлайни, профіль VentureMatch і бронювання. Скасувати не можна.',
       { reply_markup: new InlineKeyboard().text('🗑 Так, видалити', 'delete:yes').text('Скасувати', 'delete:no') }
     );
   });
 
   bot.callbackQuery('delete:yes', async (ctx) => {
+    await GoogleService.disconnect(ctx.dbUser.id).catch(() => {});
     await db.delete(users).where(eq(users.id, ctx.dbUser.id));
     await ctx.answerCallbackQuery();
     await ctx.editMessageText('Готово, твої дані видалено. Натисни /start, якщо захочеш повернутися.');
