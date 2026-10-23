@@ -7,11 +7,11 @@ import { and, eq, inArray, or } from 'drizzle-orm';
 import { GoogleService } from './googleService.js';
 import { sha256 } from '../utils/crypto.js';
 import { escapeHtml, sendToUser } from '../bot/send.js';
-import { chatCompletion } from '../ai/client.js';
+import { chatCompletion, hasAI } from '../ai/client.js';
 
-// Gemini's free tier allows only a few requests per minute
-const MAX_MESSAGES_PER_SYNC = 15;
-const SUMMARY_CONCURRENCY = 2;
+// Gemini's free tier allows only a few requests per minute, shared with the assistant
+const MAX_MESSAGES_PER_SYNC = 10;
+const SUMMARY_CONCURRENCY = 1;
 const BASE_QUERY = '-in:spam -in:trash -category:promotions -category:social';
 const CATEGORIES: EmailCategory[] = ['deadline', 'event', 'internship', 'job', 'startup', 'admin', 'newsletter', 'other'];
 
@@ -143,7 +143,7 @@ async function findSummary(messageIdHeader: string | null, bodyHash: string): Pr
 async function summarize(subject: string, from: string, body: string) {
   // Without any AI key the digest still works, just with snippets. A failing
   // model throws instead, so the email is retried rather than cached as a snippet.
-  if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
+  if (!hasAI()) {
     const snippet = body.replace(/\s+/g, ' ').trim().slice(0, 220);
     return { summary: snippet ? `${snippet}…` : subject, category: 'other' as EmailCategory, important: false };
   }
@@ -151,7 +151,7 @@ async function summarize(subject: string, from: string, body: string) {
 }
 
 async function summarizeWithModel(subject: string, from: string, body: string) {
-  const completion = await chatCompletion('summary', {
+  const completion = await chatCompletion({
     response_format: { type: 'json_object' },
     temperature: 0.2,
     messages: [

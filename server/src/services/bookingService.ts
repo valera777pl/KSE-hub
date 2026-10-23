@@ -18,6 +18,11 @@ export class BookingService {
     startTime: Date,
     endTime: Date
   ) {
+    // postgres.js can't serialize Date in these raw queries. Columns are
+    // `timestamp` (UTC wall time, same as drizzle writes), so pass ISO strings.
+    const startIso = startTime.toISOString();
+    const endIso = endTime.toISOString();
+
     // Use raw SQL transaction for row-level locking
     const result = await queryClient.begin(async (tx) => {
       // 1. Check daily quota
@@ -28,8 +33,8 @@ export class BookingService {
         ), 0)::float AS total_hours
         FROM bookings
         WHERE user_id = ${userId}
-          AND start_time >= ${dayStart}
-          AND start_time <= ${dayEnd}
+          AND start_time >= ${dayStart.toISOString()}
+          AND start_time <= ${dayEnd.toISOString()}
           AND status = 'active'
       `;
 
@@ -57,18 +62,30 @@ export class BookingService {
         SELECT COUNT(*)::int AS cnt FROM bookings
         WHERE room_id = ${roomId}
           AND status = 'active'
-          AND start_time < ${endTime}
-          AND end_time > ${startTime}
+          AND start_time < ${endIso}
+          AND end_time > ${startIso}
       `;
 
       if (overlap.cnt > 0) {
         throw new AppError('Time slot already booked', 409);
       }
 
-      // 4. Insert booking
+      // 4. One room at a time per student
+      const [own] = await tx`
+        SELECT COUNT(*)::int AS cnt FROM bookings
+        WHERE user_id = ${userId}
+          AND status = 'active'
+          AND start_time < ${endIso}
+          AND end_time > ${startIso}
+      `;
+      if (own.cnt > 0) {
+        throw new AppError('You already have a booking at this time', 409);
+      }
+
+      // 5. Insert booking
       const [booking] = await tx`
         INSERT INTO bookings (room_id, user_id, start_time, end_time, status)
-        VALUES (${roomId}, ${userId}, ${startTime}, ${endTime}, 'active')
+        VALUES (${roomId}, ${userId}, ${startIso}, ${endIso}, 'active')
         RETURNING *
       `;
 

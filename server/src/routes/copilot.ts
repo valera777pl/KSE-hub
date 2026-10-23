@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { AIService } from '../ai/aiService.js';
 import { chatMessageSchema } from '../utils/validators.js';
+import { AppError } from '../middleware/errorHandler.js';
 
 const copilotRoutes = new Hono();
 
@@ -10,8 +11,12 @@ copilotRoutes.post('/chat', async (c) => {
   const body = await c.req.json();
   const { message } = chatMessageSchema.parse(body);
 
-  const response = await AIService.chat(user.id, message);
-  return c.json(response);
+  try {
+    return c.json(await AIService.chat(user.id, message));
+  } catch (err) {
+    console.error('Assistant failed:', err);
+    throw new AppError('ІІ зараз перевантажений, спробуй за хвилину 🙏', 503);
+  }
 });
 
 // DELETE /copilot/history — Start a new conversation

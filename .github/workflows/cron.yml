@@ -1,6 +1,6 @@
 # Free scheduler for the bot: Vercel Hobby only allows daily crons, so GitHub
 # calls /cron/tick every 10 minutes (deadline reminders, digests, Moodle sync).
-# Needs repo secrets APP_URL (https://<project>.vercel.app) and CRON_SECRET.
+# Needs the repo secret CRON_SECRET (same value as in Vercel).
 name: cron-tick
 
 on:
@@ -15,5 +15,5 @@ jobs:
     steps:
       - name: Call /cron/tick
         run: |
-          curl -fsS --max-time 280 -X POST "${{ secrets.APP_URL }}/cron/tick" \
+          curl -fsS --max-time 280 -X POST "https://kse-hub.vercel.app/cron/tick" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

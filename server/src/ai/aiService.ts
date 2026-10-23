@@ -1,4 +1,5 @@
 import type OpenAI from 'openai';
+import { BookingService } from '../services/bookingService.js';
 import { MoodleService } from '../services/moodleService.js';
 import { DigestService } from '../services/digestService.js';
 import { db } from '../db/connection.js';
@@ -6,25 +7,27 @@ import { chatMessages, emails, opportunities, summaries } from '../db/schema.js'
 import { and, desc, eq, gt, gte, ilike, isNull, or } from 'drizzle-orm';
 import { toolDefinitions } from './tools.js';
 import { chatCompletion } from './client.js';
-import { formatKyiv } from '../utils/kyivTime.js';
+import { formatKyiv, kyivNowForPrompt } from '../utils/kyivTime.js';
 
 const HISTORY_TURNS = 10;
 const MAX_TOOL_ROUNDS = 3;
 
 function systemPrompt(): string {
   return `Ти — KSE Hub, ІІ-помічник студентів Київської школи економіки (KSE).
-Зараз: ${formatKyiv(new Date())} (Київ).
+Зараз у Києві: ${kyivNowForPrompt()}. «Завтра», «у понеділок» тощо рахуй від цієї дати.
 
 Ти допомагаєш з:
-1. Дедлайнами Moodle — завдання та тести студента.
-2. Листами — короткий зміст пошти @kse.org.ua, сповіщень Slack і Moodle.
-3. Стажуваннями, вакансіями та грантами.
+1. Бронюванням кімнат — Skype Rooms і Silent Boxes, максимум 3 год на день.
+2. Дедлайнами Moodle — завдання та тести студента.
+3. Листами — короткий зміст пошти @kse.org.ua, сповіщень Slack і Moodle.
+4. Стажуваннями, вакансіями та грантами.
 
 Правила:
 - Відповідай коротко, тією мовою, якою пише студент (за замовчуванням українською).
 - Форматування: лише **жирний**, *курсив*, \`код\`, [посилання](url) і списки з "• ". Без таблиць і заголовків.
 - Дані про студента бери тільки з інструментів. Нічого не вигадуй: якщо даних немає — так і скажи.
-- Бронювання кімнат: ти не бронюєш сам. Скажи, що це робиться через бота BookingRooms у Slack KSE (кнопки Book time / Book room / Hot Booking), максимум 3 год на день.
+- Бронювання: спершу перевір вільні кімнати (get_available_rooms), запропонуй варіант і бронюй лише після згоди студента. Час — за Києвом, передавай у ISO 8601 з київським поясом з рядка «Зараз».
+- Якщо інструмент повернув "error" — дія НЕ виконана. Скажи студенту, що саме не вийшло, і не пиши, що все готово.
 - Про правила, програми й процедури KSE відповідай лише тим, у чому впевнений; інакше порадь звернутися до Student Office або на kse.ua.`;
 }
 
@@ -44,7 +47,7 @@ export class AIService {
 
     let reply: string | null = null;
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-      const response = await chatCompletion('assistant', {
+      const response = await chatCompletion({
         messages,
         // Last round: no tools, force a text answer
         ...(round < MAX_TOOL_ROUNDS ? { tools: toolDefinitions, tool_choice: 'auto' as const } : {}),
@@ -91,6 +94,33 @@ export class AIService {
 
   private static async executeTool(name: string, args: Record<string, any>, userId: number): Promise<unknown> {
     switch (name) {
+      case 'get_available_rooms': {
+        const start = args.start_time ? new Date(args.start_time) : new Date();
+        const end = args.end_time ? new Date(args.end_time) : new Date(start.getTime() + 60 * 60 * 1000);
+        return BookingService.getAvailableRooms(start, end, args.room_type);
+      }
+
+      case 'book_room': {
+        const result = await BookingService.createBooking(userId, args.room_id, new Date(args.start_time), new Date(args.end_time));
+        return { success: true, room: result.room.name, from: formatKyiv(new Date(args.start_time)), to: formatKyiv(new Date(args.end_time)) };
+      }
+
+      case 'hot_book_room': {
+        const { booking, room } = await BookingService.hotBook(userId, args.room_id);
+        return { success: true, room: room.name, from: formatKyiv(new Date(booking.start_time)), to: formatKyiv(new Date(booking.end_time)) };
+      }
+
+      case 'get_booking_quota':
+        return BookingService.getRemainingQuota(userId);
+
+      case 'get_my_bookings': {
+        // Kyiv times only, so the model doesn't echo UTC back to the student
+        const rows = await BookingService.getUserBookings(userId);
+        return rows.map(({ booking, room }) => ({
+          room: room?.name, from: formatKyiv(booking.startTime), to: formatKyiv(booking.endTime), status: booking.status,
+        }));
+      }
+
       case 'get_my_deadlines': {
         if (args.include_completed) return MoodleService.getDeadlines(userId, true);
         const days = Math.min(Math.max(Number(args.days) || 14, 1), 90);
