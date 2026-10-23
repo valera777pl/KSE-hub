@@ -36,6 +36,7 @@ export class CronService {
       .where(
         and(
           or(isNull(googleAccounts.syncError), ne(googleAccounts.syncError, 'invalid_grant')),
+          // a partially failed sync keeps its old lastSyncAt, so it's picked up again next tick
           or(isNull(googleAccounts.lastSyncAt), lt(googleAccounts.lastSyncAt, staleBefore))
         )
       )

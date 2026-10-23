@@ -13,15 +13,15 @@ const googleCallback = new Hono();
 googleCallback.get('/callback', async (c) => {
   const userId = verifyState(c.req.query('state') ?? '');
   const code = c.req.query('code');
-  if (!userId) return c.html(page('Посилання застаріло', 'Повернись у бота і натисни «Підключити пошту» ще раз.'), 400);
-  if (!code) return c.html(page('Доступ не надано', 'Без дозволу Google ми не можемо читати пошту. Спробуй ще раз з бота.'), 400);
+  if (!userId) return c.html(page('Посилання застаріло', 'Повернись у KSE Hub і натисни «Підключити пошту» ще раз.'), 400);
+  if (!code) return c.html(page('Доступ не надано', 'Без дозволу Google ми не можемо читати пошту. Спробуй ще раз з KSE Hub.'), 400);
 
   try {
     const email = await GoogleService.completeLogin(userId, code);
     const [user] = await db.select({ telegramId: users.telegramId }).from(users).where(eq(users.id, userId)).limit(1);
     if (user) {
       await sendToUser(user.telegramId,
-        `✅ Пошту <b>${escapeHtml(email)}</b> підключено.\n\nПерші листи з'являться в дайджесті протягом 10 хвилин. Що надсилати — /settings.`);
+        `✅ Пошту <b>${escapeHtml(email)}</b> підключено.\n\nПерші листи з'являться в дайджесті протягом 10 хвилин. Що й коли надсилати — у міні-застосунку → Профіль.`);
     }
     return c.html(page('Готово ✅', `Пошту ${email} підключено. Можна повертатися в Telegram.`));
   } catch (err: any) {

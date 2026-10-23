@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { db } from '../db/connection.js';
 import {
   emails, googleAccounts, opportunities, summaries, users,
@@ -8,17 +7,11 @@ import { and, eq, inArray, or } from 'drizzle-orm';
 import { GoogleService } from './googleService.js';
 import { sha256 } from '../utils/crypto.js';
 import { escapeHtml, sendToUser } from '../bot/send.js';
+import { chatCompletion } from '../ai/client.js';
 
-// Any OpenAI-compatible API. For Gemini's free tier set
-// SUMMARY_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/ and SUMMARY_API_KEY from AI Studio.
-const openai = new OpenAI({
-  apiKey: process.env.SUMMARY_API_KEY || process.env.OPENAI_API_KEY,
-  baseURL: process.env.SUMMARY_BASE_URL || undefined,
-});
-const SUMMARY_MODEL = process.env.SUMMARY_MODEL || 'gpt-4o-mini';
-
-const MAX_MESSAGES_PER_SYNC = 25;
-const SUMMARY_CONCURRENCY = 5;
+// Gemini's free tier allows only a few requests per minute
+const MAX_MESSAGES_PER_SYNC = 15;
+const SUMMARY_CONCURRENCY = 2;
 const BASE_QUERY = '-in:spam -in:trash -category:promotions -category:social';
 const CATEGORIES: EmailCategory[] = ['deadline', 'event', 'internship', 'job', 'startup', 'admin', 'newsletter', 'other'];
 
@@ -53,17 +46,21 @@ export class GmailService {
     const fresh = ids.filter((id) => !knownIds.has(id));
 
     const stored: StoredEmail[] = [];
+    let failed = 0;
     await inBatches(fresh, SUMMARY_CONCURRENCY, async (id) => {
       try {
         const email = await this.ingest(account, token, id);
         if (email) stored.push(email);
       } catch (err) {
+        failed++;
         console.error(`Gmail ingest failed (${account.email}, ${id}):`, err);
       }
     });
 
+    // On failures keep the old sync point: the next run lists the same window
+    // again, skips what's stored, and retries the rest
     await db.update(googleAccounts)
-      .set({ lastSyncAt: new Date(), syncError: null })
+      .set(failed ? { syncError: `${failed} message(s) failed` } : { lastSyncAt: new Date(), syncError: null })
       .where(eq(googleAccounts.id, account.id));
 
     await this.pushUrgent(account.userId, stored);
@@ -144,19 +141,17 @@ async function findSummary(messageIdHeader: string | null, bodyHash: string): Pr
 }
 
 async function summarize(subject: string, from: string, body: string) {
-  try {
-    return await summarizeWithModel(subject, from, body);
-  } catch (err) {
-    // No AI (quota, outage) still means the email reaches the digest, just as a snippet
-    console.error('Summary model failed, using snippet:', err instanceof Error ? err.message : err);
+  // Without any AI key the digest still works, just with snippets. A failing
+  // model throws instead, so the email is retried rather than cached as a snippet.
+  if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
     const snippet = body.replace(/\s+/g, ' ').trim().slice(0, 220);
     return { summary: snippet ? `${snippet}…` : subject, category: 'other' as EmailCategory, important: false };
   }
+  return summarizeWithModel(subject, from, body);
 }
 
 async function summarizeWithModel(subject: string, from: string, body: string) {
-  const completion = await openai.chat.completions.create({
-    model: SUMMARY_MODEL,
+  const completion = await chatCompletion('summary', {
     response_format: { type: 'json_object' },
     temperature: 0.2,
     messages: [

@@ -10,13 +10,14 @@ copilotRoutes.post('/chat', async (c) => {
   const body = await c.req.json();
   const { message } = chatMessageSchema.parse(body);
 
-  const response = await AIService.chat(
-    user.id,
-    message,
-    user.languagePref || 'uk'
-  );
-
+  const response = await AIService.chat(user.id, message);
   return c.json(response);
+});
+
+// DELETE /copilot/history — Start a new conversation
+copilotRoutes.delete('/history', async (c) => {
+  await AIService.clearHistory(c.get('dbUser').id);
+  return c.json({ success: true });
 });
 
 export { copilotRoutes };

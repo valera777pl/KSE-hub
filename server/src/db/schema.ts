@@ -119,6 +119,19 @@ export const emails = pgTable('emails', {
   index('emails_user_digest_idx').on(table.userId, table.digestedAt),
 ]);
 
+/* ───────────── AI ASSISTANT ───────────── */
+
+// Recent turns of the student's chat with the assistant (bot chat and mini app share it)
+export const chatMessages = pgTable('chat_messages', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: varchar('role', { length: 10 }).$type<'user' | 'assistant'>().notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('chat_messages_user_idx').on(table.userId, table.createdAt),
+]);
+
 /* ───────────── ROOMS ───────────── */
 
 export const rooms = pgTable('rooms', {

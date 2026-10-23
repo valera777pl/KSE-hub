@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { createHash, timingSafeEqual } from 'crypto';
-import { webhookCallback } from 'grammy';
+import { waitUntil } from '@vercel/functions';
+import type { Update } from 'grammy/types';
 import { BOT_COMMANDS, getBot } from '../bot/bot.js';
 import { appUrl } from '../bot/send.js';
 import { CronService } from '../services/cronService.js';
@@ -24,15 +25,22 @@ botRoutes.post('/webhook', async (c) => {
   if (c.req.header('X-Telegram-Bot-Api-Secret-Token') !== webhookSecret()) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
-  const handle = webhookCallback(getBot(), 'hono', { secretToken: webhookSecret() });
-  try {
-    return await handle(c);
-  } catch (err) {
-    // A non-2xx makes Telegram redeliver the same update forever; log it and ack instead
-    console.error('Bot update failed:', err);
-    return c.json({ ok: true });
-  }
+  // Ack right away and finish in the background: AI replies can take longer than
+  // Telegram waits, and a slow or non-2xx answer makes it redeliver the update
+  const update = await c.req.json<Update>();
+  waitUntil(handleUpdate(update));
+  return c.json({ ok: true });
 });
+
+async function handleUpdate(update: Update) {
+  try {
+    const bot = getBot();
+    if (!bot.isInited()) await bot.init();
+    await bot.handleUpdate(update);
+  } catch (err) {
+    console.error('Bot update failed:', err);
+  }
+}
 
 // POST /bot/setup — one-time: point Telegram at this deployment (Authorization: Bearer BOT_SECRET)
 botRoutes.post('/setup', async (c) => {

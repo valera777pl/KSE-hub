@@ -11,8 +11,19 @@ export interface User {
   faculty: string | null;
   year: number | null;
   languagePref: 'uk' | 'en';
+  digestSources: DigestSource[];
+  digestHour: number; // Kyiv hour, -1 = digest off
   createdAt: string;
   updatedAt: string;
+}
+
+export type DigestSource = 'moodle' | 'gmail' | 'slack';
+
+export interface GoogleStatus {
+  connected: boolean;
+  email: string | null;
+  needsReconnect: boolean;
+  lastSyncAt: string | null;
 }
 
 /* ─── Room Booking ─── */

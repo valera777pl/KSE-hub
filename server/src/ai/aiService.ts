@@ -1,185 +1,153 @@
-import OpenAI from 'openai';
-import { BookingService } from '../services/bookingService.js';
+import type OpenAI from 'openai';
 import { MoodleService } from '../services/moodleService.js';
+import { DigestService } from '../services/digestService.js';
 import { db } from '../db/connection.js';
-import { opportunities } from '../db/schema.js';
-import { eq, ilike, and, gte } from 'drizzle-orm';
+import { chatMessages, emails, opportunities, summaries } from '../db/schema.js';
+import { and, desc, eq, gt, gte, ilike, isNull, or } from 'drizzle-orm';
 import { toolDefinitions } from './tools.js';
+import { chatCompletion } from './client.js';
+import { formatKyiv } from '../utils/kyivTime.js';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const HISTORY_TURNS = 10;
+const MAX_TOOL_ROUNDS = 3;
 
-const SYSTEM_PROMPT_EN = `You are KSE Copilot — an AI campus assistant for Kyiv School of Economics students.
-You help students with:
-1. Room bookings (Skype Rooms & Silent Boxes). Max 3h/day per student.
-2. Moodle deadlines — upcoming assignments and quizzes.
-3. Career opportunities — internships, jobs, grants.
+function systemPrompt(): string {
+  return `Ти — KSE Hub, ІІ-помічник студентів Київської школи економіки (KSE).
+Зараз: ${formatKyiv(new Date())} (Київ).
 
-Rules:
-- Be concise and helpful. Use markdown formatting.
-- When booking rooms, always check availability first.
-- When searching opportunities, consider the student's eligibility (grant/contract).
-- Reply in the same language the student uses (Ukrainian or English).
-- Always confirm actions before executing them.`;
-
-const SYSTEM_PROMPT_UK = `Ти — KSE Copilot, AI-помічник кампусу Київської школи економіки.
-Ти допомагаєш студентам з:
-1. Бронюванням кімнат (Skype Rooms і Silent Boxes). Максимум 3 год/день.
-2. Дедлайнами Moodle — завдання та тести.
-3. Кар'єрними можливостями — стажування, робота, гранти.
+Ти допомагаєш з:
+1. Дедлайнами Moodle — завдання та тести студента.
+2. Листами — короткий зміст пошти @kse.org.ua, сповіщень Slack і Moodle.
+3. Стажуваннями, вакансіями та грантами.
 
 Правила:
-- Будь коротким і корисним. Використовуй markdown.
-- При бронюванні — завжди перевіряй доступність.
-- При пошуку можливостей — враховуй тип студента (грант/контракт).
-- Відповідай тією мовою, якою пише студент.
-- Завжди підтверджуй дії перед виконанням.`;
+- Відповідай коротко, тією мовою, якою пише студент (за замовчуванням українською).
+- Форматування: лише **жирний**, *курсив*, \`код\`, [посилання](url) і списки з "• ". Без таблиць і заголовків.
+- Дані про студента бери тільки з інструментів. Нічого не вигадуй: якщо даних немає — так і скажи.
+- Бронювання кімнат: ти не бронюєш сам. Скажи, що це робиться через бота BookingRooms у Slack KSE (кнопки Book time / Book room / Hot Booking), максимум 3 год на день.
+- Про правила, програми й процедури KSE відповідай лише тим, у чому впевнений; інакше порадь звернутися до Student Office або на kse.ua.`;
+}
 
 export class AIService {
   /**
-   * Process a chat message with OpenAI function calling.
+   * One assistant turn. The conversation is kept in chat_messages,
+   * so the bot chat and the mini app continue the same dialogue.
    */
-  static async chat(
-    userId: number,
-    message: string,
-    lang: string = 'uk',
-    conversationHistory: OpenAI.ChatCompletionMessageParam[] = []
-  ) {
-    const systemPrompt = lang === 'uk' ? SYSTEM_PROMPT_UK : SYSTEM_PROMPT_EN;
-
+  static async chat(userId: number, message: string) {
+    const history = await this.history(userId);
     const messages: OpenAI.ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-      ...conversationHistory,
+      { role: 'system', content: systemPrompt() },
+      ...history,
       { role: 'user', content: message },
     ];
+    const toolCalls: { name: string; args: unknown }[] = [];
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages,
-      tools: toolDefinitions,
-      tool_choice: 'auto',
-      temperature: 0.7,
-      max_tokens: 1000,
-    });
-
-    const assistantMessage = response.choices[0].message;
-
-    // Handle tool calls
-    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-      const toolResults: OpenAI.ChatCompletionMessageParam[] = [
-        assistantMessage as OpenAI.ChatCompletionMessageParam,
-      ];
-
-      for (const toolCall of assistantMessage.tool_calls) {
-        const result = await this.executeTool(
-          toolCall.function.name,
-          JSON.parse(toolCall.function.arguments),
-          userId
-        );
-
-        toolResults.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(result),
-        });
-      }
-
-      // Get final response after tool execution
-      const finalResponse = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [...messages, ...toolResults],
-        temperature: 0.7,
+    let reply: string | null = null;
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+      const response = await chatCompletion('assistant', {
+        messages,
+        // Last round: no tools, force a text answer
+        ...(round < MAX_TOOL_ROUNDS ? { tools: toolDefinitions, tool_choice: 'auto' as const } : {}),
+        temperature: 0.4,
         max_tokens: 1000,
       });
+      const assistantMessage = response.choices[0]?.message;
+      if (!assistantMessage?.tool_calls?.length) {
+        reply = assistantMessage?.content ?? null;
+        break;
+      }
 
-      return {
-        content: finalResponse.choices[0].message.content,
-        toolCalls: assistantMessage.tool_calls.map((tc) => ({
-          name: tc.function.name,
-          args: JSON.parse(tc.function.arguments),
-        })),
-      };
+      // Passed back as returned: Gemini needs its thought signatures on tool-call turns
+      messages.push(assistantMessage as OpenAI.ChatCompletionMessageParam);
+      for (const call of assistantMessage.tool_calls) {
+        const args = safeJson(call.function.arguments);
+        toolCalls.push({ name: call.function.name, args });
+        const result = await this.executeTool(call.function.name, args, userId).catch((err) => ({ error: String(err?.message ?? err) }));
+        messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+      }
     }
 
-    return {
-      content: assistantMessage.content,
-      toolCalls: [],
-    };
+    const content = reply?.trim() || 'Не вдалося сформулювати відповідь, спробуй перепитати.';
+    await db.insert(chatMessages).values([
+      { userId, role: 'user', content: message },
+      { userId, role: 'assistant', content },
+    ]);
+    return { content, toolCalls };
   }
 
-  /**
-   * Execute a tool call.
-   */
-  private static async executeTool(
-    name: string,
-    args: Record<string, any>,
-    userId: number
-  ): Promise<any> {
+  static async clearHistory(userId: number) {
+    await db.delete(chatMessages).where(eq(chatMessages.userId, userId));
+  }
+
+  private static async history(userId: number): Promise<OpenAI.ChatCompletionMessageParam[]> {
+    const rows = await db
+      .select({ role: chatMessages.role, content: chatMessages.content })
+      .from(chatMessages)
+      .where(eq(chatMessages.userId, userId))
+      .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+      .limit(HISTORY_TURNS * 2);
+    return rows.reverse();
+  }
+
+  private static async executeTool(name: string, args: Record<string, any>, userId: number): Promise<unknown> {
     switch (name) {
-      case 'get_available_rooms': {
-        const startTime = args.start_time
-          ? new Date(args.start_time)
-          : new Date();
-        const endTime = args.end_time
-          ? new Date(args.end_time)
-          : new Date(startTime.getTime() + 60 * 60 * 1000);
-        return BookingService.getAvailableRooms(startTime, endTime, args.room_type);
-      }
-
-      case 'book_room': {
-        try {
-          const result = await BookingService.createBooking(
-            userId,
-            args.room_id,
-            new Date(args.start_time),
-            new Date(args.end_time)
-          );
-          return { success: true, booking: result.booking, room: result.room };
-        } catch (err: any) {
-          return { success: false, error: err.message };
-        }
-      }
-
-      case 'hot_book_room': {
-        try {
-          const result = await BookingService.hotBook(userId, args.room_id);
-          return { success: true, booking: result.booking, room: result.room };
-        } catch (err: any) {
-          return { success: false, error: err.message };
-        }
-      }
-
       case 'get_my_deadlines': {
-        return MoodleService.getDeadlines(userId, args.include_completed);
+        if (args.include_completed) return MoodleService.getDeadlines(userId, true);
+        const days = Math.min(Math.max(Number(args.days) || 14, 1), 90);
+        const now = new Date();
+        const rows = await DigestService.upcomingDeadlines(userId, now, new Date(now.getTime() + days * 86_400_000), 30);
+        return rows.map(({ assignment, courseName }) => ({
+          title: assignment.title,
+          course: courseName,
+          due: assignment.dueDate ? formatKyiv(assignment.dueDate) : null,
+          type: assignment.type,
+          url: assignment.sourceUrl,
+        }));
       }
 
-      case 'get_booking_quota': {
-        return BookingService.getRemainingQuota(userId);
+      case 'search_my_emails': {
+        const conditions = [
+          eq(emails.userId, userId),
+          gt(emails.receivedAt, new Date(Date.now() - 30 * 86_400_000)),
+        ];
+        if (args.source) conditions.push(eq(emails.source, args.source));
+        if (args.query) {
+          const like = `%${String(args.query)}%`;
+          conditions.push(or(ilike(emails.subject, like), ilike(summaries.summary, like))!);
+        }
+        const rows = await db
+          .select({
+            subject: emails.subject, from: emails.fromName, source: emails.source,
+            receivedAt: emails.receivedAt, summary: summaries.summary, category: summaries.category,
+          })
+          .from(emails)
+          .innerJoin(summaries, eq(emails.summaryId, summaries.id))
+          .where(and(...conditions))
+          .orderBy(desc(emails.receivedAt))
+          .limit(15);
+        return rows.length
+          ? rows.map((r) => ({ ...r, receivedAt: formatKyiv(r.receivedAt) }))
+          : { note: 'Нічого не знайдено. Можливо, пошта ще не підключена в міні-застосунку.' };
       }
 
       case 'search_opportunities': {
-        const conditions = [gte(opportunities.deadline, new Date())];
-        if (args.eligibility) {
-          conditions.push(eq(opportunities.eligibility, args.eligibility));
-        }
-        if (args.domain) {
-          conditions.push(ilike(opportunities.domain, `%${args.domain}%`));
-        }
-
-        return db
-          .select()
-          .from(opportunities)
-          .where(and(...conditions))
-          .limit(10);
-      }
-
-      case 'get_my_bookings': {
-        return BookingService.getUserBookings(userId);
+        // Opportunities collected from emails usually have no explicit deadline
+        const conditions = [or(isNull(opportunities.deadline), gte(opportunities.deadline, new Date()))!];
+        if (args.eligibility) conditions.push(eq(opportunities.eligibility, args.eligibility));
+        if (args.domain) conditions.push(ilike(opportunities.domain, `%${args.domain}%`));
+        return db.select().from(opportunities).where(and(...conditions)).orderBy(desc(opportunities.createdAt)).limit(10);
       }
 
       default:
         return { error: `Unknown tool: ${name}` };
     }
+  }
+}
+
+function safeJson(text: string): Record<string, any> {
+  try {
+    return JSON.parse(text || '{}');
+  } catch {
+    return {};
   }
 }

@@ -31,6 +31,9 @@ export const updateProfileSchema = z.object({
   languagePref: z.enum(['uk', 'en']).optional(),
   moodleToken: z.string().optional(),
   calendarUrl: z.string().optional().or(z.literal('')),
+  // Telegram digest: sources to include, and the Kyiv hour to send it (-1 = off)
+  digestSources: z.array(z.enum(['moodle', 'gmail', 'slack'])).max(3).optional(),
+  digestHour: z.number().int().min(-1).max(23).optional(),
 });
 
 /* ───── Venture Profile Validators ───── */

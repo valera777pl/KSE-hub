@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
 import { useMoodleStore } from '../../stores/moodleStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { BotSettings } from './BotSettings';
 
 interface ProfileDrawerProps {
   onClose: () => void;
@@ -198,10 +199,13 @@ export function ProfileDrawer({ onClose }: ProfileDrawerProps) {
             className="btn btn--primary btn--full"
             onClick={handleSave}
             disabled={saving}
-            style={{ marginTop: '16px' }}
+            style={{ marginTop: '16px', marginBottom: '32px' }}
           >
             {saving ? '...' : saved ? `✓ ${t('profile.saved')}` : t('profile.save')}
           </button>
+
+          {/* Bot, mail and Slack settings save on tap */}
+          <BotSettings />
         </div>
       </aside>
     </>
