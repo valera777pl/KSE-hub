@@ -73,6 +73,9 @@ export class GmailService {
       msg.payload.headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? '';
 
     const from = header('From');
+    // Class invitations come from the calendar itself (schedule feature); not worth a digest line or AI quota
+    if (isCalendarInvite(from, msg.payload)) return null;
+
     const subject = header('Subject') || '(без теми)';
     const messageIdHeader = header('Message-ID').trim().toLowerCase() || null;
     const body = extractText(msg.payload);
@@ -198,6 +201,10 @@ async function gmail<T>(token: string, path: string): Promise<T> {
   });
   if (!res.ok) throw new Error(`Gmail API ${res.status}: ${await res.text()}`);
   return res.json() as Promise<T>;
+}
+
+function isCalendarInvite(from: string, payload: GmailPart): boolean {
+  return /calendar-notification@google\.com/i.test(from) || findPart(payload, 'text/calendar') !== null;
 }
 
 function detectSource(from: string): EmailSource {
