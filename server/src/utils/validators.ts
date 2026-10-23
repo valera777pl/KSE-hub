@@ -34,6 +34,7 @@ export const updateProfileSchema = z.object({
   // Telegram digest: sources to include, and the Kyiv hour to send it (-1 = off)
   digestSources: z.array(z.enum(['moodle', 'gmail', 'slack'])).max(3).optional(),
   digestHour: z.number().int().min(-1).max(23).optional(),
+  scheduleVisible: z.boolean().optional(),
 });
 
 /* ───── Venture Profile Validators ───── */

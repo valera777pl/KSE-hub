@@ -4,6 +4,7 @@ import { and, asc, eq, gt, isNotNull, isNull, lt, lte, ne, or, sql } from 'drizz
 import { MoodleService } from './moodleService.js';
 import { DigestService } from './digestService.js';
 import { GmailService } from './gmailService.js';
+import { ScheduleService } from './scheduleService.js';
 import { escapeHtml, openAppKeyboard, sendToUser } from '../bot/send.js';
 import { formatKyiv, kyivHour } from '../utils/kyivTime.js';
 
@@ -21,9 +22,10 @@ export class CronService {
   static async tick() {
     const calendars = await this.syncCalendars();
     const emails = await this.syncGmail();
+    const schedules = process.env.GOOGLE_CLIENT_ID ? await ScheduleService.syncDueAccounts() : 0;
     const reminders = await this.sendDeadlineReminders();
     const digests = await this.sendDigests();
-    return { calendars, emails, reminders, digests };
+    return { calendars, emails, schedules, reminders, digests };
   }
 
   /** Pull new mail for the accounts synced longest ago. Revoked accounts wait for a reconnect. */

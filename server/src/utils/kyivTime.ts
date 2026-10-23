@@ -39,3 +39,29 @@ export function kyivNowForPrompt(now = new Date()): string {
     .formatToParts(now).find((p) => p.type === 'timeZoneName')?.value.replace('GMT', 'UTC') ?? 'UTC+02:00';
   return `${human} (${offset}, сьогодні ${isoDate})`;
 }
+
+/** "+03:00" / "+02:00" for the given instant in Kyiv. */
+function kyivOffset(at: Date): string {
+  const name = new Intl.DateTimeFormat('en-US', { timeZone: TZ, timeZoneName: 'longOffset' })
+    .formatToParts(at).find((p) => p.type === 'timeZoneName')?.value ?? 'GMT+02:00';
+  return name === 'GMT' ? '+00:00' : name.replace('GMT', '');
+}
+
+/** "2026-10-24" — the calendar date in Kyiv. */
+export function kyivDate(at = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(at);
+}
+
+/** 00:00 Kyiv on the given "YYYY-MM-DD". */
+export function kyivDayStart(day: string): Date {
+  return new Date(`${day}T00:00:00${kyivOffset(new Date(`${day}T12:00:00Z`))}`);
+}
+
+/** Monday 00:00 Kyiv of the week containing `date` ("YYYY-MM-DD" or an instant). */
+export function kyivWeekStart(date: string | Date = new Date()): Date {
+  const day = typeof date === 'string' ? date : kyivDate(date);
+  const noon = new Date(`${day}T12:00:00Z`);
+  const shift = (noon.getUTCDay() + 6) % 7; // Mon=0 … Sun=6
+  const monday = new Date(noon.getTime() - shift * 86_400_000).toISOString().slice(0, 10);
+  return kyivDayStart(monday);
+}

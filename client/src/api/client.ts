@@ -16,7 +16,7 @@ function getInitData(): string {
 function getDevHeaders(): Record<string, string> {
   // In development without Telegram, use a dev user
   if (import.meta.env.DEV && !getInitData()) {
-    return { 'X-Dev-User-Id': '12345678' };
+    return { 'X-Dev-User-Id': import.meta.env.VITE_DEV_USER_ID || '12345678' };
   }
   return {};
 }

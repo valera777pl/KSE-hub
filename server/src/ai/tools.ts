@@ -93,6 +93,51 @@ export const toolDefinitions: OpenAI.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'get_my_schedule',
+      description: 'The student\'s classes (from KSE course calendars) between two dates.',
+      parameters: {
+        type: 'object',
+        properties: {
+          from_date: { type: 'string', description: 'First day, YYYY-MM-DD (Kyiv). Default: today.' },
+          days: { type: 'number', description: 'How many days. Default: 1. Use 7 for a week.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'compare_schedule',
+      description: 'Find another student by surname or name (Cyrillic or Latin) and get their week, with the classes you share marked shared=true. If several students match, ask which one.',
+      parameters: {
+        type: 'object',
+        properties: {
+          student: { type: 'string', description: 'Surname and/or first name, e.g. "Петренко" or "Ivan Petrenko".' },
+          week_of: { type: 'string', description: 'Any date in the wanted week, YYYY-MM-DD. Default: this week.' },
+          user_id: { type: 'number', description: 'Pick one student from a previous ambiguous result.' },
+        },
+        required: ['student'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'find_free_classmates',
+      description: 'Classmates (students who share at least one course section with you) who have no class in the given time range.',
+      parameters: {
+        type: 'object',
+        properties: {
+          start_time: { type: 'string', description: 'ISO 8601 with Kyiv offset.' },
+          end_time: { type: 'string', description: 'ISO 8601 with Kyiv offset.' },
+        },
+        required: ['start_time', 'end_time'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_my_deadlines',
       description: 'Get the student\'s upcoming Moodle deadlines (assignments and quizzes), sorted by due date.',
       parameters: {

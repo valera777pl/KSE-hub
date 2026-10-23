@@ -11,6 +11,7 @@ import { ProfileDrawer } from './components/layout/ProfileDrawer';
 import { NotificationPanel } from './components/layout/NotificationPanel';
 import { RoomsPage } from './components/modules/rooms/RoomsPage';
 import { MoodlePage } from './components/modules/moodle/MoodlePage';
+import { SchedulePage } from './components/modules/schedule/SchedulePage';
 import { VenturePage } from './components/modules/venture/VenturePage';
 import { CareersPage } from './components/modules/careers/CareersPage';
 import { CopilotPage } from './components/modules/copilot/CopilotPage';
@@ -68,6 +69,7 @@ export default function App() {
   const renderPage = () => {
     switch (activeTab) {
       case 'rooms': return <RoomsPage />;
+      case 'schedule': return <SchedulePage />;
       case 'moodle': return <MoodlePage />;
       case 'venture': return <VenturePage />;
       case 'careers': return <CareersPage />;

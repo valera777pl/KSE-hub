@@ -51,6 +51,8 @@ export const users = pgTable('users', {
   lastDigestAt: timestamp('last_digest_at'),
   calendarSyncedAt: timestamp('calendar_synced_at'),
   botBlocked: boolean('bot_blocked').default(false).notNull(),
+  // Other KSE Hub students can see this student's weekly schedule (off = hidden from search)
+  scheduleVisible: boolean('schedule_visible').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
@@ -81,6 +83,7 @@ export const googleAccounts = pgTable('google_accounts', {
   refreshTokenEnc: text('refresh_token_enc').notNull(),
   scopes: text('scopes'),
   lastSyncAt: timestamp('last_sync_at'),
+  calendarsSyncedAt: timestamp('calendars_synced_at'),
   syncError: text('sync_error'),
   connectedAt: timestamp('connected_at').defaultNow().notNull(),
 });
@@ -117,6 +120,44 @@ export const emails = pgTable('emails', {
 }, (table) => [
   uniqueIndex('emails_user_gmail_idx').on(table.userId, table.gmailId),
   index('emails_user_digest_idx').on(table.userId, table.digestedAt),
+]);
+
+/* ───────────── SCHEDULE (KSE course calendars) ───────────── */
+
+/**
+ * KSE publishes one Google calendar per course section ("ECON100 [L1] …").
+ * Students subscribe to theirs; two students share a class exactly when they
+ * share a calendar. Events are stored once per calendar, not per student.
+ */
+export const courseCalendars = pgTable('course_calendars', {
+  id: serial('id').primaryKey(),
+  googleId: varchar('google_id', { length: 255 }).notNull().unique(),
+  courseCode: varchar('course_code', { length: 20 }).notNull(),
+  section: varchar('section', { length: 20 }),
+  title: varchar('title', { length: 255 }).notNull(),
+  eventsSyncedAt: timestamp('events_synced_at'),
+});
+
+export const userCalendars = pgTable('user_calendars', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  calendarId: integer('calendar_id').notNull().references(() => courseCalendars.id, { onDelete: 'cascade' }),
+}, (table) => [
+  uniqueIndex('user_calendars_user_calendar_idx').on(table.userId, table.calendarId),
+  index('user_calendars_calendar_idx').on(table.calendarId),
+]);
+
+export const calendarEvents = pgTable('calendar_events', {
+  id: serial('id').primaryKey(),
+  calendarId: integer('calendar_id').notNull().references(() => courseCalendars.id, { onDelete: 'cascade' }),
+  googleEventId: varchar('google_event_id', { length: 255 }).notNull(),
+  title: text('title').notNull(),
+  location: text('location'),
+  startAt: timestamp('start_at').notNull(),
+  endAt: timestamp('end_at').notNull(),
+}, (table) => [
+  uniqueIndex('calendar_events_calendar_event_idx').on(table.calendarId, table.googleEventId),
+  index('calendar_events_start_idx').on(table.startAt),
 ]);
 
 /* ───────────── AI ASSISTANT ───────────── */

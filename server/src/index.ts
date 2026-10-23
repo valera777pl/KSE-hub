@@ -18,6 +18,7 @@ import { userRoutes } from './routes/users.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { botRoutes, cronRoutes } from './routes/bot.js';
 import { googleCallback, googleRoutes } from './routes/google.js';
+import { scheduleRoutes } from './routes/schedule.js';
 
 const app = new Hono();
 
@@ -51,6 +52,7 @@ api.route('/copilot', copilotRoutes);
 api.route('/users', userRoutes);
 api.route('/notifications', notificationRoutes);
 api.route('/google', googleRoutes);
+api.route('/schedule', scheduleRoutes);
 
 app.route('/api', api);
 

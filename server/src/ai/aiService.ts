@@ -1,13 +1,14 @@
 import type OpenAI from 'openai';
 import { BookingService } from '../services/bookingService.js';
 import { MoodleService } from '../services/moodleService.js';
+import { ScheduleService, type ScheduleEvent } from '../services/scheduleService.js';
 import { DigestService } from '../services/digestService.js';
 import { db } from '../db/connection.js';
 import { chatMessages, emails, opportunities, summaries } from '../db/schema.js';
 import { and, desc, eq, gt, gte, ilike, isNull, or } from 'drizzle-orm';
 import { toolDefinitions } from './tools.js';
 import { chatCompletion } from './client.js';
-import { formatKyiv, kyivNowForPrompt } from '../utils/kyivTime.js';
+import { formatKyiv, kyivDate, kyivDayStart, kyivNowForPrompt } from '../utils/kyivTime.js';
 
 const HISTORY_TURNS = 10;
 const MAX_TOOL_ROUNDS = 3;
@@ -18,9 +19,10 @@ function systemPrompt(): string {
 
 Ти допомагаєш з:
 1. Бронюванням кімнат — Skype Rooms і Silent Boxes, максимум 3 год на день.
-2. Дедлайнами Moodle — завдання та тести студента.
-3. Листами — короткий зміст пошти @kse.org.ua, сповіщень Slack і Moodle.
-4. Стажуваннями, вакансіями та грантами.
+2. Розкладом пар — свій розклад, спільні пари з іншими студентами, хто з одногрупників вільний.
+3. Дедлайнами Moodle — завдання та тести студента.
+4. Листами — короткий зміст пошти @kse.org.ua, сповіщень Slack і Moodle.
+5. Стажуваннями, вакансіями та грантами.
 
 Правила:
 - Відповідай коротко, тією мовою, якою пише студент (за замовчуванням українською).
@@ -121,6 +123,36 @@ export class AIService {
         }));
       }
 
+      case 'get_my_schedule': {
+        const fromDay = /^\d{4}-\d{2}-\d{2}$/.test(args.from_date ?? '') ? args.from_date : kyivDate();
+        const days = Math.min(Math.max(Number(args.days) || 1, 1), 14);
+        const start = kyivDayStart(fromDay);
+        const events = await ScheduleService.events(userId, start, new Date(start.getTime() + days * 86_400_000));
+        return events.length ? events.map(describeClass) : { note: 'Пар немає (або пошту ще не підключено в KSE Hub).' };
+      }
+
+      case 'compare_schedule': {
+        let otherId = Number(args.user_id) || null;
+        if (!otherId) {
+          const found = await ScheduleService.searchStudents(String(args.student ?? ''), userId);
+          if (found.length === 0) return { error: 'Студента не знайдено: можливо, він ще не підключив пошту в KSE Hub або приховав розклад.' };
+          if (found.length > 1) return { ambiguous: found.map((s) => ({ user_id: s.userId, name: s.name, cohort: s.cohort, telegram: s.username })) };
+          otherId = found[0].userId;
+        }
+        const week = /^\d{4}-\d{2}-\d{2}$/.test(args.week_of ?? '') ? args.week_of : new Date();
+        const result = await ScheduleService.compare(userId, otherId, week);
+        return {
+          student: result.student,
+          shared_courses: result.sharedCourses,
+          classes: result.events.map((e) => ({ ...describeClass(e), shared: e.shared })),
+        };
+      }
+
+      case 'find_free_classmates': {
+        const free = await ScheduleService.freeClassmates(userId, new Date(args.start_time), new Date(args.end_time));
+        return free.length ? free.map((s) => ({ name: s.name, cohort: s.cohort, telegram: s.username })) : { note: 'Нікого вільного серед одногрупників у KSE Hub.' };
+      }
+
       case 'get_my_deadlines': {
         if (args.include_completed) return MoodleService.getDeadlines(userId, true);
         const days = Math.min(Math.max(Number(args.days) || 14, 1), 90);
@@ -172,6 +204,16 @@ export class AIService {
         return { error: `Unknown tool: ${name}` };
     }
   }
+}
+
+function describeClass(e: ScheduleEvent) {
+  return {
+    course: `${e.courseCode} [${e.section}]`,
+    title: e.title,
+    from: formatKyiv(e.startAt),
+    to: formatKyiv(e.endAt),
+    where: e.location,
+  };
 }
 
 function safeJson(text: string): Record<string, any> {

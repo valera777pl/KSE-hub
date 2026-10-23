@@ -6,6 +6,8 @@ import { db } from '../db/connection.js';
 import { users } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { escapeHtml, sendToUser } from '../bot/send.js';
+import { waitUntil } from '@vercel/functions';
+import { ScheduleService } from '../services/scheduleService.js';
 
 // GET /api/google/callback — Google redirects the browser here (no Telegram initData)
 const googleCallback = new Hono();
@@ -18,6 +20,12 @@ googleCallback.get('/callback', async (c) => {
 
   try {
     const email = await GoogleService.completeLogin(userId, code);
+    // The schedule comes with the same login; fetch it in the background so the page returns now
+    waitUntil(
+      GoogleService.getAccount(userId)
+        .then((account) => account && ScheduleService.syncAccount(account))
+        .catch((err) => console.error('Initial schedule sync failed:', err))
+    );
     const [user] = await db.select({ telegramId: users.telegramId }).from(users).where(eq(users.id, userId)).limit(1);
     if (user) {
       await sendToUser(user.telegramId,

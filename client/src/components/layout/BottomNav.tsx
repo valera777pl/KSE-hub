@@ -8,6 +8,7 @@ interface BottomNavProps {
 
 const tabs: { id: TabId; icon: string }[] = [
   { id: 'rooms', icon: '🏠' },
+  { id: 'schedule', icon: '🗓' },
   { id: 'moodle', icon: '📚' },
   { id: 'venture', icon: '🤝' },
   { id: 'careers', icon: '💼' },

@@ -168,6 +168,22 @@ export function BotSettings() {
         </div>
       </div>
 
+      {/* Schedule visibility */}
+      <div className="profile-section">
+        <h3 className="profile-section__title">🗓 Мій розклад</h3>
+        <div className="tabs" style={{ marginBottom: 0 }}>
+          <button className={`tab ${user.scheduleVisible ? 'tab--active' : ''}`} onClick={() => save({ scheduleVisible: true })}>
+            Видно студентам
+          </button>
+          <button className={`tab ${!user.scheduleVisible ? 'tab--active' : ''}`} onClick={() => save({ scheduleVisible: false })}>
+            Приховано
+          </button>
+        </div>
+        <div style={hint}>
+          Інші студенти KSE Hub можуть знайти тебе за прізвищем і побачити твій розклад на тиждень зі спільними парами. Якщо приховати — тебе не буде в пошуку.
+        </div>
+      </div>
+
       {/* Slack via email notifications */}
       <div className="profile-section">
         <h3 className="profile-section__title">💬 Slack</h3>

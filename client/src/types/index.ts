@@ -13,6 +13,7 @@ export interface User {
   languagePref: 'uk' | 'en';
   digestSources: DigestSource[];
   digestHour: number; // Kyiv hour, -1 = digest off
+  scheduleVisible: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -189,4 +190,31 @@ export interface ChatMessage {
 }
 
 /* ─── Navigation ─── */
-export type TabId = 'rooms' | 'moodle' | 'venture' | 'careers' | 'copilot';
+export type TabId = 'rooms' | 'schedule' | 'moodle' | 'venture' | 'careers' | 'copilot';
+
+/* ─── Schedule ─── */
+export interface ClassEvent {
+  id: number;
+  calendarId: number;
+  courseCode: string;
+  section: string | null;
+  title: string;
+  location: string | null;
+  startAt: string;
+  endAt: string;
+}
+
+export interface StudentMatch {
+  userId: number;
+  name: string;
+  cohort: number | null;
+  fullName: string;
+  username: string | null;
+}
+
+export interface ScheduleCompare {
+  student: StudentMatch;
+  weekStart: string;
+  events: (ClassEvent & { shared: boolean })[];
+  sharedCourses: string[];
+}
