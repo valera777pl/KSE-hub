@@ -3,6 +3,7 @@ import { BookingService } from '../services/bookingService.js';
 import { MoodleService } from '../services/moodleService.js';
 import { ScheduleService, type ScheduleEvent } from '../services/scheduleService.js';
 import { KnowledgeService } from '../services/knowledgeService.js';
+import { GmailService } from '../services/gmailService.js';
 import { DigestService } from '../services/digestService.js';
 import { db } from '../db/connection.js';
 import { chatMessages, emails, opportunities, summaries } from '../db/schema.js';
@@ -199,6 +200,8 @@ export class AIService {
       }
 
       case 'search_my_emails': {
+        // The cron pulls mail every ~10 min; when the student asks, look for brand-new letters first
+        await GmailService.syncIfStale(userId);
         const conditions = [
           eq(emails.userId, userId),
           gt(emails.receivedAt, new Date(Date.now() - 30 * 86_400_000)),

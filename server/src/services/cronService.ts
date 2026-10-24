@@ -12,8 +12,10 @@ import { formatKyiv, kyivHour, kyivWeekday } from '../utils/kyivTime.js';
 const HOUR = 3_600_000;
 const CALENDAR_SYNC_EVERY = 3 * HOUR;
 const CALENDARS_PER_TICK = 10;
-const GMAIL_SYNC_EVERY = 10 * 60_000;
-const GMAIL_ACCOUNTS_PER_TICK = 5;
+// Just under the cron interval, so every inbox is checked on every tick
+const GMAIL_SYNC_EVERY = 8 * 60_000;
+const GMAIL_ACCOUNTS_PER_TICK = 25;
+const GMAIL_CONCURRENCY = 3;
 
 /**
  * One cron "tick" (an external scheduler calls it every ~10 minutes).
@@ -80,12 +82,14 @@ export class CronService {
       .limit(GMAIL_ACCOUNTS_PER_TICK);
 
     let stored = 0;
-    for (const account of due) {
-      try {
-        stored += await GmailService.sync(account);
-      } catch (err) {
-        console.error(`Gmail sync failed for ${account.email}:`, err);
-      }
+    for (let i = 0; i < due.length; i += GMAIL_CONCURRENCY) {
+      await Promise.all(due.slice(i, i + GMAIL_CONCURRENCY).map(async (account) => {
+        try {
+          stored += await GmailService.sync(account);
+        } catch (err) {
+          console.error(`Gmail sync failed for ${account.email}:`, err);
+        }
+      }));
     }
     return stored;
   }

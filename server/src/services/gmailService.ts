@@ -24,7 +24,21 @@ type GmailMessage = {
   payload: GmailPart & { headers: { name: string; value: string }[] };
 };
 
+const ON_DEMAND_FRESHNESS_MS = 90_000;
+const ON_DEMAND_TIMEOUT_MS = 20_000;
+
 export class GmailService {
+  /** Sync now if the last pull is older than 90 s; gives up quietly after 20 s so a chat reply isn't held hostage. */
+  static async syncIfStale(userId: number): Promise<void> {
+    const [account] = await db.select().from(googleAccounts).where(eq(googleAccounts.userId, userId)).limit(1);
+    if (!account || account.syncError === 'invalid_grant') return;
+    if (account.lastSyncAt && Date.now() - account.lastSyncAt.getTime() < ON_DEMAND_FRESHNESS_MS) return;
+    await Promise.race([
+      this.sync(account).catch((err) => console.error('On-demand Gmail sync failed:', err)),
+      new Promise((resolve) => setTimeout(resolve, ON_DEMAND_TIMEOUT_MS)),
+    ]);
+  }
+
   /** Pull new mail for one account, summarize what's new, return how many emails were stored. */
   static async sync(account: Account): Promise<number> {
     const token = await GoogleService.accessToken(account);
