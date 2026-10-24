@@ -193,6 +193,20 @@ export const toolDefinitions: OpenAI.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'search_startups',
+      description: 'Student startups at KSE that are looking for teammates. Applying is done in the mini app (tab «Метч» → Стартапи).',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Words about the idea or field, e.g. "fintech", "освіта".' },
+          role: { type: 'string', description: 'Wanted role, e.g. "developer", "designer", "marketing".' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'search_opportunities',
       description: 'Search internships, jobs, grants, and research opportunities. Can filter by student eligibility and domain.',
       parameters: {

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { db } from '../db/connection.js';
-import { opportunities } from '../db/schema.js';
-import { eq, ilike, and, gte, desc } from 'drizzle-orm';
+import { emails, googleAccounts, opportunities } from '../db/schema.js';
+import { eq, ilike, and, gte, desc, isNull, or, inArray } from 'drizzle-orm';
 import { opportunityFilterSchema } from '../utils/validators.js';
 
 const careerRoutes = new Hono();
@@ -30,22 +30,43 @@ careerRoutes.get('/', async (c) => {
   }
 
   if (filters.search) {
-    conditions.push(
-      ilike(opportunities.title, `%${filters.search}%`)
-    );
+    const like = `%${filters.search}%`;
+    conditions.push(or(ilike(opportunities.title, like), ilike(opportunities.company, like), ilike(opportunities.description, like)));
   }
 
-  // Only show active opportunities (deadline >= now or no deadline)
-  conditions.push(gte(opportunities.deadline, new Date()));
+  if (c.req.query('source') === 'email') {
+    conditions.push(ilike(opportunities.slackMessageId, 'summary:%'));
+  }
+
+  // Still open: deadline ahead, or none given (most opportunities found in emails)
+  conditions.push(or(isNull(opportunities.deadline), gte(opportunities.deadline, new Date())));
 
   const results = await db
     .select()
     .from(opportunities)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(desc(opportunities.createdAt))
     .limit(50);
 
-  return c.json({ opportunities: results });
+  // For opportunities found in mail: a link to the viewer's own copy of that email
+  const user = c.get('dbUser');
+  const summaryIds = results
+    .map((o) => o.slackMessageId?.match(/^summary:(\d+)$/)?.[1])
+    .filter(Boolean)
+    .map(Number);
+  const [account] = await db.select({ email: googleAccounts.email }).from(googleAccounts).where(eq(googleAccounts.userId, user.id)).limit(1);
+  const myCopies = summaryIds.length && account
+    ? await db.select({ summaryId: emails.summaryId, gmailId: emails.gmailId }).from(emails)
+        .where(and(eq(emails.userId, user.id), inArray(emails.summaryId, summaryIds)))
+    : [];
+  const gmailLink = new Map(myCopies.map((m) => [m.summaryId, `https://mail.google.com/mail/?authuser=${encodeURIComponent(account!.email)}#all/${m.gmailId}`]));
+
+  return c.json({
+    opportunities: results.map(({ slackMessageId, ...o }) => {
+      const summaryId = Number(slackMessageId?.match(/^summary:(\d+)$/)?.[1]) || null;
+      return { ...o, source: summaryId ? 'email' : 'manual', emailUrl: summaryId ? gmailLink.get(summaryId) ?? null : null };
+    }),
+  });
 });
 
 // GET /careers/:id — Single opportunity

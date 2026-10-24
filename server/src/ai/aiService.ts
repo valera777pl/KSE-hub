@@ -4,6 +4,7 @@ import { MoodleService } from '../services/moodleService.js';
 import { ScheduleService, type ScheduleEvent } from '../services/scheduleService.js';
 import { KnowledgeService } from '../services/knowledgeService.js';
 import { GmailService } from '../services/gmailService.js';
+import { StartupService } from '../services/startupService.js';
 import { DigestService } from '../services/digestService.js';
 import { db } from '../db/connection.js';
 import { chatMessages, emails, opportunities, summaries } from '../db/schema.js';
@@ -35,7 +36,7 @@ function systemPrompt(): string {
 2. Розкладом пар — свій розклад, спільні пари з іншими студентами, хто з одногрупників вільний.
 3. Дедлайнами Moodle — завдання та тести студента.
 4. Листами — короткий зміст пошти @kse.org.ua, сповіщень Slack і Moodle.
-5. Стажуваннями, вакансіями та грантами.
+5. Стажуваннями, вакансіями та грантами; студентськими стартапами, яким потрібна команда (заявку подають у мініаппі, вкладка «Метч»).
 6. Інформацією про KSE — програми, гранти й фінансова допомога, оплата, обмін, викладачі, контакти, кампус.
 
 Правила:
@@ -224,6 +225,16 @@ export class AIService {
         return rows.length
           ? rows.map((r) => ({ ...r, receivedAt: formatKyiv(r.receivedAt) }))
           : { note: 'Нічого не знайдено. Можливо, пошта ще не підключена в міні-застосунку.' };
+      }
+
+      case 'search_startups': {
+        const found = await StartupService.list(userId, { query: args.query || undefined, role: args.role || undefined });
+        return found.length
+          ? found.slice(0, 10).map(({ project, author, myStatus }) => ({
+              title: project.title, pitch: project.pitch, roles: project.requiredRoles,
+              commitment: project.commitmentLevel, author: author.name, my_application: myStatus,
+            }))
+          : { note: 'Відкритих стартапів за цим запитом немає.' };
       }
 
       case 'search_opportunities': {

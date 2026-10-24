@@ -2,20 +2,25 @@ import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVentureStore } from '../../../stores/ventureStore';
 import type { SwipeCardProfile, SwipeCardProject } from '../../../types';
+import { ApplicationsTab, ProfileForm, StartupsTab } from './Startups';
 
 export function VenturePage() {
   const { t } = useTranslation();
   const {
-    deck, deckType, matchResult,
+    deck, deckType, matchResult, myProfile,
     setDeckType, fetchDeck, swipe, clearMatch, fetchMyProfile,
   } = useVentureStore();
+  const [section, setSection] = useState<'startups' | 'applications' | 'people'>('startups');
+  const [editingProfile, setEditingProfile] = useState(false);
 
   const [, setSwipingId] = useState<number | null>(null);
   const [swipeDir, setSwipeDir] = useState<'left' | 'right' | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetchDeck();
+    // Startups have their own list now; the swipe deck is for people only
+    if (deckType !== 'profile') setDeckType('profile');
+    else fetchDeck();
     fetchMyProfile();
   }, []);
 
@@ -164,22 +169,28 @@ export function VenturePage() {
     <div className="page">
       <h1 className="section-header__title mb-md">{t('venture.title')}</h1>
 
-      {/* Type Tabs */}
       <div className="tabs mb-lg">
-        <button
-          className={`tab ${deckType === 'profile' ? 'tab--active' : ''}`}
-          onClick={() => setDeckType('profile')}
-        >
-          👤 {t('venture.profiles')}
-        </button>
-        <button
-          className={`tab ${deckType === 'project' ? 'tab--active' : ''}`}
-          onClick={() => setDeckType('project')}
-        >
-          🚀 {t('venture.projects')}
-        </button>
+        {([['startups', '🚀 Стартапи'], ['applications', '📥 Заявки'], ['people', '👤 Люди']] as const).map(([id, label]) => (
+          <button key={id} className={`tab ${section === id ? 'tab--active' : ''}`} onClick={() => setSection(id)}>{label}</button>
+        ))}
       </div>
 
+      {section === 'startups' && <StartupsTab />}
+      {section === 'applications' && <ApplicationsTab />}
+
+      {section === 'people' && (
+        <div className="card" style={{ padding: '12px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="text-sm" style={{ flex: 1 }}>
+            {myProfile ? <>Твій профіль: <b>{myProfile.title}</b></> : 'Заповни профіль, щоб тебе бачили інші й автори стартапів'}
+          </div>
+          <button className="btn btn--secondary btn--small" onClick={() => setEditingProfile(true)}>{myProfile ? 'Змінити' : 'Заповнити'}</button>
+        </div>
+      )}
+      {editingProfile && (
+        <ProfileForm profile={myProfile} onClose={() => setEditingProfile(false)} onDone={() => { setEditingProfile(false); fetchMyProfile(); }} />
+      )}
+
+      {section === 'people' && <>
       {/* Swipe Deck */}
       <div className="swipe-container">
         {renderCard()}
@@ -196,6 +207,7 @@ export function VenturePage() {
           </button>
         </div>
       )}
+      </>}
 
       {/* Match Modal */}
       {matchResult?.matched && matchResult.matchedUser && (

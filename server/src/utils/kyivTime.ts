@@ -57,9 +57,19 @@ export function kyivDate(at = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(at);
 }
 
-/** 00:00 Kyiv on the given "YYYY-MM-DD". */
+/**
+ * 00:00 Kyiv on the given "YYYY-MM-DD". On a DST-switch day the offset at
+ * midnight differs from the one at noon, so try both and keep the one that
+ * really is midnight in Kyiv.
+ */
 export function kyivDayStart(day: string): Date {
-  return new Date(`${day}T00:00:00${kyivOffset(new Date(`${day}T12:00:00Z`))}`);
+  const noon = new Date(`${day}T12:00:00Z`);
+  const offsets = [kyivOffset(new Date(noon.getTime() - 86_400_000)), kyivOffset(noon)];
+  for (const offset of offsets) {
+    const candidate = new Date(`${day}T00:00:00${offset}`);
+    if (kyivDate(candidate) === day && kyivHour(candidate) === 0) return candidate;
+  }
+  return new Date(`${day}T00:00:00${offsets[1]}`);
 }
 
 /** Monday 00:00 Kyiv of the week containing `date` ("YYYY-MM-DD" or an instant). */

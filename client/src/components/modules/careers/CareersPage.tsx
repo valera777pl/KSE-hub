@@ -10,6 +10,7 @@ export function CareersPage() {
   const [search, setSearch] = useState('');
   const [eligibility, setEligibility] = useState<string>('');
   const [category, setCategory] = useState<string>('');
+  const [fromMail, setFromMail] = useState(false);
 
   const fetchOpportunities = async () => {
     try {
@@ -18,6 +19,7 @@ export function CareersPage() {
       if (eligibility) params.set('eligibility', eligibility);
       if (category) params.set('category', category);
       if (search) params.set('search', search);
+      if (fromMail) params.set('source', 'email');
       const { opportunities: data } = await api.get<{ opportunities: Opportunity[] }>(
         `/careers?${params}`
       );
@@ -31,7 +33,7 @@ export function CareersPage() {
 
   useEffect(() => {
     fetchOpportunities();
-  }, [eligibility, category]);
+  }, [eligibility, category, fromMail]);
 
   useEffect(() => {
     const timer = setTimeout(fetchOpportunities, 300);
@@ -95,6 +97,13 @@ export function CareersPage() {
         ))}
       </div>
 
+      {/* Found in the student's KSE mail */}
+      <div className="filter-chips">
+        <button className={`filter-chip ${fromMail ? 'filter-chip--active' : ''}`} onClick={() => setFromMail(!fromMail)}>
+          📬 Лише з моєї пошти
+        </button>
+      </div>
+
       {/* Eligibility Filters */}
       <div className="filter-chips">
         {[
@@ -132,9 +141,9 @@ export function CareersPage() {
               <span className="opportunity-card__company">
                 {getCategoryIcon(opp.category)} {opp.company}
               </span>
-              <span className={`badge ${getBadgeClass(opp.eligibility)}`}>
-                {getBadgeLabel(opp.eligibility)}
-              </span>
+              {opp.source === 'email'
+                ? <span className="badge badge--all">📬 з пошти</span>
+                : <span className={`badge ${getBadgeClass(opp.eligibility)}`}>{getBadgeLabel(opp.eligibility)}</span>}
             </div>
 
             <div className="opportunity-card__title">{opp.title}</div>
@@ -159,16 +168,16 @@ export function CareersPage() {
                 )}
               </div>
 
-              {opp.url && (
-                <a
-                  href={opp.url}
-                  target="_blank"
-                  rel="noopener"
-                  className="btn btn--primary btn--small"
-                >
-                  {t('careers.apply')} ↗
-                </a>
-              )}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {opp.emailUrl && (
+                  <a href={opp.emailUrl} target="_blank" rel="noopener" className="btn btn--secondary btn--small">Лист ↗</a>
+                )}
+                {opp.url && (
+                  <a href={opp.url} target="_blank" rel="noopener" className="btn btn--primary btn--small">
+                    {t('careers.apply')} ↗
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         ))

@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { upsertUser } from '../middleware/telegramAuth.js';
 import { AIService, AILimitError } from '../ai/aiService.js';
 import { AnalyticsService } from '../services/analyticsService.js';
+import { StartupService, contactLink, displayName } from '../services/startupService.js';
 import { signState } from '../utils/crypto.js';
 import { appUrl, chunkHtml, escapeHtml, openAppKeyboard } from './send.js';
 
@@ -76,6 +77,21 @@ export function getBot(): Bot<BotContext> {
     await ctx.reply('Спершу зареєструйся в міні-застосунку — увійди поштою @kse.org.ua 👇', {
       reply_markup: openAppKeyboard('🚀 Зареєструватися'),
     });
+  });
+
+  // Startup author answers an application right from the notification
+  bot.callbackQuery(/^vapp:(a|d):(\d+)$/, async (ctx) => {
+    const accept = ctx.match[1] === 'a';
+    try {
+      const { application, applicant, alreadyDecided } = await StartupService.decide(ctx.dbUser.id, parseInt(ctx.match[2], 10), accept);
+      await ctx.answerCallbackQuery(alreadyDecided ? 'Вже вирішено' : accept ? 'Прийнято' : 'Відхилено');
+      const outcome = application.status === 'accepted'
+        ? `\n\n✅ Прийнято. Напиши: <a href="${contactLink(applicant)}">${escapeHtml(displayName(applicant))}</a>`
+        : '\n\n❌ Відхилено';
+      await ctx.editMessageText(`${escapeHtml(ctx.callbackQuery.message?.text ?? '')}${outcome}`, { parse_mode: 'HTML' });
+    } catch (err: any) {
+      await ctx.answerCallbackQuery(err?.message ?? 'Не вийшло');
+    }
   });
 
   bot.command('new', async (ctx) => {

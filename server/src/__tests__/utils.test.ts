@@ -71,3 +71,16 @@ test('signed links: purpose and expiry are enforced', () => {
   assert.equal(verifyState(signState(7, -1, 'admin'), 'admin'), null);
   assert.equal(verifyState(admin.replace(/^7/, '8'), 'admin'), null);
 });
+
+test('booking quota day is the Kyiv day, including the 25-hour DST day', async () => {
+  const { getDayBounds } = await import('../utils/dateUtils.js');
+  const late = getDayBounds(new Date('2026-10-23T22:30:00Z')); // 01:30 on the 24th in Kyiv
+  assert.equal(late.start.toISOString(), '2026-10-23T21:00:00.000Z');
+  const dst = getDayBounds(new Date('2026-10-25T12:00:00Z'));
+  assert.equal(dst.end.getTime() - dst.start.getTime() + 1, 25 * 3_600_000);
+});
+
+test('midnight in Kyiv on the DST-switch days', () => {
+  assert.equal(kyivDayStart('2026-10-25').toISOString(), '2026-10-24T21:00:00.000Z'); // still +03 at 00:00
+  assert.equal(kyivDayStart('2026-03-29').toISOString(), '2026-03-28T22:00:00.000Z'); // still +02 at 00:00
+});

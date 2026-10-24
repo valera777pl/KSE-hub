@@ -28,6 +28,7 @@ export const eligibilityEnum = pgEnum('eligibility', ['grant', 'contract', 'all'
 export const opportunityCategoryEnum = pgEnum('opportunity_category', [
   'internship', 'job', 'grant', 'research',
 ]);
+export const applicationStatusEnum = pgEnum('application_status', ['pending', 'accepted', 'declined']);
 export const notificationTypeEnum = pgEnum('notification_type', [
   'deadline', 'match', 'booking_expiry', 'system',
 ]);
@@ -331,6 +332,22 @@ export const matches = pgTable('matches', {
   projectId: integer('project_id').references(() => ventureProjects.id),
   matchedAt: timestamp('matched_at').defaultNow().notNull(),
 });
+
+/* ───────────── STARTUP APPLICATIONS ───────────── */
+
+// A student asks to join a startup in a role; the author accepts or declines
+export const projectApplications = pgTable('project_applications', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull().references(() => ventureProjects.id, { onDelete: 'cascade' }),
+  applicantId: integer('applicant_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: varchar('role', { length: 100 }),
+  message: text('message'),
+  status: applicationStatusEnum('status').default('pending').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  decidedAt: timestamp('decided_at'),
+}, (table) => [
+  uniqueIndex('project_applications_project_applicant_idx').on(table.projectId, table.applicantId),
+]);
 
 /* ───────────── OPPORTUNITIES ───────────── */
 

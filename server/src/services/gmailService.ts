@@ -14,6 +14,11 @@ import { AnalyticsService } from './analyticsService.js';
 const MAX_MESSAGES_PER_SYNC = 10;
 const SUMMARY_CONCURRENCY = 1;
 const BASE_QUERY = '-in:spam -in:trash -category:promotions -category:social';
+const DOMAINS = ['Tech', 'Economics & Finance', 'Consulting', 'Public sector', 'Marketing', 'Research', 'Other'];
+
+/** Extra fields the model pulls out of internship/job emails for the Careers tab. */
+type OpportunityDetails = { company?: string; deadline?: Date; link?: string; domain?: string };
+
 const CATEGORIES: EmailCategory[] = ['deadline', 'event', 'internship', 'job', 'startup', 'admin', 'newsletter', 'other'];
 
 type Account = typeof googleAccounts.$inferSelect;
@@ -95,7 +100,7 @@ export class GmailService {
     const messageIdHeader = header('Message-ID').trim().toLowerCase() || null;
     const body = extractText(msg.payload);
     const source = detectSource(from);
-    const summary = await this.summaryFor(messageIdHeader, subject, from, body);
+    const { summary, opportunity } = await this.summaryFor(messageIdHeader, subject, from, body);
 
     const [row] = await db.insert(emails).values({
       userId: account.userId,
@@ -126,7 +131,7 @@ export class GmailService {
     }
 
     if (summary.category === 'internship' || summary.category === 'job') {
-      await saveOpportunity(summary, subject, senderName(from));
+      await saveOpportunity(summary, subject, senderName(from), opportunity);
     }
     return { ...row, summary };
   }
@@ -135,15 +140,17 @@ export class GmailService {
    * Reuse an existing summary when the same content was already seen
    * (same Message-ID across inboxes, or same normalized body) — 0 tokens.
    */
-  private static async summaryFor(messageIdHeader: string | null, subject: string, from: string, body: string) {
+  private static async summaryFor(
+    messageIdHeader: string | null, subject: string, from: string, body: string
+  ): Promise<{ summary: Summary; opportunity?: OpportunityDetails }> {
     const bodyHash = sha256(normalize(`${subject}\n${body}`));
     const existing = await findSummary(messageIdHeader, bodyHash);
-    if (existing) return existing;
+    if (existing) return { summary: existing };
 
-    const generated = await summarize(subject, from, body);
+    const { opportunity, ...generated } = await summarize(subject, from, body);
     await db.insert(summaries).values({ messageIdHeader, bodyHash, ...generated }).onConflictDoNothing();
     // Re-read: a parallel sync of the same mailing may have won the insert
-    return (await findSummary(messageIdHeader, bodyHash))!;
+    return { summary: (await findSummary(messageIdHeader, bodyHash))!, opportunity };
   }
 
   /** Deadlines and admin notices that the model flagged important go out right away, not in the digest. */
@@ -181,7 +188,7 @@ async function summarize(subject: string, from: string, body: string) {
   // model throws instead, so the email is retried rather than cached as a snippet.
   if (!hasAI()) {
     const snippet = body.replace(/\s+/g, ' ').trim().slice(0, 220);
-    return { summary: snippet ? `${snippet}…` : subject, category: 'other' as EmailCategory, important: false };
+    return { summary: snippet ? `${snippet}…` : subject, category: 'other' as EmailCategory, important: false, opportunity: undefined };
   }
   return summarizeWithModel(subject, from, body);
 }
@@ -198,7 +205,9 @@ async function summarizeWithModel(subject: string, from: string, body: string) {
           '{"summary": "1–2 речення українською: що сталося і що треба зробити, з датами/дедлайнами якщо є", ' +
           `"category": одне з ${CATEGORIES.map((c) => `"${c}"`).join(', ')}, ` +
           '"important": true лише якщо студенту треба діяти найближчими днями (дедлайн, зміна розкладу, обовʼязкова дія)}. ' +
-          'internship/job — стажування та вакансії; startup — пошук команди чи стартап-активності; newsletter — розсилки без дії.',
+          'internship/job — стажування та вакансії; startup — пошук команди чи стартап-активності; newsletter — розсилки без дії. ' +
+          'Лише для internship/job додай поля: "company" (організація), "deadline" (YYYY-MM-DD або null), ' +
+          `"link" (посилання на подачу заявки з листа або null), "domain" (одне з ${DOMAINS.map((d) => `"${d}"`).join(', ')}).`,
       },
       { role: 'user', content: `Від: ${from}\nТема: ${subject}\n\n${body.slice(0, 6000)}` },
     ],
@@ -206,14 +215,23 @@ async function summarizeWithModel(subject: string, from: string, body: string) {
 
   const raw = JSON.parse(completion.choices[0]?.message?.content || '{}');
   const category: EmailCategory = CATEGORIES.includes(raw.category) ? raw.category : 'other';
+  const deadline = /^\d{4}-\d{2}-\d{2}$/.test(raw.deadline ?? '') ? new Date(`${raw.deadline}T23:59:00+03:00`) : undefined;
   return {
     summary: String(raw.summary || subject).slice(0, 1000),
     category,
     important: raw.important === true,
+    opportunity: category === 'internship' || category === 'job'
+      ? {
+          company: typeof raw.company === 'string' && raw.company.trim() ? raw.company.trim() : undefined,
+          deadline: deadline && !Number.isNaN(deadline.getTime()) ? deadline : undefined,
+          link: typeof raw.link === 'string' && /^https?:\/\//.test(raw.link) ? raw.link : undefined,
+          domain: DOMAINS.includes(raw.domain) ? raw.domain : undefined,
+        }
+      : undefined,
   };
 }
 
-async function saveOpportunity(summary: Summary, subject: string, company: string) {
+async function saveOpportunity(summary: Summary, subject: string, sender: string, details: OpportunityDetails = {}) {
   // One opportunity per summary, however many inboxes it arrived in
   const sourceKey = `summary:${summary.id}`;
   const [exists] = await db.select({ id: opportunities.id }).from(opportunities)
@@ -221,9 +239,12 @@ async function saveOpportunity(summary: Summary, subject: string, company: strin
   if (exists) return;
   await db.insert(opportunities).values({
     title: subject.slice(0, 500),
-    company: (company || 'KSE').slice(0, 255),
+    company: (details.company || sender || 'KSE').slice(0, 255),
     category: summary.category === 'job' ? 'job' : 'internship',
     description: summary.summary,
+    deadline: details.deadline ?? null,
+    url: details.link ?? null,
+    domain: details.domain ?? null,
     slackMessageId: sourceKey,
   });
 }

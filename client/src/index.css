@@ -1388,3 +1388,35 @@ img { max-width: 100%; display: block; }
 }
 .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .admin-table td { padding: 6px 4px; border-bottom: 1px solid var(--border-color); }
+
+/* ─── Modal (bottom sheet) ─── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.15s ease-out;
+}
+.modal {
+  width: 100%;
+  max-width: 520px;
+  background: var(--surface-1);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: 20px 16px calc(20px + var(--safe-area-bottom));
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.2);
+  animation: sheetUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+}
+.modal__title { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+.modal__text { color: var(--text-muted); margin-bottom: 16px; }
+.match-modal__confetti { font-size: 48px; }
+.match-modal__avatars { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 8px 0 12px; font-size: 28px; }
+.match-modal__avatar {
+  width: 56px; height: 56px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); font-weight: 700;
+}
+@keyframes sheetUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }

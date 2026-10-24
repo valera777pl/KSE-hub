@@ -170,6 +170,8 @@ export interface Opportunity {
   description: string | null;
   salaryInfo: string | null;
   createdAt: string;
+  source: 'email' | 'manual';
+  emailUrl: string | null;
 }
 
 /* ─── Notifications ─── */
@@ -221,4 +223,23 @@ export interface ScheduleCompare {
   weekStart: string;
   events: (ClassEvent & { shared: boolean })[];
   sharedCourses: string[];
+}
+
+/* ─── Startups ─── */
+export interface StartupCard {
+  project: VentureProject;
+  author: { id: number; name: string };
+  myStatus: Application['status'] | null;
+}
+
+export interface Application {
+  id: number;
+  projectId: number;
+  role: string | null;
+  message: string | null;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+  project: { id: number; title: string };
+  applicant?: { name: string; headline: string | null; skills: string[]; contact: string | null };
+  author?: { name: string; contact: string | null };
 }

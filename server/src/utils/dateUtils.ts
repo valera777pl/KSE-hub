@@ -1,11 +1,15 @@
+import { kyivDate, kyivDayStart } from './kyivTime.js';
+
 /**
- * Returns the start and end of a given day in UTC.
+ * Start and end of the Kyiv calendar day containing `date` (the 3 h/day
+ * booking quota resets at midnight Kyiv, not UTC). DST days are 23/25 h long.
  */
 export function getDayBounds(date: Date = new Date()): { start: Date; end: Date } {
-  const start = new Date(date);
-  start.setUTCHours(0, 0, 0, 0);
-  const end = new Date(date);
-  end.setUTCHours(23, 59, 59, 999);
+  const day = kyivDate(date);
+  const start = kyivDayStart(day);
+  const next = new Date(`${day}T12:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  const end = new Date(kyivDayStart(next.toISOString().slice(0, 10)).getTime() - 1);
   return { start, end };
 }
 
