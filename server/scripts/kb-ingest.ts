@@ -2,10 +2,14 @@
  * Builds the KSE knowledge base: fetch public pages → strip site chrome →
  * chunk → embed with Gemini → store in kb_pages / kb_chunks.
  * Unchanged pages (same text hash) are skipped, pages no longer listed are removed.
+ * Internal documents that aren't on the public sites (office contacts, SSO
+ * structure…) live as Markdown in server/kb-docs/ and are stored as "doc:<file>".
  *
  *   npm run kb:ingest            # incremental
  *   npm run kb:ingest -- --force # re-embed everything
  */
+import fs from 'fs';
+import path from 'path';
 import { db, queryClient } from '../src/db/connection.js';
 import { kbChunks, kbPages } from '../src/db/schema.js';
 import { eq, notInArray } from 'drizzle-orm';
@@ -18,7 +22,23 @@ const CHUNK_CHARS = 1200;
 const OVERLAP_CHARS = 200;
 const force = process.argv.includes('--force');
 
-type Page = { url: string; title: string; lines: string[] };
+type Page = { url: string; title: string; lines: string[]; byParagraph?: boolean };
+
+const DOCS_DIR = path.resolve(import.meta.dirname, '../kb-docs');
+
+/** "# Title" on the first line, one paragraph per line after it. */
+function readDocs(): Page[] {
+  if (!fs.existsSync(DOCS_DIR)) return [];
+  return fs.readdirSync(DOCS_DIR).filter((f) => f.endsWith('.md')).sort().map((file) => {
+    const [first, ...rest] = fs.readFileSync(path.join(DOCS_DIR, file), 'utf8').split('\n');
+    return {
+      url: `doc:${file.replace(/\.md$/, '')}`,
+      title: first.replace(/^#\s*/, '').trim(),
+      lines: rest.map((l) => l.trim()).filter(Boolean),
+      byParagraph: true,
+    };
+  });
+}
 
 async function get(url: string): Promise<string> {
   const res = await fetch(url, { headers: { 'User-Agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(30_000) });
@@ -71,6 +91,8 @@ function stripBoilerplate(pages: Page[]): Page[] {
 }
 
 function chunk(page: Page): string[] {
+  // Hand-written docs: each paragraph is one topic, keep it whole
+  if (page.byParagraph) return page.lines.map((l) => `${page.title}\n${l}`);
   const chunks: string[] = [];
   let current = '';
   for (const line of page.lines) {
@@ -99,6 +121,7 @@ async function main() {
     await new Promise((r) => setTimeout(r, 300)); // be polite to KSE's servers
   }
   stripBoilerplate(pages);
+  pages.push(...readDocs());
 
   let embedded = 0;
   let unchanged = 0;

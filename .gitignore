@@ -4,3 +4,6 @@ dist
 .env
 .env.local
 *.log
+
+# Internal KSE docs with staff/student contacts: kept local, already loaded into the DB
+server/kb-docs/*.md
