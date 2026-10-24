@@ -1,92 +1,45 @@
-# 🎓 KSE Hub — Telegram Mini App for Kyiv School of Economics
+# KSE Hub
 
-All-in-one Telegram Mini App (TMA) для студентів Київської Школи Економіки (KSE), що об'єднує ключові університетські сценарії в єдиному сучасному інтерфейсі.
+Telegram-бот [@ksehub_bot](https://t.me/ksehub_bot) і мініапп для студентів Київської школи економіки: дайджести пошти й Moodle, розклад і спільні пари, ІІ-помічник (бронювання кімнат, дедлайни, база знань KSE), стартапи та стажування.
 
----
+Що зроблено і що далі — у [PLAN.md](PLAN.md).
 
-## 🚀 Основні модулі
+## Як влаштовано
 
-1. **🏢 Room Booking (Модуль 1)**
-   - Бронювання кімнат (Skype Rooms та Silent Boxes) у кампусі KSE.
-   - Захист від овербукінгу через транзакції та advisory locks у PostgreSQL.
-   - Денний ліміт 3 години на студента (Quota bar).
-   - "Hot Booking" в 1 клік на найближчі 30 хвилин.
+| Частина | Де | Що робить |
+|---|---|---|
+| Мініапп | `client/` (React + Vite) | Весь інтерфейс і налаштування, реєстрація, адмінка на `/admin` |
+| Сервер | `server/` (Hono) | API мініаппу, вебхук бота, `/cron/tick` |
+| База | Neon Postgres + pgvector | Дані, кеш стислих листів, база знань KSE |
+| ІІ | Gemini (одна модель) | Помічник у боті й мініаппі, стислий зміст листів, ембединги |
+| Хостинг | Vercel (`vercel.json`: сервіси `client` і `server`) | Деплой з гілки `main` |
+| Будильник | cron-job.org → `POST /cron/tick` кожні 10 хв | Пошта, розклад, нагадування, дайджести |
 
-2. **📚 Moodle Companion (Модуль 2)**
-   - Синхронізація з Moodle KSE через токен мобільного додатку.
-   - Дедлайн-радар (Deadline Radar) із відліком часу та статусом готовності.
-   - Перелік та огляд навчальних курсів.
-
-3. **🤝 VentureMatch (Модуль 3)**
-   - Тіндер-подібний нетворкінг для стартапів та студентів KSE.
-   - Свайпи профілів та проектів (react-spring / touch gestures).
-   - Автоматичне виявлення взаємного метчу та пряме посилання у Telegram (`tg://user?id=...`).
-
-4. **💼 Careers & Grants (Модуль 4)**
-   - Каталог стажувань, грантів, вакансій та досліджень.
-   - Фільтрація за типом фінансування (Грант / Контракт / Всі), дедлайнами та напрямками.
-
-5. **🤖 AI Campus Copilot (Модуль 5)**
-   - Асистент на базі OpenAI GPT-4o з підтримкою Function Calling (Tool Calling).
-   - Автоматичне виконання дій: бронювання вільних кімнат, перевірка дедлайнів, пошук можливостей.
-
----
-
-## 🛠 Технологічний стек
-
-- **Frontend**: React 18, TypeScript, Vite, Vanilla CSS Design System (з підтримкою змінних Telegram WebApp), Zustand, i18next (UK/EN).
-- **Backend**: Node.js, Hono, Drizzle ORM, OpenAI SDK, ical.js, Zod.
-- **Database**: PostgreSQL 16.
-- **Real-time / Auth**: SSE (Server-Sent Events), HMAC-SHA256 верифікація Telegram `initData`.
-- **DevOps**: Docker & Docker Compose.
-
----
-
-## ⚡ Швидкий старт (Локальна розробка)
-
-### 1. Клонування та налаштування змінних оточення
-
-Створіть `.env` файл на основі шаблону:
+## Локальний запуск
 
 ```bash
-cp .env.example .env
+cp .env.example .env        # заповнити ключі
+cd server && npm install && npm run db:sql && npm run dev   # API на :3001
+cd client && npm install && npm run dev                     # мініапп на :5173
 ```
 
-Заповніть необхідні параметри:
-- `TELEGRAM_BOT_TOKEN`
-- `OPENAI_API_KEY`
-- `DATABASE_URL`
+Поза Telegram мініапп працює від тестового користувача (`X-Dev-User-Id`, лише з `NODE_ENV=development`).
 
-### 2. Запуск через Docker Compose
+## Команди сервера
+
+| Команда | Що робить |
+|---|---|
+| `npm run db:sql` | Застосовує `src/db/sql/*.sql` (ідемпотентно). `drizzle-kit push` не використовуємо: він неправильно читає Postgres 18 |
+| `npm run kb:ingest` | Оновлює базу знань KSE: сайти KSE + внутрішні документи з `kb-docs/` (вони лише локально, у git не потрапляють) |
+| `npm test` | Автотести |
+| `npm run typecheck` | Перевірка типів |
+
+## Після деплою
+
+Зареєструвати вебхук і команди бота (один раз або після зміни команд):
 
 ```bash
-docker compose up --build
+curl -X POST https://kse-hub.vercel.app/bot/setup -H "Authorization: Bearer $BOT_SECRET"
 ```
 
-- Клієнт: [http://localhost:5173](http://localhost:5173)
-- Бекенд API: [http://localhost:3001](http://localhost:3001)
-
-### 3. Локальний запуск без Docker
-
-#### Бекенд:
-```bash
-cd server
-npm install
-npm run db:push     # застосування схеми до вашої БД
-npm run db:seed     # наповнення початковими кімнатами та тестовими даними
-npm run dev
-```
-
-#### Фронтенд:
-```bash
-cd client
-npm install
-npm run dev
-```
-
----
-
-## 🧪 Збірка та перевірка
-
-- **Typecheck & Build Client**: `cd client && npm run build`
-- **Typecheck & Build Server**: `cd server && npm run build`
+Адмінка: написати боту `/admin` (лише для адміністраторів) → посилання на 30 днів.

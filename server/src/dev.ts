@@ -6,13 +6,13 @@ import app from './index.js';
 
 // Local / Docker entry point. On Vercel, src/index.ts is used directly.
 
-// ─── Serve Frontend Static Files (Production SPA) ───
-const staticRoot = fs.existsSync(path.resolve(process.cwd(), 'public'))
-  ? './public'
-  : (fs.existsSync(path.resolve(process.cwd(), '../client/dist')) ? '../client/dist' : './public');
+// ─── Serve the built mini app if it exists (npm run build in client/); in dev use Vite on :5173 ───
+const staticRoot = '../client/dist';
 
-app.use('/*', serveStatic({ root: staticRoot }));
-app.get('*', serveStatic({ path: `${staticRoot}/index.html` }));
+if (fs.existsSync(path.resolve(process.cwd(), staticRoot))) {
+  app.use('/*', serveStatic({ root: staticRoot }));
+  app.get('*', serveStatic({ path: `${staticRoot}/index.html` }));
+}
 
 // ─── Start Server ───
 const port = parseInt(process.env.PORT || '3001');

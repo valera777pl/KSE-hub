@@ -3,12 +3,9 @@ import { notifications, users } from '../db/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { escapeHtml, sendToUser } from '../bot/send.js';
 
-// SSE connections store
-const connections = new Map<number, Set<ReadableStreamDefaultController>>();
-
 export class NotificationService {
   /**
-   * Create a notification and push via SSE.
+   * Create a notification and push it to the Telegram chat.
    */
   static async create(
     userId: number,
@@ -22,13 +19,7 @@ export class NotificationService {
       .values({ userId, type, title, message, actionUrl })
       .returning();
 
-    // Push to SSE
-    this.pushToUser(userId, {
-      type: 'notification',
-      data: notification,
-    });
-
-    // And to the Telegram chat
+    // Push to the Telegram chat
     const [user] = await db
       .select({ telegramId: users.telegramId, botBlocked: users.botBlocked })
       .from(users)
@@ -100,44 +91,5 @@ export class NotificationService {
         )
       );
     return result.length;
-  }
-
-  /**
-   * SSE: Register a client connection.
-   */
-  static addConnection(userId: number, controller: ReadableStreamDefaultController) {
-    if (!connections.has(userId)) {
-      connections.set(userId, new Set());
-    }
-    connections.get(userId)!.add(controller);
-  }
-
-  /**
-   * SSE: Remove a client connection.
-   */
-  static removeConnection(userId: number, controller: ReadableStreamDefaultController) {
-    connections.get(userId)?.delete(controller);
-    if (connections.get(userId)?.size === 0) {
-      connections.delete(userId);
-    }
-  }
-
-  /**
-   * SSE: Push event to a specific user.
-   */
-  static pushToUser(userId: number, payload: { type: string; data: any }) {
-    const userConns = connections.get(userId);
-    if (!userConns) return;
-
-    const message = `data: ${JSON.stringify(payload)}\n\n`;
-    const encoder = new TextEncoder();
-
-    for (const controller of userConns) {
-      try {
-        controller.enqueue(encoder.encode(message));
-      } catch {
-        userConns.delete(controller);
-      }
-    }
   }
 }

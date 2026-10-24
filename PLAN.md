@@ -126,12 +126,16 @@ Telegram-бот + мини-апп для студентов KSE: Moodle, пош�
 - Хостинг тільки безкоштовний: Vercel + Neon + cron-job.org (кожні 10 хв)
 - ІІ — тільки Gemini, одна модель, без перемикань
 - Slack — без прихованого читання через профілі, лише офіційні шляхи
-- Демо-стажування в базі лишаємо для тестів ІІ (прибрати перед тестом на студентах); демо-кімнати — поки немає BookingRooms API
+- Демо-стажування прибрано (2026-10-24) — у «Карʼєрі» лише те, що прийшло з листів; демо-кімнати лишаються, поки немає BookingRooms API (на них працює бронювання)
 - Розклад: повний тиждень видно іншим студентам KSE Hub за замовчуванням, з можливістю приховати; спільні пари — за спільним календарем секції
 
 ## Відомі дрібниці
 - Мова за замовчуванням для нових — українська; ти й одногрупник зареєструвались раніше — у вас може стояти English (Профіль → мова)
 
+## Прибирання (2026-10-24)
+- Прибрано: демо-стажування, тестові броні й події аналітики, копію мініаппу в `server/public`, Docker/Render-файли, SSE, `db:push`/`db:migrate`
+- `OPENAI_API_KEY` більше не використовується — можна видалити у Vercel; старий сервіс на Render — видалити в його панелі
+
 ## Змінні у Vercel
-`TELEGRAM_BOT_TOKEN`, `BOT_SECRET`, `DATABASE_URL`, `CRON_SECRET`, `TOKEN_ENC_KEY`, `GEMINI_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NODE_ENV`
+`TELEGRAM_BOT_TOKEN`, `BOT_SECRET`, `DATABASE_URL`, `CRON_SECRET`, `TOKEN_ENC_KEY`, `GEMINI_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NODE_ENV`; за бажанням `AI_DAILY_LIMIT` (за замовчуванням 30)
 У cron-job.org: заголовок `Authorization: Bearer <CRON_SECRET>`. GitHub Secret `CRON_SECRET` більше не потрібен

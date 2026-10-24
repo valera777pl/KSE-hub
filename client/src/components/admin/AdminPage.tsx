@@ -35,6 +35,15 @@ const EVENT_LABELS: Record<string, string> = {
   'google.connected': 'Підключили пошту',
   'onboarding.completed': 'Завершили реєстрацію',
   'digest.sent': 'Надіслано дайджест',
+  'digest.empty': 'Дайджест порожній (не надіслано)',
+  'digest.failed': 'Дайджест не доставлено',
+  'weekly.sent': 'Дедлайни на тиждень',
+  'class_reminder.sent': 'Нагадування про пару',
+  'schedule.change_sent': 'Зміни в розкладі',
+  'startup.created': 'Створено стартап',
+  'startup.applied': 'Заявка в стартап',
+  'startup.accepted': 'Заявку прийнято',
+  'startup.declined': 'Заявку відхилено',
   'reminder.sent': 'Нагадування про дедлайн',
   'urgent.sent': 'Терміновий лист',
 };
@@ -52,6 +61,7 @@ const TOOL_LABELS: Record<string, string> = {
   search_my_emails: 'Пошук у листах',
   search_opportunities: 'Стажування',
   search_kse_info: 'База знань KSE',
+  search_startups: 'Стартапи',
 };
 
 function authHeader(): string | null {

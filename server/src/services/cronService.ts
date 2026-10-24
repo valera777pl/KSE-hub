@@ -193,9 +193,14 @@ export class CronService {
       // Stamp first: a crash mid-send must not turn into a duplicate digest
       await db.update(users).set({ lastDigestAt: new Date() }).where(eq(users.id, user.id));
       const text = await DigestService.build(user, { markDigested: true });
-      if (text && (await sendToUser(user.telegramId, text, openAppKeyboard()))) {
+      if (!text) {
+        // Nothing new in the chosen sources: no message, but visible in the admin dashboard
+        AnalyticsService.track(user.id, 'digest.empty');
+      } else if (await sendToUser(user.telegramId, text, openAppKeyboard())) {
         sent++;
         AnalyticsService.track(user.id, 'digest.sent');
+      } else {
+        AnalyticsService.track(user.id, 'digest.failed');
       }
     }
     return sent;
