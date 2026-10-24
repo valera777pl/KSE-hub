@@ -2,6 +2,7 @@ import type OpenAI from 'openai';
 import { BookingService } from '../services/bookingService.js';
 import { MoodleService } from '../services/moodleService.js';
 import { ScheduleService, type ScheduleEvent } from '../services/scheduleService.js';
+import { KnowledgeService } from '../services/knowledgeService.js';
 import { DigestService } from '../services/digestService.js';
 import { db } from '../db/connection.js';
 import { chatMessages, emails, opportunities, summaries } from '../db/schema.js';
@@ -34,6 +35,7 @@ function systemPrompt(): string {
 3. Дедлайнами Moodle — завдання та тести студента.
 4. Листами — короткий зміст пошти @kse.org.ua, сповіщень Slack і Moodle.
 5. Стажуваннями, вакансіями та грантами.
+6. Інформацією про KSE — програми, гранти й фінансова допомога, оплата, обмін, викладачі, контакти, кампус.
 
 Правила:
 - Відповідай коротко, тією мовою, якою пише студент (за замовчуванням українською).
@@ -41,7 +43,7 @@ function systemPrompt(): string {
 - Дані про студента бери тільки з інструментів. Нічого не вигадуй: якщо даних немає — так і скажи.
 - Бронювання: спершу перевір вільні кімнати (get_available_rooms), запропонуй варіант і бронюй лише після згоди студента. Час — за Києвом, передавай у ISO 8601 з київським поясом з рядка «Зараз».
 - Якщо інструмент повернув "error" — дія НЕ виконана. Скажи студенту, що саме не вийшло, і не пиши, що все готово.
-- Про правила, програми й процедури KSE відповідай лише тим, у чому впевнений; інакше порадь звернутися до Student Office або на kse.ua.`;
+- Про KSE (програми, гранти, оплата, обмін, викладачі, контакти) спершу шукай через search_kse_info і відповідай лише з того, що знайшов, додаючи посилання на сторінку-джерело. Якщо нічого не знайдено — так і скажи й порадь звернутися до Student Office або приймальної комісії; не вигадуй.`;
 }
 
 export class AIService {
@@ -142,6 +144,13 @@ export class AIService {
         return rows.map(({ booking, room }) => ({
           room: room?.name, from: formatKyiv(booking.startTime), to: formatKyiv(booking.endTime), status: booking.status,
         }));
+      }
+
+      case 'search_kse_info': {
+        const found = await KnowledgeService.search(String(args.query ?? ''), 5);
+        return found.length
+          ? found.map((f) => ({ source: f.title, url: f.url, text: f.content }))
+          : { note: 'У базі знань KSE нічого не знайдено.' };
       }
 
       case 'get_my_schedule': {

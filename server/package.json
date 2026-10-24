@@ -14,7 +14,8 @@
     "build:client": "cd ../client && npm install && npm run build && cd ../server && rm -rf public && cp -r ../client/dist ./public",
     "typecheck": "tsc --noEmit",
     "db:sql": "node --env-file-if-exists=../.env --env-file-if-exists=.env scripts/run-sql.mjs",
-    "test": "node --import tsx --test \"src/__tests__/*.test.ts\""
+    "test": "node --import tsx --test \"src/__tests__/*.test.ts\"",
+    "kb:ingest": "tsx --env-file-if-exists=../.env --env-file-if-exists=.env scripts/kb-ingest.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.17",

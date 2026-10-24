@@ -51,6 +51,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_my_deadlines: 'Дедлайни',
   search_my_emails: 'Пошук у листах',
   search_opportunities: 'Стажування',
+  search_kse_info: 'База знань KSE',
 };
 
 function authHeader(): string | null {

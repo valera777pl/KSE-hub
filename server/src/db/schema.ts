@@ -11,6 +11,7 @@ import {
   pgEnum,
   uniqueIndex,
   index,
+  vector,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -175,6 +176,26 @@ export const classReminders = pgTable('class_reminders', {
   sentAt: timestamp('sent_at').defaultNow().notNull(),
 }, (table) => [
   uniqueIndex('class_reminders_user_event_idx').on(table.userId, table.eventId),
+]);
+
+/* ───────────── KSE KNOWLEDGE BASE ───────────── */
+
+// Public KSE pages the assistant can quote; `hash` lets a re-crawl skip unchanged pages
+export const kbPages = pgTable('kb_pages', {
+  id: serial('id').primaryKey(),
+  url: text('url').notNull().unique(),
+  title: text('title').notNull(),
+  hash: varchar('hash', { length: 64 }).notNull(),
+  fetchedAt: timestamp('fetched_at').defaultNow().notNull(),
+});
+
+export const kbChunks = pgTable('kb_chunks', {
+  id: serial('id').primaryKey(),
+  pageId: integer('page_id').notNull().references(() => kbPages.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  embedding: vector('embedding', { dimensions: 768 }).notNull(),
+}, (table) => [
+  index('kb_chunks_page_idx').on(table.pageId),
 ]);
 
 /* ───────────── ANALYTICS ───────────── */

@@ -4,6 +4,20 @@ export const toolDefinitions: OpenAI.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'search_kse_info',
+      description: 'Search public KSE information (university.kse.ua, kse.ua): bachelor/master programmes, admission, grants and financial aid, tuition payment, exchange/mobility, teachers, offices and contacts, campus. Use for any question about how KSE works.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'The question in Ukrainian, as specific as possible.' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_available_rooms',
       description: 'Find available rooms (Skype Rooms or Silent Boxes) for a given time range. Returns list of rooms with availability status.',
       parameters: {
