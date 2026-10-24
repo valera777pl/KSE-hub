@@ -4,6 +4,8 @@ import { users } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { updateProfileSchema } from '../utils/validators.js';
 import { GoogleService } from '../services/googleService.js';
+import { AnalyticsService, CLIENT_EVENTS } from '../services/analyticsService.js';
+import { AppError } from '../middleware/errorHandler.js';
 
 const userRoutes = new Hono();
 
@@ -30,6 +32,26 @@ userRoutes.patch('/me', async (c) => {
     .returning();
 
   return c.json({ user: updated });
+});
+
+// POST /users/me/onboarding — finish sign-up; requires a connected KSE mail
+userRoutes.post('/me/onboarding', async (c) => {
+  const user = c.get('dbUser');
+  if (!(await GoogleService.getAccount(user.id))) throw new AppError('Спершу увійди поштою @kse.org.ua', 400);
+  const [updated] = await db
+    .update(users)
+    .set({ onboardedAt: user.onboardedAt ?? new Date(), updatedAt: new Date() })
+    .where(eq(users.id, user.id))
+    .returning();
+  if (!user.onboardedAt) AnalyticsService.track(user.id, 'onboarding.completed');
+  return c.json({ user: updated });
+});
+
+// POST /users/me/events — the mini app reports screen views ({ event: "tab.schedule" })
+userRoutes.post('/me/events', async (c) => {
+  const { event } = await c.req.json().catch(() => ({ event: '' }));
+  if (typeof event === 'string' && CLIENT_EVENTS.test(event)) AnalyticsService.track(c.get('dbUser').id, event);
+  return c.json({ ok: true });
 });
 
 // DELETE /users/me — Remove the student and everything linked to them

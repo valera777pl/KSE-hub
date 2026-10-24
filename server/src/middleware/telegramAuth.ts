@@ -2,7 +2,7 @@ import type { Context, Next } from 'hono';
 import { validateTelegramInitData, type TelegramUser } from '../utils/telegramHash.js';
 import { db } from '../db/connection.js';
 import { users } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 // Extend Hono context with user data
 declare module 'hono' {
@@ -65,37 +65,27 @@ export async function telegramAuth(c: Context, next: Next) {
 export async function upsertUser(tgUser: TelegramUser) {
   const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
 
-  const existing = await db
-    .select()
-    .from(users)
-    .where(eq(users.telegramId, tgUser.id))
-    .limit(1);
-
-  if (existing.length > 0) {
-    // Update username/avatar if changed
-    const [updated] = await db
-      .update(users)
-      .set({
-        username: tgUser.username || existing[0].username,
-        avatarUrl: tgUser.photo_url || existing[0].avatarUrl,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.telegramId, tgUser.id))
-      .returning();
-    return updated;
-  }
-
-  // Create new user
-  const [newUser] = await db
+  // One atomic statement: the mini app fires several requests at once on first
+  // open, and a select-then-insert would race into a duplicate-key error
+  const [user] = await db
     .insert(users)
     .values({
       telegramId: tgUser.id,
       username: tgUser.username,
       fullName,
       avatarUrl: tgUser.photo_url,
-      languagePref: tgUser.language_code === 'uk' ? 'uk' : 'en',
+      // The product is in Ukrainian; English stays available in the profile
+      languagePref: 'uk',
+    })
+    .onConflictDoUpdate({
+      target: users.telegramId,
+      set: {
+        username: sql`coalesce(excluded.username, ${users.username})`,
+        avatarUrl: sql`coalesce(excluded.avatar_url, ${users.avatarUrl})`,
+        updatedAt: new Date(),
+      },
     })
     .returning();
 
-  return newUser;
+  return user;
 }

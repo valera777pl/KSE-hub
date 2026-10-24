@@ -1350,3 +1350,41 @@ img { max-width: 100%; display: block; }
 .font-bold { font-weight: 700; }
 .font-extrabold { font-weight: 800; }
 .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ─── Admin dashboard (single-series charts: one blue, validated per theme) ─── */
+:root, [data-theme="light"] { --chart-mark: #2a78d6; --chart-grid: var(--border-color); }
+[data-theme="dark"] { --chart-mark: #3987e5; --chart-grid: var(--border-color); }
+
+.admin-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.admin-grid { position: absolute; left: 0; right: 0; height: 1px; background: var(--chart-grid); }
+.admin-grid--base { background: var(--text-subtle); }
+.admin-col {
+  width: 100%;
+  max-width: 24px;
+  background: var(--chart-mark);
+  border-radius: 4px 4px 0 0;
+  transition: opacity var(--transition-fast);
+}
+.admin-bar { height: 10px; background: var(--chart-mark); border-radius: 0 4px 4px 0; }
+.admin-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-1);
+  border: var(--border-card);
+  box-shadow: var(--card-shadow);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 5;
+  pointer-events: none;
+}
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table td { padding: 6px 4px; border-bottom: 1px solid var(--border-color); }

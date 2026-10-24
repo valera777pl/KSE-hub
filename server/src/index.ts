@@ -19,6 +19,7 @@ import { notificationRoutes } from './routes/notifications.js';
 import { botRoutes, cronRoutes } from './routes/bot.js';
 import { googleCallback, googleRoutes } from './routes/google.js';
 import { scheduleRoutes } from './routes/schedule.js';
+import { adminRoutes } from './routes/admin.js';
 
 const app = new Hono();
 
@@ -39,6 +40,8 @@ app.route('/cron', cronRoutes);
 
 // Google redirects the browser here without Telegram initData; must be mounted before /api auth
 app.route('/api/google', googleCallback);
+// Admin dashboard has its own auth (bot link or admin's initData)
+app.route('/api/admin', adminRoutes);
 
 // ─── Protected Routes (Telegram Auth required) ───
 const api = new Hono();

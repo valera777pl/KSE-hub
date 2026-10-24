@@ -1,3 +1,4 @@
+import { AnalyticsService } from '../services/analyticsService.js';
 import { Hono } from 'hono';
 import { BookingService } from '../services/bookingService.js';
 import { createBookingSchema, hotBookingSchema } from '../utils/validators.js';
@@ -44,6 +45,7 @@ roomRoutes.post('/book', async (c) => {
     new Date(data.startTime),
     new Date(data.endTime)
   );
+  AnalyticsService.track(user.id, 'booking.created', { via: 'app' });
 
   return c.json(result, 201);
 });
@@ -55,6 +57,7 @@ roomRoutes.post('/hot-book', async (c) => {
   const user = c.get('dbUser');
 
   const result = await BookingService.hotBook(user.id, data.roomId);
+  AnalyticsService.track(user.id, 'booking.created', { via: 'app', hot: true });
   return c.json(result, 201);
 });
 

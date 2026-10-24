@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import { escapeHtml, sendToUser } from '../bot/send.js';
 import { waitUntil } from '@vercel/functions';
 import { ScheduleService } from '../services/scheduleService.js';
+import { AnalyticsService } from '../services/analyticsService.js';
 
 // GET /api/google/callback — Google redirects the browser here (no Telegram initData)
 const googleCallback = new Hono();
@@ -20,6 +21,7 @@ googleCallback.get('/callback', async (c) => {
 
   try {
     const email = await GoogleService.completeLogin(userId, code);
+    AnalyticsService.track(userId, 'google.connected');
     // The schedule comes with the same login; fetch it in the background so the page returns now
     waitUntil(
       GoogleService.getAccount(userId)

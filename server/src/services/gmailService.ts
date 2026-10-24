@@ -8,6 +8,7 @@ import { GoogleService } from './googleService.js';
 import { sha256 } from '../utils/crypto.js';
 import { escapeHtml, sendToUser } from '../bot/send.js';
 import { chatCompletion, hasAI } from '../ai/client.js';
+import { AnalyticsService } from './analyticsService.js';
 
 // Gemini's free tier allows only a few requests per minute, shared with the assistant
 const MAX_MESSAGES_PER_SYNC = 10;
@@ -142,6 +143,7 @@ export class GmailService {
     for (const email of urgent) {
       const text = `🚨 <b>${escapeHtml(email.subject ?? '')}</b>\n<i>${escapeHtml(email.fromName ?? '')}</i>\n\n${escapeHtml(email.summary.summary)}`;
       if (await sendToUser(user.telegramId, text)) {
+        AnalyticsService.track(userId, 'urgent.sent');
         await db.update(emails).set({ digestedAt: new Date() }).where(eq(emails.id, email.id));
       }
     }

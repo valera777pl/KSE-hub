@@ -8,9 +8,20 @@ import { chatMessages, emails, opportunities, summaries } from '../db/schema.js'
 import { and, desc, eq, gt, gte, ilike, isNull, or } from 'drizzle-orm';
 import { toolDefinitions } from './tools.js';
 import { chatCompletion } from './client.js';
+import { AnalyticsService } from '../services/analyticsService.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { users } from '../db/schema.js';
 import { formatKyiv, kyivDate, kyivDayStart, kyivNowForPrompt } from '../utils/kyivTime.js';
 
 const HISTORY_TURNS = 10;
+// Free Gemini quota is shared by everyone; a paid plan can lift this later
+const DAILY_LIMIT = parseInt(process.env.AI_DAILY_LIMIT || '30', 10);
+
+export class AILimitError extends AppError {
+  constructor() {
+    super(`Ліміт ${DAILY_LIMIT} повідомлень ІІ на сьогодні вичерпано. Завтра знову можна 🙂`, 429);
+  }
+}
 const MAX_TOOL_ROUNDS = 3;
 
 function systemPrompt(): string {
@@ -38,7 +49,13 @@ export class AIService {
    * One assistant turn. The conversation is kept in chat_messages,
    * so the bot chat and the mini app continue the same dialogue.
    */
-  static async chat(userId: number, message: string) {
+  static async chat(userId: number, message: string, source: 'bot' | 'app' = 'app') {
+    const [user] = await db.select({ isAdmin: users.isAdmin }).from(users).where(eq(users.id, userId)).limit(1);
+    if (!user?.isAdmin && (await AnalyticsService.countToday(userId, 'ai.message')) >= DAILY_LIMIT) {
+      AnalyticsService.track(userId, 'ai.limit_hit', { source });
+      throw new AILimitError();
+    }
+
     const history = await this.history(userId);
     const messages: OpenAI.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt() },
@@ -67,12 +84,14 @@ export class AIService {
       for (const call of assistantMessage.tool_calls) {
         const args = safeJson(call.function.arguments);
         toolCalls.push({ name: call.function.name, args });
+        AnalyticsService.track(userId, 'ai.tool', { name: call.function.name });
         const result = await this.executeTool(call.function.name, args, userId).catch((err) => ({ error: String(err?.message ?? err) }));
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
       }
     }
 
     const content = reply?.trim() || 'Не вдалося сформулювати відповідь, спробуй перепитати.';
+    AnalyticsService.track(userId, 'ai.message', { source });
     await db.insert(chatMessages).values([
       { userId, role: 'user', content: message },
       { userId, role: 'assistant', content },
@@ -104,11 +123,13 @@ export class AIService {
 
       case 'book_room': {
         const result = await BookingService.createBooking(userId, args.room_id, new Date(args.start_time), new Date(args.end_time));
+        AnalyticsService.track(userId, 'booking.created', { via: 'ai' });
         return { success: true, room: result.room.name, from: formatKyiv(new Date(args.start_time)), to: formatKyiv(new Date(args.end_time)) };
       }
 
       case 'hot_book_room': {
         const { booking, room } = await BookingService.hotBook(userId, args.room_id);
+        AnalyticsService.track(userId, 'booking.created', { via: 'ai', hot: true });
         return { success: true, room: room.name, from: formatKyiv(new Date(booking.start_time)), to: formatKyiv(new Date(booking.end_time)) };
       }
 

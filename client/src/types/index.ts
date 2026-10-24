@@ -14,6 +14,8 @@ export interface User {
   digestSources: DigestSource[];
   digestHour: number; // Kyiv hour, -1 = digest off
   scheduleVisible: boolean;
+  onboardedAt: string | null;
+  isAdmin: boolean;
   createdAt: string;
   updatedAt: string;
 }

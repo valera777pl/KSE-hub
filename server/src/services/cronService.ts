@@ -4,6 +4,7 @@ import { and, asc, eq, gt, isNotNull, isNull, lt, lte, ne, or, sql } from 'drizz
 import { MoodleService } from './moodleService.js';
 import { DigestService } from './digestService.js';
 import { GmailService } from './gmailService.js';
+import { AnalyticsService } from './analyticsService.js';
 import { ScheduleService } from './scheduleService.js';
 import { escapeHtml, openAppKeyboard, sendToUser } from '../bot/send.js';
 import { formatKyiv, kyivHour } from '../utils/kyivTime.js';
@@ -127,7 +128,10 @@ export class CronService {
       const head = kind === '3h' ? '🔥 <b>Менше 3 годин до дедлайну</b>' : '⏰ <b>Дедлайн завтра</b>';
       const course = courseName ? `\n<i>${escapeHtml(courseName)}</i>` : '';
       const text = `${head}\n\n<b>${escapeHtml(assignment.title)}</b>${course}\n${formatKyiv(due)}`;
-      if (await sendToUser(telegramId, text, openAppKeyboard('Відкрити дедлайни'))) sent++;
+      if (await sendToUser(telegramId, text, openAppKeyboard('Відкрити дедлайни'))) {
+        sent++;
+        AnalyticsService.track(assignment.userId, 'reminder.sent', { kind });
+      }
     }
     return sent;
   }
@@ -152,7 +156,10 @@ export class CronService {
       // Stamp first: a crash mid-send must not turn into a duplicate digest
       await db.update(users).set({ lastDigestAt: new Date() }).where(eq(users.id, user.id));
       const text = await DigestService.build(user, { markDigested: true });
-      if (text && (await sendToUser(user.telegramId, text, openAppKeyboard()))) sent++;
+      if (text && (await sendToUser(user.telegramId, text, openAppKeyboard()))) {
+        sent++;
+        AnalyticsService.track(user.id, 'digest.sent');
+      }
     }
     return sent;
   }

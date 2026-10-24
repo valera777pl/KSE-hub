@@ -8,6 +8,8 @@ import { useThemeStore } from './stores/themeStore';
 import { TopBar } from './components/layout/TopBar';
 import { BottomNav } from './components/layout/BottomNav';
 import { ProfileDrawer } from './components/layout/ProfileDrawer';
+import { Onboarding } from './components/layout/Onboarding';
+import { track } from './api/client';
 import { NotificationPanel } from './components/layout/NotificationPanel';
 import { RoomsPage } from './components/modules/rooms/RoomsPage';
 import { MoodlePage } from './components/modules/moodle/MoodlePage';
@@ -27,6 +29,7 @@ export default function App() {
   useEffect(() => {
     fetchUser();
     fetchNotifications();
+    track('app.open');
 
     // Apply theme from store
     document.documentElement.setAttribute('data-theme', useThemeStore.getState().theme);
@@ -64,6 +67,7 @@ export default function App() {
   const handleTabChange = (tab: TabId) => {
     handleHaptic('light');
     setActiveTab(tab);
+    track(`tab.${tab}`);
   };
 
   const renderPage = () => {
@@ -85,6 +89,17 @@ export default function App() {
           <div style={{ fontSize: '20px', fontWeight: 700 }}>KSE Hub</div>
           <div style={{ fontSize: '12px', color: 'var(--tg-hint)', marginTop: '8px' }}>Loading...</div>
         </div>
+      </div>
+    );
+  }
+
+  // Sign-up first: nothing else opens until the KSE mail is connected
+  if (user && !user.onboardedAt) {
+    return (
+      <div className="app-layout">
+        <main className="app-content" style={{ paddingBottom: 24 }}>
+          <Onboarding />
+        </main>
       </div>
     );
   }

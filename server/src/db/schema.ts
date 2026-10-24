@@ -53,6 +53,9 @@ export const users = pgTable('users', {
   botBlocked: boolean('bot_blocked').default(false).notNull(),
   // Other KSE Hub students can see this student's weekly schedule (off = hidden from search)
   scheduleVisible: boolean('schedule_visible').default(true).notNull(),
+  // Finished the mini app sign-up (KSE mail connected); the bot works only after this
+  onboardedAt: timestamp('onboarded_at'),
+  isAdmin: boolean('is_admin').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
@@ -158,6 +161,20 @@ export const calendarEvents = pgTable('calendar_events', {
 }, (table) => [
   uniqueIndex('calendar_events_calendar_event_idx').on(table.calendarId, table.googleEventId),
   index('calendar_events_start_idx').on(table.startAt),
+]);
+
+/* ───────────── ANALYTICS ───────────── */
+
+// One row per meaningful action ("ai.message", "tab.schedule", "digest.sent"…), for the admin dashboard
+export const usageEvents = pgTable('usage_events', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  event: varchar('event', { length: 50 }).notNull(),
+  props: jsonb('props').$type<Record<string, unknown>>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('usage_events_created_idx').on(table.createdAt),
+  index('usage_events_event_idx').on(table.event, table.createdAt),
 ]);
 
 /* ───────────── AI ASSISTANT ───────────── */

@@ -25,17 +25,20 @@ export function sha256(text: string): string {
   return createHash('sha256').update(text).digest('hex');
 }
 
-/** Short-lived signed token, e.g. the OAuth `state` that ties a Google login to a Telegram user. */
-export function signState(userId: number, ttlSeconds = 15 * 60): string {
+/**
+ * Signed, expiring token for a user. `purpose` keeps kinds apart: an OAuth
+ * `state` can't be replayed as an admin login and vice versa.
+ */
+export function signState(userId: number, ttlSeconds = 15 * 60, purpose = 'oauth'): string {
   const body = `${userId}.${Math.floor(Date.now() / 1000) + ttlSeconds}`;
-  const mac = createHmac('sha256', key()).update(body).digest('base64url');
+  const mac = createHmac('sha256', key()).update(`${purpose}:${body}`).digest('base64url');
   return `${body}.${mac}`;
 }
 
-export function verifyState(state: string): number | null {
+export function verifyState(state: string, purpose = 'oauth'): number | null {
   const [userId, exp, mac] = state.split('.');
   if (!userId || !exp || !mac) return null;
-  const expected = createHmac('sha256', key()).update(`${userId}.${exp}`).digest('base64url');
+  const expected = createHmac('sha256', key()).update(`${purpose}:${userId}.${exp}`).digest('base64url');
   const a = Buffer.from(mac);
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;

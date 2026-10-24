@@ -57,3 +57,8 @@ export const api = {
   delete: <T>(endpoint: string) =>
     apiRequest<T>(endpoint, { method: 'DELETE' }),
 };
+
+/** Report a screen view or onboarding step for the admin dashboard; never throws. */
+export function track(event: string) {
+  apiRequest('/users/me/events', { method: 'POST', body: JSON.stringify({ event }) }).catch(() => {});
+}
