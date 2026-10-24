@@ -35,6 +35,8 @@ export const updateProfileSchema = z.object({
   digestSources: z.array(z.enum(['moodle', 'gmail', 'slack'])).max(3).optional(),
   digestHour: z.number().int().min(-1).max(23).optional(),
   scheduleVisible: z.boolean().optional(),
+  notifyScheduleChanges: z.boolean().optional(),
+  classReminders: z.boolean().optional(),
 });
 
 /* ───── Venture Profile Validators ───── */

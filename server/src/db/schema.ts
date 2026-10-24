@@ -55,6 +55,10 @@ export const users = pgTable('users', {
   scheduleVisible: boolean('schedule_visible').default(true).notNull(),
   // Finished the mini app sign-up (KSE mail connected); the bot works only after this
   onboardedAt: timestamp('onboarded_at'),
+  // Schedule notifications: class moved/cancelled (on), "class in 15 min" (opt-in)
+  notifyScheduleChanges: boolean('notify_schedule_changes').default(true).notNull(),
+  classReminders: boolean('class_reminders').default(false).notNull(),
+  lastWeeklyAt: timestamp('last_weekly_at'),
   isAdmin: boolean('is_admin').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -161,6 +165,16 @@ export const calendarEvents = pgTable('calendar_events', {
 }, (table) => [
   uniqueIndex('calendar_events_calendar_event_idx').on(table.calendarId, table.googleEventId),
   index('calendar_events_start_idx').on(table.startAt),
+]);
+
+// "Class in 15 min" sent once per student per class
+export const classReminders = pgTable('class_reminders', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  eventId: varchar('event_key', { length: 300 }).notNull(),
+  sentAt: timestamp('sent_at').defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('class_reminders_user_event_idx').on(table.userId, table.eventId),
 ]);
 
 /* ───────────── ANALYTICS ───────────── */

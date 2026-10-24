@@ -16,6 +16,11 @@ export function formatKyiv(date: Date): string {
   return dateTimeFmt.format(date);
 }
 
+/** 0 = Sunday … 6 = Saturday, in Kyiv. */
+export function kyivWeekday(now = new Date()): number {
+  return new Date(`${kyivDate(now)}T12:00:00Z`).getUTCDay();
+}
+
 /** Current hour (0–23) in Kyiv. */
 export function kyivHour(now = new Date()): number {
   return parseInt(hourFmt.format(now), 10);

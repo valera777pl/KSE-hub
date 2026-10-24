@@ -7,7 +7,7 @@ import { GmailService } from './gmailService.js';
 import { AnalyticsService } from './analyticsService.js';
 import { ScheduleService } from './scheduleService.js';
 import { escapeHtml, openAppKeyboard, sendToUser } from '../bot/send.js';
-import { formatKyiv, kyivHour } from '../utils/kyivTime.js';
+import { formatKyiv, kyivHour, kyivWeekday } from '../utils/kyivTime.js';
 
 const HOUR = 3_600_000;
 const CALENDAR_SYNC_EVERY = 3 * HOUR;
@@ -23,10 +23,43 @@ export class CronService {
   static async tick() {
     const calendars = await this.syncCalendars();
     const emails = await this.syncGmail();
-    const schedules = process.env.GOOGLE_CLIENT_ID ? await ScheduleService.syncDueAccounts() : 0;
+    const google = !!process.env.GOOGLE_CLIENT_ID;
+    const schedules = google ? await ScheduleService.syncDueAccounts() : 0;
+    const courseCalendars = google ? await ScheduleService.syncStaleCalendars() : 0;
+    const classReminders = await ScheduleService.sendClassReminders();
     const reminders = await this.sendDeadlineReminders();
     const digests = await this.sendDigests();
-    return { calendars, emails, schedules, reminders, digests };
+    const weekly = await this.sendWeeklyDeadlines();
+    return { calendars, emails, schedules, courseCalendars, classReminders, reminders, digests, weekly };
+  }
+
+  /** Sunday from 19:00 Kyiv: next week's Moodle deadlines in one message (classes are in the schedule tab). */
+  static async sendWeeklyDeadlines() {
+    const now = new Date();
+    if (kyivWeekday(now) !== 0 || kyivHour(now) < 19) return 0;
+
+    const due = await db.select().from(users).where(and(
+      isNotNull(users.onboardedAt),
+      eq(users.botBlocked, false),
+      or(isNull(users.lastWeeklyAt), lt(users.lastWeeklyAt, new Date(now.getTime() - 5 * 24 * HOUR)))
+    ));
+
+    let sent = 0;
+    for (const user of due) {
+      await db.update(users).set({ lastWeeklyAt: now }).where(eq(users.id, user.id));
+      if (!user.digestSources.includes('moodle')) continue;
+      const rows = await DigestService.upcomingDeadlines(user.id, now, new Date(now.getTime() + 8 * 24 * HOUR), 25);
+      if (!rows.length) continue;
+      const lines = rows.map(({ assignment, courseName }) => {
+        const course = courseName ? ` · <i>${escapeHtml(courseName)}</i>` : '';
+        return `• ${escapeHtml(assignment.title)}${course}\n  ⏰ ${formatKyiv(assignment.dueDate!)}`;
+      });
+      if (await sendToUser(user.telegramId, `📅 <b>Дедлайни на тиждень</b>\n\n${lines.join('\n')}`, openAppKeyboard('Відкрити Moodle'))) {
+        sent++;
+        AnalyticsService.track(user.id, 'weekly.sent');
+      }
+    }
+    return sent;
   }
 
   /** Pull new mail for the accounts synced longest ago. Revoked accounts wait for a reconnect. */

@@ -15,6 +15,8 @@ export interface User {
   digestHour: number; // Kyiv hour, -1 = digest off
   scheduleVisible: boolean;
   onboardedAt: string | null;
+  notifyScheduleChanges: boolean;
+  classReminders: boolean;
   isAdmin: boolean;
   createdAt: string;
   updatedAt: string;

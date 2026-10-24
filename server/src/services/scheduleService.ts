@@ -1,10 +1,13 @@
 import { db } from '../db/connection.js';
-import { calendarEvents, courseCalendars, googleAccounts, userCalendars, users } from '../db/schema.js';
-import { and, asc, eq, gt, gte, inArray, isNull, lt, ne, notInArray, or, sql } from 'drizzle-orm';
+import { calendarEvents, classReminders, courseCalendars, googleAccounts, userCalendars, users } from '../db/schema.js';
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, sql } from 'drizzle-orm';
 import { GoogleService } from './googleService.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { toLatin } from '../utils/translit.js';
-import { kyivWeekStart } from '../utils/kyivTime.js';
+import { formatKyiv, kyivWeekStart } from '../utils/kyivTime.js';
+import { diffSchedule, type ScheduleChange } from '../utils/scheduleDiff.js';
+import { escapeHtml, openAppKeyboard, sendToUser } from '../bot/send.js';
+import { AnalyticsService } from './analyticsService.js';
 
 type Account = typeof googleAccounts.$inferSelect;
 type CourseCalendar = typeof courseCalendars.$inferSelect;
@@ -13,7 +16,9 @@ const DAY = 86_400_000;
 const SUBSCRIPTIONS_SYNC_EVERY = 12 * 3_600_000;
 // Not synced on schedule.kse.ua yet: look again every hour so the schedule shows up soon after they do
 const EMPTY_SUBSCRIPTIONS_SYNC_EVERY = 3_600_000;
-const EVENTS_SYNC_EVERY = 6 * 3_600_000;
+const EVENTS_SYNC_EVERY = 2 * 3_600_000;
+// Changes further out than two weeks aren't worth a message yet
+const CHANGE_HORIZON = 14 * DAY;
 const EVENT_SYNC_CONCURRENCY = 5;
 // "ECON100 [L1] Principles of Economics – Fall 26/27" → code, section, name
 const COURSE_CALENDAR = /^([A-Z]{2,6}\d{3}[A-Z]?)\s*\[([^\]]+)\]\s*(.+?)(?:\s+[–-]\s+(?:Fall|Spring|Summer)\b.*)?$/;
@@ -100,6 +105,15 @@ export class ScheduleService {
         endAt: new Date(e.end!.dateTime!),
       }));
 
+    // Snapshot before replacing, to tell subscribers what moved (not on the very first sync)
+    const previous = calendar.eventsSyncedAt
+      ? await db.select().from(calendarEvents).where(and(
+          eq(calendarEvents.calendarId, calendar.id),
+          gte(calendarEvents.startAt, from),
+          lt(calendarEvents.startAt, to)
+        ))
+      : [];
+
     await db.transaction(async (tx) => {
       await tx.delete(calendarEvents).where(and(
         eq(calendarEvents.calendarId, calendar.id),
@@ -109,6 +123,118 @@ export class ScheduleService {
       if (rows.length) await tx.insert(calendarEvents).values(rows).onConflictDoNothing();
       await tx.update(courseCalendars).set({ eventsSyncedAt: new Date() }).where(eq(courseCalendars.id, calendar.id));
     });
+
+    if (calendar.eventsSyncedAt) {
+      const changes = diffSchedule(previous, rows, new Date(), CHANGE_HORIZON);
+      if (changes.length) await this.notifyChanges(calendar, changes);
+    }
+  }
+
+  /** One message per student for all changes in this course section. */
+  private static async notifyChanges(calendar: CourseCalendar, changes: ScheduleChange[]) {
+    const subscribers = await db
+      .select({ id: users.id, telegramId: users.telegramId })
+      .from(userCalendars)
+      .innerJoin(users, eq(users.id, userCalendars.userId))
+      .where(and(
+        eq(userCalendars.calendarId, calendar.id),
+        eq(users.notifyScheduleChanges, true),
+        eq(users.botBlocked, false),
+        isNotNull(users.onboardedAt)
+      ));
+    if (!subscribers.length) return;
+
+    const course = `<b>${escapeHtml(calendar.courseCode)} [${escapeHtml(calendar.section ?? '')}]</b>`;
+    const lines = changes.slice(0, 8).map((c) => {
+      switch (c.kind) {
+        case 'moved':
+          return `🔄 ${formatKyiv(c.before.startAt)} → <b>${formatKyiv(c.after.startAt)}</b>${c.after.location ? ` · ${escapeHtml(c.after.location)}` : ''}`;
+        case 'room':
+          return `🚪 ${formatKyiv(c.after.startAt)}: тепер <b>${escapeHtml(c.after.location ?? 'без аудиторії')}</b>`;
+        case 'cancelled':
+          return `❌ ${formatKyiv(c.before.startAt)} — скасовано`;
+        case 'added':
+          return `➕ ${formatKyiv(c.after.startAt)}${c.after.location ? ` · ${escapeHtml(c.after.location)}` : ''}`;
+      }
+    });
+    const more = changes.length > 8 ? `\n…і ще ${changes.length - 8}` : '';
+    const text = `📅 Зміни в розкладі ${course}\n\n${lines.join('\n')}${more}`;
+
+    for (const s of subscribers) {
+      if (await sendToUser(s.telegramId, text, openAppKeyboard('Відкрити розклад'))) {
+        AnalyticsService.track(s.id, 'schedule.change_sent', { changes: changes.length });
+      }
+    }
+  }
+
+  /**
+   * Cron: re-read course calendars whose events are older than 2 h, using any
+   * subscriber's token. Keeps change notifications timely.
+   */
+  static async syncStaleCalendars(limit = 8) {
+    const staleBefore = new Date(Date.now() - EVENTS_SYNC_EVERY);
+    const due = await db
+      .selectDistinctOn([courseCalendars.id], { calendar: courseCalendars, account: googleAccounts })
+      .from(courseCalendars)
+      .innerJoin(userCalendars, eq(userCalendars.calendarId, courseCalendars.id))
+      .innerJoin(googleAccounts, eq(googleAccounts.userId, userCalendars.userId))
+      .where(and(
+        or(isNull(courseCalendars.eventsSyncedAt), lt(courseCalendars.eventsSyncedAt, staleBefore)),
+        or(isNull(googleAccounts.syncError), ne(googleAccounts.syncError, 'invalid_grant'))
+      ))
+      .orderBy(courseCalendars.id)
+      .limit(limit);
+
+    const tokens = new Map<number, string>();
+    let synced = 0;
+    for (const { calendar, account } of due) {
+      try {
+        if (!tokens.has(account.id)) tokens.set(account.id, await GoogleService.accessToken(account));
+        await this.syncEvents(calendar, tokens.get(account.id)!);
+        synced++;
+      } catch (err) {
+        console.error(`Events sync failed for ${calendar.courseCode} [${calendar.section}]:`, err);
+      }
+    }
+    return synced;
+  }
+
+  /** Cron: "class in ~15 min" for students who turned it on; once per class. */
+  static async sendClassReminders() {
+    const now = Date.now();
+    const rows = await db
+      .select({
+        userId: users.id, telegramId: users.telegramId,
+        calendarId: calendarEvents.calendarId, googleEventId: calendarEvents.googleEventId,
+        courseCode: courseCalendars.courseCode, section: courseCalendars.section,
+        location: calendarEvents.location, startAt: calendarEvents.startAt,
+      })
+      .from(calendarEvents)
+      .innerJoin(courseCalendars, eq(courseCalendars.id, calendarEvents.calendarId))
+      .innerJoin(userCalendars, eq(userCalendars.calendarId, calendarEvents.calendarId))
+      .innerJoin(users, eq(users.id, userCalendars.userId))
+      .where(and(
+        eq(users.classReminders, true),
+        eq(users.botBlocked, false),
+        // The cron runs every ~10 min, so the window is 5–25 min ahead
+        gt(calendarEvents.startAt, new Date(now + 5 * 60_000)),
+        lte(calendarEvents.startAt, new Date(now + 25 * 60_000))
+      ));
+
+    let sent = 0;
+    for (const r of rows) {
+      const claimed = await db.insert(classReminders)
+        .values({ userId: r.userId, eventId: `${r.calendarId}:${r.googleEventId}` })
+        .onConflictDoNothing().returning();
+      if (!claimed.length) continue;
+      const minutes = Math.round((r.startAt.getTime() - now) / 60_000);
+      const where = r.location ? `\n📍 ${escapeHtml(r.location)}` : '';
+      if (await sendToUser(r.telegramId, `⏰ Через ${minutes} хв: <b>${escapeHtml(r.courseCode)} [${escapeHtml(r.section ?? '')}]</b>${where}`)) {
+        sent++;
+        AnalyticsService.track(r.userId, 'class_reminder.sent');
+      }
+    }
+    return sent;
   }
 
   /** Cron: refresh subscriptions older than 12 h (1 h for students with no course calendars yet). */

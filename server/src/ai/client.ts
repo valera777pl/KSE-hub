@@ -39,7 +39,7 @@ export async function chatCompletion(body: ChatRequest): Promise<OpenAI.ChatComp
 }
 
 /** Reads google.rpc.RetryInfo ("retryDelay": "23s"); null when the wait is too long to bother. */
-function retryDelayMs(errorBody: string): number | null {
+export function retryDelayMs(errorBody: string): number | null {
   const seconds = parseFloat(errorBody.match(/"retryDelay":\s*"([\d.]+)s"/)?.[1] ?? '5');
   const ms = Math.ceil(seconds * 1000) + 500;
   return ms <= MAX_RETRY_WAIT_MS ? ms : null;

@@ -184,6 +184,26 @@ export function BotSettings() {
         </div>
       </div>
 
+      {/* Schedule notifications */}
+      <div className="profile-section">
+        <h3 className="profile-section__title">⏰ Сповіщення про пари</h3>
+        {([
+          ['notifyScheduleChanges', 'Пару перенесли чи скасували'],
+          ['classReminders', 'Пара через 15 хвилин'],
+        ] as const).map(([field, label]) => (
+          <div key={field} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <span className="text-sm" style={{ flex: 1 }}>{label}</span>
+            <div className="tabs" style={{ marginBottom: 0, width: '140px' }}>
+              <button className={`tab ${user[field] ? 'tab--active' : ''}`} onClick={() => save({ [field]: true })}>Так</button>
+              <button className={`tab ${!user[field] ? 'tab--active' : ''}`} onClick={() => save({ [field]: false })}>Ні</button>
+            </div>
+          </div>
+        ))}
+        <div style={hint}>
+          Про перенесення приходить одне коротке повідомлення замість листів від KSE Hub Worker. Нагадування «через 15 хвилин» — з аудиторією.
+        </div>
+      </div>
+
       {/* Slack */}
       <div className="profile-section">
         <h3 className="profile-section__title">💬 Slack</h3>

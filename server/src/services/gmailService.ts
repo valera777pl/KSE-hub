@@ -226,7 +226,7 @@ async function gmail<T>(token: string, path: string): Promise<T> {
  * KSE's schedule workers ("KSE Hub Worker #5") send an invitation for every
  * class change. Invitations to other events (seminars, from people) stay.
  */
-function isClassScheduleNotice(from: string, subject: string): boolean {
+export function isClassScheduleNotice(from: string, subject: string): boolean {
   if (/KSE Hub Worker/i.test(from) || /calendar-notification@google\.com/i.test(from)) return true;
   return /^(updated invitation|new event|invitation|event canceled|canceled event|cancelled event|оновлене запрошення|нова подія|запрошення|подію скасовано)[^:]{0,40}:\s*[A-Z]{2,6}\d{3}\b/i.test(subject.trim());
 }
@@ -272,7 +272,7 @@ function stripHtml(html: string): string {
 }
 
 /** Drop the parts that differ between copies of one mailing: greetings, links, unsubscribe footers. */
-function normalize(text: string): string {
+export function normalize(text: string): string {
   return text
     .toLowerCase()
     .split('\n')
