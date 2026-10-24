@@ -184,15 +184,11 @@ export function BotSettings() {
         </div>
       </div>
 
-      {/* Slack via email notifications */}
+      {/* Slack */}
       <div className="profile-section">
         <h3 className="profile-section__title">💬 Slack</h3>
         <div style={{ ...hint, marginTop: 0 }}>
-          Slack потрапляє в дайджест через твою пошту, тому спершу підключи її вище. Потім у Slack:<br />
-          1. Аватар → <b>Preferences → Notifications</b><br />
-          2. Внизу <b>«When I'm not active on desktop»</b> → увімкни <b>«Send me email notifications»</b> і обери <b>«Once every 15 minutes»</b><br />
-          3. Щоб бачити більше: у потрібних каналах → назва каналу → <b>Notifications → All new messages</b><br />
-          Ми розпізнаємо листи від Slack і покажемо їх окремим розділом 💬.
+          Повноцінні дайджести каналів Slack зʼявляться, коли ІТ KSE дозволить додати бота KSE Hub у робочий простір. Поки що в розділ 💬 потрапляють лише листи-сповіщення від Slack, якщо вони приходять тобі на пошту.
         </div>
       </div>
 

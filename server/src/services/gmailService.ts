@@ -3,7 +3,7 @@ import {
   emails, googleAccounts, opportunities, summaries, users,
   type EmailCategory, type EmailSource,
 } from '../db/schema.js';
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, gt, inArray, ne, or } from 'drizzle-orm';
 import { GoogleService } from './googleService.js';
 import { sha256 } from '../utils/crypto.js';
 import { escapeHtml, sendToUser } from '../bot/send.js';
@@ -73,10 +73,10 @@ export class GmailService {
       msg.payload.headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? '';
 
     const from = header('From');
-    // Class invitations come from the calendar itself (schedule feature); not worth a digest line or AI quota
-    if (isCalendarInvite(from, msg.payload)) return null;
-
     const subject = header('Subject') || '(без теми)';
+    // Class schedule updates are shown by the schedule tab; not worth a digest line or AI quota
+    if (isClassScheduleNotice(from, subject)) return null;
+
     const messageIdHeader = header('Message-ID').trim().toLowerCase() || null;
     const body = extractText(msg.payload);
     const source = detectSource(from);
@@ -92,6 +92,23 @@ export class GmailService {
       summaryId: summary.id,
     }).onConflictDoNothing().returning();
     if (!row) return null;
+
+    // The same mailing can reach one inbox twice (two lists, slightly different
+    // footers): same summary, or same subject from the same sender within 2 days
+    const [copy] = await db.select({ id: emails.id }).from(emails)
+      .where(and(
+        eq(emails.userId, account.userId),
+        ne(emails.id, row.id),
+        or(
+          eq(emails.summaryId, summary.id),
+          and(eq(emails.subject, row.subject!), eq(emails.fromName, row.fromName!), gt(emails.receivedAt, new Date(row.receivedAt.getTime() - 2 * 86_400_000)))
+        )
+      ))
+      .limit(1);
+    if (copy) {
+      await db.update(emails).set({ digestedAt: new Date() }).where(eq(emails.id, row.id));
+      return null;
+    }
 
     if (summary.category === 'internship' || summary.category === 'job') {
       await saveOpportunity(summary, subject, senderName(from));
@@ -203,8 +220,13 @@ async function gmail<T>(token: string, path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-function isCalendarInvite(from: string, payload: GmailPart): boolean {
-  return /calendar-notification@google\.com/i.test(from) || findPart(payload, 'text/calendar') !== null;
+/**
+ * KSE's schedule workers ("KSE Hub Worker #5") send an invitation for every
+ * class change. Invitations to other events (seminars, from people) stay.
+ */
+function isClassScheduleNotice(from: string, subject: string): boolean {
+  if (/KSE Hub Worker/i.test(from) || /calendar-notification@google\.com/i.test(from)) return true;
+  return /^(updated invitation|new event|invitation|event canceled|canceled event|cancelled event|оновлене запрошення|нова подія|запрошення|подію скасовано)[^:]{0,40}:\s*[A-Z]{2,6}\d{3}\b/i.test(subject.trim());
 }
 
 function detectSource(from: string): EmailSource {

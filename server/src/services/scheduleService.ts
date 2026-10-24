@@ -11,6 +11,8 @@ type CourseCalendar = typeof courseCalendars.$inferSelect;
 
 const DAY = 86_400_000;
 const SUBSCRIPTIONS_SYNC_EVERY = 12 * 3_600_000;
+// Not synced on schedule.kse.ua yet: look again every hour so the schedule shows up soon after they do
+const EMPTY_SUBSCRIPTIONS_SYNC_EVERY = 3_600_000;
 const EVENTS_SYNC_EVERY = 6 * 3_600_000;
 const EVENT_SYNC_CONCURRENCY = 5;
 // "ECON100 [L1] Principles of Economics – Fall 26/27" → code, section, name
@@ -109,13 +111,19 @@ export class ScheduleService {
     });
   }
 
-  /** Cron: refresh subscriptions that are older than 12 h. */
+  /** Cron: refresh subscriptions older than 12 h (1 h for students with no course calendars yet). */
   static async syncDueAccounts(limit = 5) {
     const staleBefore = new Date(Date.now() - SUBSCRIPTIONS_SYNC_EVERY);
+    const emptyStaleBefore = new Date(Date.now() - EMPTY_SUBSCRIPTIONS_SYNC_EVERY);
+    const hasNoCalendars = sql`not exists (select 1 from ${userCalendars} where ${userCalendars.userId} = ${googleAccounts.userId})`;
     const due = await db.select().from(googleAccounts)
       .where(and(
         or(isNull(googleAccounts.syncError), ne(googleAccounts.syncError, 'invalid_grant')),
-        or(isNull(googleAccounts.calendarsSyncedAt), lt(googleAccounts.calendarsSyncedAt, staleBefore))
+        or(
+          isNull(googleAccounts.calendarsSyncedAt),
+          lt(googleAccounts.calendarsSyncedAt, staleBefore),
+          and(hasNoCalendars, lt(googleAccounts.calendarsSyncedAt, emptyStaleBefore))
+        )
       ))
       .orderBy(sql`${googleAccounts.calendarsSyncedAt} asc nulls first`)
       .limit(limit);

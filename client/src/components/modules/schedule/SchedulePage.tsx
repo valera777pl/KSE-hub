@@ -17,12 +17,56 @@ function weekDays(offset: number): string[] {
   return Array.from({ length: 7 }, (_, i) => new Date(monday.getTime() + i * DAY).toISOString().slice(0, 10));
 }
 
+const OFFICIAL_SCHEDULE = 'https://schedule.kse.ua/';
+
+function openExternal(url: string) {
+  // @ts-ignore - Telegram WebApp SDK
+  const tg = window.Telegram?.WebApp;
+  if (tg?.openLink) tg.openLink(url);
+  else window.open(url, '_blank');
+}
+
+/** One-time step on the official site: it adds all the student's course calendars to Google Calendar. */
+function SyncHint({ compact, onRefresh, refreshing }: { compact?: boolean; onRefresh: () => void; refreshing: boolean }) {
+  if (compact) {
+    return (
+      <div className="text-sm text-hint" style={{ textAlign: 'center', margin: '8px 0 16px' }}>
+        Бачиш не всі пари?{' '}
+        <button className="font-semibold" style={{ textDecoration: 'underline' }} onClick={() => openExternal(OFFICIAL_SCHEDULE)}>
+          Синхронізуй на schedule.kse.ua
+        </button>{' '}
+        і{' '}
+        <button className="font-semibold" style={{ textDecoration: 'underline' }} onClick={onRefresh} disabled={refreshing}>
+          {refreshing ? 'оновлюю…' : 'онови'}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="card" style={{ padding: '16px', marginBottom: '12px' }}>
+      <div className="font-semibold" style={{ marginBottom: '6px' }}>🗓 Один крок, щоб побачити пари</div>
+      <div className="text-sm text-hint" style={{ lineHeight: 1.5, marginBottom: '12px' }}>
+        1. Відкрий офіційний розклад KSE і увійди своєю поштою @kse.org.ua<br />
+        2. Натисни на своє імʼя вгорі справа → <b>Sync with Google Calendar</b> і підтверди<br />
+        3. Повернись сюди й натисни «Оновити» (якщо пар ще немає — KSE додає їх кілька хвилин)
+      </div>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button className="btn btn--primary" style={{ flex: 1 }} onClick={() => openExternal(OFFICIAL_SCHEDULE)}>Відкрити schedule.kse.ua</button>
+        <button className="btn btn--secondary" onClick={onRefresh} disabled={refreshing}>{refreshing ? '…' : 'Оновити'}</button>
+      </div>
+    </div>
+  );
+}
+
 const kind = (section: string | null) => (section?.startsWith('L') ? 'Лекція' : section?.startsWith('P') ? 'Практика' : null);
 
 export function SchedulePage() {
   const [offset, setOffset] = useState(0);
   const days = useMemo(() => weekDays(offset), [offset]);
   const [connected, setConnected] = useState(true);
+  const [synced, setSynced] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [mine, setMine] = useState<ClassEvent[]>([]);
   const [compare, setCompare] = useState<ScheduleCompare | null>(null);
   const [selected, setSelected] = useState<StudentMatch | null>(null);
@@ -38,14 +82,27 @@ export function SchedulePage() {
     setError(null);
     const load = selected
       ? api.get<ScheduleCompare>(`/schedule/compare/${selected.userId}?start=${days[0]}`).then((r) => !cancelled && setCompare(r))
-      : api.get<{ connected: boolean; events: ClassEvent[] }>(`/schedule/week?start=${days[0]}`).then((r) => {
+      : api.get<{ connected: boolean; synced: boolean; events: ClassEvent[] }>(`/schedule/week?start=${days[0]}`).then((r) => {
           if (cancelled) return;
           setConnected(r.connected);
+          setSynced(r.synced);
           setMine(r.events);
         });
     load.catch((err) => !cancelled && setError(err.message)).finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
-  }, [days, selected]);
+  }, [days, selected, reloadKey]);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      await api.post('/schedule/refresh');
+      setReloadKey((k) => k + 1);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Debounced student search
   useEffect(() => {
@@ -160,7 +217,9 @@ export function SchedulePage() {
 
       {error && <div className="text-sm" style={{ color: 'var(--danger)', marginBottom: '12px' }}>❌ {error}</div>}
 
-      {loading ? (
+      {!selected && !synced && <SyncHint onRefresh={refresh} refreshing={refreshing} />}
+
+      {!selected && !synced ? null : loading ? (
         <div className="text-sm text-hint" style={{ textAlign: 'center', padding: '24px' }}>Завантаження…</div>
       ) : events.length === 0 ? (
         <div className="empty-state">
@@ -204,6 +263,8 @@ export function SchedulePage() {
           </div>
         ))
       )}
+
+      {!selected && synced && !loading && <SyncHint compact onRefresh={refresh} refreshing={refreshing} />}
     </div>
   );
 }
