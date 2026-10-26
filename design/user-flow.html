@@ -1,0 +1,576 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>KSE Hub User Flow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: робочий документ продукту — вузька колонка тексту, ліворуч липкий зміст на десктопі; синій KSE лише як акцент */
+:root{
+  --bg:#f5f6fa; --surface:#ffffff; --ink:#11132e; --muted:#5a5d7c; --line:#dfe1ec;
+  --navy:#161a5e; --blue:#2341ee; --blue-ink:#1c33c9; --blue-soft:#e9ecff;
+  --good:#1b7a4c; --warn:#a35400; --bad:#c22a2a; --warn-soft:#fff3e3; --bad-soft:#fdecec;
+  --font-display:"Unbounded","Onest",system-ui,sans-serif;
+  --font-body:"Onest",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r-s:8px; --on-blue:#ffffff; --r-m:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0b0c18; --surface:#14162a; --ink:#eceefb; --muted:#9a9dbb; --line:#272a48;
+  --navy:#c9d0ff; --blue:#6f86ff; --blue-ink:#9aa9ff; --blue-soft:#1a2054;
+  --good:#5fd39a; --warn:#f0a95a; --bad:#ff7a7a; --warn-soft:#3a2a12; --bad-soft:#3a1616; --on-blue:#0b0c18; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b0c18; --surface:#14162a; --ink:#eceefb; --muted:#9a9dbb; --line:#272a48;
+  --navy:#c9d0ff; --blue:#6f86ff; --blue-ink:#9aa9ff; --blue-soft:#1a2054;
+  --good:#5fd39a; --warn:#f0a95a; --bad:#ff7a7a; --warn-soft:#3a2a12; --bad-soft:#3a1616; --on-blue:#0b0c18; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:200px minmax(0,1fr);gap:48px;padding-block:40px 80px}
+nav.toc{position:sticky;top:calc(24px + env(safe-area-inset-top,0px));align-self:start;font-size:14px}
+nav.toc p{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+nav.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+nav.toc a{color:var(--muted);text-decoration:none;display:block;padding:3px 0}
+nav.toc a:hover,nav.toc a:focus-visible{color:var(--blue-ink)}
+main{min-width:0}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.1;letter-spacing:-.02em;margin:0 0 16px;text-wrap:balance;color:var(--navy)}
+h2{font-family:var(--font-display);font-weight:500;font-size:clamp(20px,2.6vw,26px);line-height:1.2;margin:0 0 12px;text-wrap:balance}
+h3{font-size:17px;font-weight:600;margin:0 0 6px}
+p{margin:0 0 12px;max-width:68ch}
+.lede{font-size:18px;color:var(--muted);max-width:62ch}
+section{padding-block:40px;border-top:1px solid var(--line)}
+section:first-of-type{border-top:0;padding-top:0}
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--blue-ink);margin-bottom:8px;display:block}
+code,.ev{font-family:var(--font-mono);font-size:12.5px;background:var(--blue-soft);color:var(--blue-ink);padding:1px 6px;border-radius:5px;white-space:nowrap}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+a{color:var(--blue-ink)}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+/* principles */
+.principles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:20px}
+.principles div{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);padding:16px}
+.principles b{display:block;margin-bottom:4px}
+.principles span{color:var(--muted);font-size:14px}
+
+/* map svg */
+figure{margin:20px 0 0}
+.diagram{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);padding:12px}
+.diagram svg{display:block;width:100%;min-width:640px;height:auto;color:var(--ink)}
+figcaption{font-size:14px;color:var(--muted);margin-top:8px;max-width:68ch}
+
+/* onboarding screens */
+.screens{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 14px;scroll-snap-type:x mandatory}
+.scr{flex:0 0 236px;scroll-snap-align:start;display:flex;flex-direction:column;gap:10px}
+.phone{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:14px 14px 12px;min-height:300px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;line-height:1.45}
+.phone .where{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.phone .t{font-weight:600;font-size:15px;line-height:1.3}
+.phone .s{color:var(--muted)}
+.phone .spacer{flex:1}
+.btn{background:var(--blue);color:var(--on-blue);border-radius:10px;padding:9px 10px;text-align:center;font-weight:600;font-size:13.5px}
+.btn.ghost{background:transparent;color:var(--blue-ink);border:1px solid var(--line)}
+.opts{display:grid;gap:6px}
+.opt{border:1px solid var(--line);border-radius:10px;padding:7px 10px}
+.opt.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue-ink);font-weight:600}
+.pic{height:72px;border-radius:12px;background:var(--navy);position:relative;overflow:hidden}
+.pic::after{content:"";position:absolute;inset:auto -20% -60% 30%;height:140%;border-radius:50%;background:var(--blue);opacity:.75}
+.check{display:flex;gap:8px;align-items:baseline}
+.check::before{content:"";flex:0 0 8px;height:8px;border-radius:50%;background:var(--good);transform:translateY(-1px)}
+.meta{font-size:12.5px;color:var(--muted);display:grid;gap:3px}
+.meta .risk{color:var(--warn)}
+.stepno{font-family:var(--font-mono);font-size:12px;color:var(--blue-ink)}
+
+/* funnel */
+.funnel{display:grid;gap:8px;margin-top:16px}
+.frow{display:grid;grid-template-columns:minmax(150px,230px) 1fr 52px;gap:12px;align-items:center;font-size:14px}
+.ftrack{background:var(--blue-soft);border-radius:6px;height:22px;overflow:hidden}
+.fbar{height:100%;width:var(--w);background:var(--blue);border-radius:6px}
+.fval{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+.fnote{font-size:13px;color:var(--muted);grid-column:1/-1;margin-top:-4px}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn)}
+
+/* IA */
+.ia{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:16px}
+.tab{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);padding:16px;display:flex;flex-direction:column;gap:8px}
+.tab h3{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.tab h3 small{font-weight:400;color:var(--muted);font-size:12.5px}
+.tab ul{margin:0;padding-left:18px;font-size:14.5px;display:grid;gap:4px}
+.tab .job{font-size:13.5px;color:var(--blue-ink)}
+
+/* schedule mock */
+.sched{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:28px;align-items:start;margin-top:16px}
+.mock{background:var(--surface);border:1px solid var(--line);border-radius:26px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.mock .hdr{display:flex;justify-content:space-between;align-items:center}
+.mock .hdr b{font-size:17px}
+.pill{font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--muted)}
+.days{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;text-align:center}
+.day{border-radius:12px;padding:6px 0;font-size:12px;color:var(--muted);display:grid;gap:1px}
+.day b{font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums}
+.day.today{background:var(--blue);color:var(--on-blue)}
+.day.today b{color:var(--on-blue)}
+.day .dot{width:4px;height:4px;border-radius:50%;background:currentColor;margin:2px auto 0;opacity:.6}
+.friends{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12.5px}
+.av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:600;font-size:12px;color:#fff}
+.av.a{background:#2341ee}.av.b{background:#7a4cd6}.av.c{background:#0f8a74}
+.cls{display:grid;grid-template-columns:48px minmax(0,1fr);gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.cls:first-of-type{border-top:0}
+.cls .tm{font-variant-numeric:tabular-nums;font-size:13px;line-height:1.35}
+.cls .tm span{display:block;color:var(--muted)}
+.cls .nm{font-weight:600;font-size:14px}
+.cls .pl{font-size:13px;color:var(--muted)}
+.cls.past{opacity:.45}
+.cls.now{background:var(--blue-soft);border-radius:12px;padding:10px;margin-inline:-6px;border-top-color:transparent}
+.cls.now .nm{color:var(--blue-ink)}
+.prog{height:4px;border-radius:2px;background:var(--line);margin-top:6px;overflow:hidden}
+.prog i{display:block;height:100%;width:55%;background:var(--blue)}
+.chg{display:inline-block;font-size:11.5px;font-weight:600;color:var(--warn);background:var(--warn-soft);border-radius:6px;padding:0 6px;margin-left:4px}
+.shared{display:inline-flex;margin-left:6px;vertical-align:middle}
+.shared .av{width:18px;height:18px;font-size:10px;margin-left:-4px;border:2px solid var(--surface)}
+.notes{display:grid;gap:14px}
+.notes div b{display:block}
+.notes div span{color:var(--muted);font-size:14.5px}
+
+/* motion table + generic table */
+.tbl{overflow-x:auto;margin-top:14px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-top:1px solid var(--line);vertical-align:top}
+th{font-weight:600;font-size:12.5px;color:var(--muted);border-top:0;background:var(--bg)}
+td:first-child{font-weight:600;white-space:nowrap}
+
+/* day timeline */
+.timeline{display:grid;gap:0;margin-top:16px}
+.tl{display:grid;grid-template-columns:64px 18px minmax(0,1fr);gap:12px}
+.tl .time{font-variant-numeric:tabular-nums;font-weight:600;text-align:right;padding-top:2px}
+.tl .rail{position:relative}
+.tl .rail::before{content:"";position:absolute;left:8px;top:0;bottom:0;width:2px;background:var(--line)}
+.tl .rail::after{content:"";position:absolute;left:3px;top:8px;width:12px;height:12px;border-radius:50%;background:var(--surface);border:2px solid var(--blue)}
+.tl .body{padding-bottom:22px}
+.tl .ch{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+
+/* flows */
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 6px}
+.node{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:14px}
+.node.goal{border-color:var(--good);color:var(--good);font-weight:600}
+.arr{color:var(--muted)}
+.flowcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);padding:18px;margin-top:14px}
+.flowcard ul{margin:6px 0 0;padding-left:18px;font-size:14.5px;display:grid;gap:3px}
+
+/* messages */
+.msgs{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:16px}
+.msg{display:flex;flex-direction:column;gap:6px}
+.bubble{background:var(--surface);border:1px solid var(--line);border-radius:16px 16px 16px 4px;padding:12px 14px;font-size:14px;line-height:1.5;white-space:pre-line}
+.bubble b{font-weight:600}
+.bubble .q{display:block;border-left:3px solid var(--blue);padding-left:8px;color:var(--muted);margin-top:4px}
+.kb{border:1px solid var(--line);border-radius:10px;text-align:center;padding:7px;font-size:13.5px;font-weight:600;color:var(--blue-ink);background:var(--surface)}
+.msg .lbl{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+
+/* rules list */
+.rules{margin:10px 0 0;padding-left:20px;display:grid;gap:6px;max-width:72ch}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:14px}
+.src{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);padding:14px}
+.src .conf{font-size:12px;font-weight:600}
+.conf.h{color:var(--good)}.conf.m{color:var(--warn)}
+.qs{counter-reset:q;list-style:none;padding:0;margin:12px 0 0;display:grid;gap:10px;max-width:72ch}
+.qs li{counter-increment:q;display:grid;grid-template-columns:28px 1fr;gap:6px}
+.qs li::before{content:counter(q);font-family:var(--font-mono);color:var(--blue-ink);font-weight:500}
+
+@media (max-width:860px){
+  .wrap{grid-template-columns:minmax(0,1fr);gap:24px}
+  nav.toc{position:static}
+  nav.toc ol{display:flex;flex-wrap:wrap;gap:6px 14px}
+  .sched{grid-template-columns:minmax(0,1fr)}
+  .frow{grid-template-columns:minmax(0,1fr) 46px}
+  .frow .ftrack{grid-column:1/-1;grid-row:2}
+}
+@media (prefers-reduced-motion:no-preference){ nav.toc a{transition:color .15s} }
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Зміст">
+  <p>KSE Hub · flow v1</p>
+  <ol>
+    <li><a href="#map">Карта продукту</a></li>
+    <li><a href="#onboarding">Онбординг</a></li>
+    <li><a href="#funnel">Воронка входу</a></li>
+    <li><a href="#tabs">4 вкладки</a></li>
+    <li><a href="#schedule">Розклад</a></li>
+    <li><a href="#motion">Анімації</a></li>
+    <li><a href="#day">День студента</a></li>
+    <li><a href="#flows">Ключові сценарії</a></li>
+    <li><a href="#chat">Повідомлення в чаті</a></li>
+    <li><a href="#program">Програма студента</a></li>
+    <li><a href="#metrics">Метрики</a></li>
+    <li><a href="#refs">Референси</a></li>
+    <li><a href="#questions">Відкриті питання</a></li>
+  </ol>
+</nav>
+
+<main>
+<section>
+  <span class="eyebrow">User flow · версия 1 · 26 октября 2026</span>
+  <h1>KSE Hub: путь студента от первого /start до ежедневной привычки</h1>
+  <p class="lede">Бот и Mini App — одна система. Чат живёт каждый день: пуши, изменения, Copilot. Mini App открывается из пуша сразу на нужном экране и отвечает за всё, где надо выбирать и смотреть списки.</p>
+  <div class="principles">
+    <div><b>Ответ «что у меня сейчас» за 1 секунду</b><span>Первое, что видно после открытия, — текущая или следующая пара.</span></div>
+    <div><b>Каждый пуш ведёт в конкретный экран</b><span>Кнопка открывает тот дедлайн или тот день, а не главную.</span></div>
+    <div><b>Данные, которым веришь</b><span>Ни одного прошедшего события, дубля или ложного «Прострочено».</span></div>
+    <div><b>Одно главное действие на экран</b><span>Оно всегда внизу, в нативной кнопке Telegram.</span></div>
+  </div>
+</section>
+
+<section id="map">
+  <span class="eyebrow">Карта продукту</span>
+  <h2>Куда ведёт каждое сообщение бота</h2>
+  <p>Слева — то, что приходит в чат. Справа — экраны Mini App. Стрелки — deep link-и в кнопках сообщений.</p>
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 760 420" role="img" aria-label="Каждое сообщение бота ведёт кнопкой в конкретный экран Mini App; из экрана дедлайна можно вернуться в чат с Copilot.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+          <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5a74ff"/></marker>
+        </defs>
+        <g font-family="Onest, system-ui, sans-serif" font-size="13" fill="currentColor">
+          <text x="20" y="40" font-weight="600">Чат бота — пуші і Copilot</text>
+          <text x="520" y="40" font-weight="600">Mini App — 4 вкладки</text>
+          <g fill="none" stroke="currentColor" stroke-opacity=".35">
+            <rect x="20" y="70" width="220" height="36" rx="8"/><rect x="20" y="118" width="220" height="36" rx="8"/>
+            <rect x="20" y="166" width="220" height="36" rx="8"/><rect x="20" y="214" width="220" height="36" rx="8" stroke="#5a74ff" stroke-opacity="1"/>
+            <rect x="20" y="262" width="220" height="36" rx="8"/><rect x="20" y="310" width="220" height="36" rx="8"/>
+            <rect x="20" y="358" width="220" height="36" rx="8"/>
+            <rect x="520" y="70" width="220" height="36" rx="8"/><rect x="520" y="140" width="220" height="36" rx="8"/>
+            <rect x="520" y="230" width="220" height="36" rx="8"/><rect x="520" y="300" width="220" height="36" rx="8"/>
+            <rect x="520" y="360" width="220" height="36" rx="8"/>
+          </g>
+          <text x="34" y="93">Дайджест 08:00</text>
+          <text x="34" y="141">Пару перенесли</text>
+          <text x="34" y="189">Пара через 15 хв <tspan fill-opacity=".55">· без кнопки</tspan></text>
+          <text x="34" y="237" fill="#5a74ff" font-weight="600">Copilot (вільний текст)</text>
+          <text x="34" y="285">Дедлайн за 24 / 3 год</text>
+          <text x="34" y="333">Бронь підтверджена</text>
+          <text x="34" y="381">Нові можливості (раз на тиждень)</text>
+          <text x="534" y="93">Сьогодні</text>
+          <text x="534" y="163">Навчання · Розклад, день</text>
+          <text x="534" y="253">Навчання · Дедлайн</text>
+          <text x="534" y="323">Кімнати · бронь</text>
+          <text x="534" y="383">Можливості · для тебе</text>
+          <g stroke="currentColor" stroke-opacity=".6" stroke-width="1.4" fill="none" color="currentColor">
+            <line x1="240" y1="88" x2="516" y2="88" marker-end="url(#ah)"/>
+            <line x1="240" y1="136" x2="516" y2="157" marker-end="url(#ah)"/>
+            <line x1="240" y1="280" x2="516" y2="256" marker-end="url(#ah)"/>
+            <line x1="240" y1="328" x2="516" y2="319" marker-end="url(#ah)"/>
+            <line x1="240" y1="376" x2="516" y2="378" marker-end="url(#ah)"/>
+          </g>
+          <line x1="520" y1="242" x2="244" y2="232" stroke="#5a74ff" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ahb)"/>
+          <g font-family="JetBrains Mono, monospace" font-size="11" fill-opacity=".7">
+            <text x="300" y="82">startapp=today</text>
+            <text x="300" y="138">startapp=day_2026-10-27</text>
+            <text x="300" y="274">startapp=deadline_ID</text>
+            <text x="300" y="316">startapp=booking_ID</text>
+            <text x="300" y="370">startapp=opps</text>
+            <text x="300" y="226" fill="#5a74ff" fill-opacity="1">?start=ask_deadline_ID</text>
+          </g>
+        </g>
+      </svg>
+    </div>
+    <figcaption>Пуш «через 15 хв» без кнопки: всё нужное уже в тексте. Синяя пунктирная стрелка — возврат в чат с Copilot из экрана дедлайна, бот сразу получает контекст.</figcaption>
+  </figure>
+</section>
+
+<section id="onboarding">
+  <span class="eyebrow">Сценарий 1 · первый вход</span>
+  <h2>Онбординг: один вопрос на экран, польза до настроек</h2>
+  <p>Цель — <b>меньше 30 секунд до первой пользы</b>. Вопросы не раздражают, если каждый ответ сразу что-то меняет, а ответить можно одним касанием с автопереходом и лёгкой вибрацией. Тексты экранов — черновик на украинском, как в боте. Листай вбок.</p>
+  <div class="screens" tabindex="0" aria-label="Экраны онбординга">
+    <div class="scr">
+      <div class="phone"><span class="where">Чат · до /start</span><div class="pic" aria-hidden="true"></div><div class="t">Що вміє цей бот?</div><div class="s">KSE Hub збирає пари, дедлайни й листи KSE в одне місце і сам каже, коли щось змінилось.</div><div class="spacer"></div><div class="btn">Start</div></div>
+      <div class="meta"><span class="stepno">00 · @BotFather: картинка + опис</span><span><span class="ev">bot_start</span></span></div>
+    </div>
+    <div class="scr">
+      <div class="phone"><span class="where">Чат · після /start</span><div class="pic" aria-hidden="true"></div><div class="s">Привіт. Налаштування займе хвилину.</div><div class="spacer"></div><div class="btn">Відкрити KSE Hub</div></div>
+      <div class="meta"><span class="stepno">01 · одне повідомлення, одна кнопка</span><span><span class="ev">miniapp_open</span></span><span class="risk">Ризик: людина не натискає. Кнопка меню теж відкриває Mini App.</span></div>
+    </div>
+    <div class="scr">
+      <div class="phone"><span class="where">Mini App · вхід</span><div class="t">Увійди через пошту KSE</div><div class="s">Підтягнемо розклад і листи. Лише читання — нічого не надсилаємо від твого імені.</div><div class="spacer"></div><div class="btn">Увійти через Google</div><div class="s small" style="text-align:center">Потрібна пошта @kse.org.ua</div></div>
+      <div class="meta"><span class="stepno">02 · BottomButton</span><span><span class="ev">auth_start</span> → <span class="ev">auth_ok</span></span><span class="risk">Чужий домен: «Це не пошта KSE. Обери акаунт @kse.org.ua».</span></div>
+    </div>
+    <div class="scr">
+      <div class="phone"><span class="where">Mini App · синхронізація</span><div class="check">Пошта підключена</div><div class="check">Розклад: 14 пар цього тижня</div><div class="check">Листи: 6 нових</div><div class="spacer"></div><div class="s">Завтра перша пара</div><div class="t">10:00 · MATH111<br><span class="muted" style="font-weight:400">М. Шпака 3, 2.15.1</span></div><div class="btn">Далі</div></div>
+      <div class="meta"><span class="stepno">03 · aha-момент, 2–4 с</span><span><span class="ev">sync_done</span> <span class="muted">has_schedule</span></span><span class="risk">Пар немає: «Увімкни Sync with Google Calendar на schedule.kse.ua» + «Пізніше». Не блокуємо.</span></div>
+    </div>
+    <div class="scr">
+      <div class="phone"><span class="where">Mini App · програма</span><div class="t">Твоя програма</div><div class="opts"><div class="opt on">Business Economics</div><div class="opt">Economics and Big Data</div></div><div class="s small">Підказали за твоїми курсами. Так стажування й гранти будуть саме для твоєї програми.</div><div class="spacer"></div><div class="btn">Далі</div></div>
+      <div class="meta"><span class="stepno">04 · лише BE або EBD, одне касання</span><span><span class="ev">program_confirmed</span></span><span class="muted">Варіант уже виділено за назвами курсів. Курс рахуємо з пошти.</span></div>
+    </div>
+    <div class="scr">
+      <div class="phone"><span class="where">Mini App · дайджест</span><div class="t">Коли надсилати дайджест?</div><div class="opts"><div class="opt on">Зранку, 08:00</div><div class="opt">В обід, 13:00</div><div class="opt">Увечері, 20:00</div><div class="opt">Не надсилати</div></div><div class="spacer"></div><div class="s small">Нагадування про дедлайни й перенесення пар — завжди одразу.</div></div>
+      <div class="meta"><span class="stepno">05 · одне касання, автоперехід</span><span><span class="ev">digest_time_set</span></span></div>
+    </div>
+    <div class="scr">
+      <div class="phone"><span class="where">Mini App · Moodle</span><div class="t">Додай дедлайни з Moodle</div><div class="s">Хвилина, і всі здачі будуть тут із нагадуваннями.</div><div class="opts small"><div class="opt">1. Відкрий сторінку експорту</div><div class="opt">2. «Усі події» + «60 днів»</div><div class="opt">3. Скопіюй посилання і повернись</div></div><div class="spacer"></div><div class="btn">Відкрити Moodle</div><div class="btn ghost">Пропустити</div></div>
+      <div class="meta"><span class="stepno">06 · необов'язково</span><span><span class="ev">moodle_connected</span> / <span class="ev">moodle_skipped</span></span><span class="muted">Кнопка веде одразу на /calendar/export.php. При поверненні поле саме вставляє посилання.</span></div>
+    </div>
+    <div class="scr">
+      <div class="phone"><span class="where">Mini App · друзі</span><div class="t">Показувати твій розклад одногрупникам?</div><div class="s">Друзі побачать спільні пари. Знайти тебе можна буде за прізвищем.</div><div class="spacer"></div><div class="btn">Показувати</div><div class="btn ghost">Приховати</div></div>
+      <div class="meta"><span class="stepno">07 · приватність явно</span><span><span class="ev">schedule_visibility_set</span></span></div>
+    </div>
+    <div class="scr">
+      <div class="phone"><span class="where">Mini App → «Сьогодні»</span><div class="t">Готово</div><div class="s">Твій день уже тут. Перший дайджест прийде завтра о 08:00.</div><div class="spacer"></div><div class="btn">До розкладу</div></div>
+      <div class="meta"><span class="stepno">08 · у чат летить «Готово»</span><span><span class="ev">onboarding_complete</span></span></div>
+    </div>
+  </div>
+  <p class="small muted">Прогресс показываем тонкой полоской сверху, без «Шаг 4 из 8». Назад работает через BackButton Telegram. Если человек закрыл Mini App на середине, при следующем открытии он продолжает с того же шага.</p>
+</section>
+
+<section id="funnel">
+  <span class="eyebrow">Воронка онбординга</span>
+  <h2>Где теряем людей при первом входе</h2>
+  <p><span class="tag">Цели, а не данные</span> Это стартовые гипотезы. После первых 50 пользователей заменить на реальные цифры из событий.</p>
+  <div class="funnel">
+    <div class="frow"><span>Нажал Start</span><div class="ftrack"><div class="fbar" style="--w:100%"></div></div><span class="fval">100%</span></div>
+    <div class="frow"><span>Открыл Mini App</span><div class="ftrack"><div class="fbar" style="--w:85%"></div></div><span class="fval">85%</span><span class="fnote">Если ниже — переписать приветствие, проверить кнопку меню.</span></div>
+    <div class="frow"><span>Начал вход через Google</span><div class="ftrack"><div class="fbar" style="--w:75%"></div></div><span class="fval">75%</span></div>
+    <div class="frow"><span>Вошёл с почтой KSE</span><div class="ftrack"><div class="fbar" style="--w:65%"></div></div><span class="fval">65%</span><span class="fnote">Самое дорогое место. Если ниже — усилить строку «лише читання», проверить экран согласия Google.</span></div>
+    <div class="frow"><span>Увидел свои пары</span><div class="ftrack"><div class="fbar" style="--w:55%"></div></div><span class="fval">55%</span><span class="fnote">Разрыв с предыдущим шагом — люди без Sync на schedule.kse.ua. Считать отдельно.</span></div>
+    <div class="frow"><span>Завершил онбординг</span><div class="ftrack"><div class="fbar" style="--w:50%"></div></div><span class="fval">50%</span></div>
+    <div class="frow"><span>Открыл пуш на следующий день</span><div class="ftrack"><div class="fbar" style="--w:35%"></div></div><span class="fval">35%</span><span class="fnote">Это и есть активация: человек вернулся сам.</span></div>
+  </div>
+</section>
+
+<section id="tabs">
+  <span class="eyebrow">Інформаційна архітектура</span>
+  <h2>4 вкладки вместо 6</h2>
+  <p>Панель вкладок — нативная, иконки Lucide с подписями, без эмодзи. Шапка с приветствием, солнцем и колокольчиком уходит. Профиль и настройки открываются по аватару справа сверху, тема берётся из Telegram.</p>
+  <div class="ia">
+    <div class="tab"><h3>Сьогодні <small>главный экран</small></h3><span class="job">Ответ на «что у меня сейчас»</span><ul><li>Зараз / далі: пара, время, корпус и аудитория, прогресс</li><li>Изменения на сегодня</li><li>Дедлайны на 48 часов</li><li>Важное из почты, 2–3 строки</li></ul></div>
+    <div class="tab"><h3>Навчання <small>Розклад · Дедлайни</small></h3><span class="job">Неделя и всё, что сдать</span><ul><li>Расписание с закреплённым сегодня</li><li>Сравнение с несколькими друзьями</li><li>Дедлайны по курсам; общеуниверситетские — свёрнутой группой</li><li>Ссылки на курсы Moodle внутри дедлайна</li></ul></div>
+    <div class="tab"><h3>Кімнати <small>одна форма</small></h3><span class="job">Забронировать за 3 касания</span><ul><li>«Коли?»: Зараз · Через 30 хв · Обрати час</li><li>Тип: Усі · Skype · Silent Box</li><li>Список свободных комнат, нажатие = выбор</li><li>Квота одной строкой: «Сьогодні ще 3 год»</li><li>Мои брони сверху, если есть</li></ul></div>
+    <div class="tab"><h3>Можливості <small>Метч + Кар'єра</small></h3><span class="job">Куда приложить себя</span><ul><li>Для тебе: стажировки и гранты твоей программы</li><li>Стартапи: проекты и заявки</li><li>Люди: поиск тиммейтов</li><li>Фильтры — в одном нижнем листе</li></ul></div>
+  </div>
+  <p class="small muted" style="margin-top:14px">Copilot уходит из вкладок. Он живёт в чате бота, а в Mini App появляется кнопкой «Запитати Copilot» внутри дедлайна, курса или возможности. Кнопка открывает чат, и бот уже знает, о чём речь.</p>
+</section>
+
+<section id="schedule">
+  <span class="eyebrow">Розклад</span>
+  <h2>Сегодня закреплено, листать не нужно</h2>
+  <p>Так делают Apple Calendar, Fantastical и большинство студенческих приложений: сверху полоса дней недели, сегодня уже выбрано, ниже — только выбранный день. Неделю целиком смотрят свайпом, а не прокруткой.</p>
+  <div class="sched">
+    <figure style="margin:0">
+      <div class="mock" aria-label="Пример экрана расписания">
+        <div class="hdr"><b>Розклад</b><span class="pill">Тиждень 26.10 – 1.11</span></div>
+        <div class="days">
+          <div class="day">Пн<b>26</b><span class="dot"></span></div>
+          <div class="day today">Вт<b>27</b><span class="dot"></span></div>
+          <div class="day">Ср<b>28</b><span class="dot"></span></div>
+          <div class="day">Чт<b>29</b><span class="dot"></span></div>
+          <div class="day">Пт<b>30</b><span class="dot"></span></div>
+          <div class="day">Сб<b>31</b></div>
+        </div>
+        <div class="friends"><span class="av a">Я</span><span class="av b">Д</span><span class="av c">О</span><span class="pill">+ Порівняти</span></div>
+        <div>
+          <div class="cls past"><div class="tm">10:00<span>11:20</span></div><div><div class="nm">MATH111 [P6]</div><div class="pl">М. Шпака 3, 3.05</div></div></div>
+          <div class="cls now"><div class="tm">11:30<span>12:50</span></div><div><div class="nm">ECON100 [P6] <span class="chg">нова аудиторія</span></div><div class="pl">М. Шпака 3, 4.08 · зараз, ще 35 хв</div><div class="prog"><i></i></div></div></div>
+          <div class="cls"><div class="tm">13:30<span>14:50</span></div><div><div class="nm">MATH111 [P7] <span class="shared" aria-label="спільна з Д і О"><span class="av b">Д</span><span class="av c">О</span></span></div><div class="pl">М. Шпака 3, 2.08.1</div></div></div>
+          <div class="cls"><div class="tm">18:00<span>19:20</span></div><div><div class="nm">ENG111 [P11]</div><div class="pl">Мирошниченка 6/11, F3</div></div></div>
+        </div>
+      </div>
+      <figcaption>Пример с выдуманными данными. Коды курсов остаются как есть, названия «memorial classroom» убраны.</figcaption>
+    </figure>
+    <div class="notes">
+      <div><b>Сегодня выбрано при открытии</b><span>Полоса дней не прокручивается вместе со списком. Точка под днём — есть пары.</span></div>
+      <div><b>Свайп влево и вправо — соседний день</b><span>Если ушёл с сегодня, появляется кнопка «Сьогодні», чтобы вернуться одним нажатием.</span></div>
+      <div><b>Прошедшие пары бледнеют, текущая подсвечена</b><span>С полоской прогресса и «ще 35 хв». Через 15 минут после конца пары подсветка переходит на следующую.</span></div>
+      <div><b>Изменения видны на месте</b><span>Плашка «нова аудиторія» или «перенесено» прямо в строке пары, тот же текст, что в пуше.</span></div>
+      <div><b>Сравнение с несколькими друзьями</b><span>Аватары сверху — выбранные люди, до 5. Нажатие на аватар включает и выключает человека. На общих парах — маленькие аватары тех, кто тоже там. Сверху счётчик «Спільних пар: 3».</span></div>
+      <div><b>Неделя целиком — по нажатию на диапазон дат</b><span>Компактная сетка недели для тех, кто планирует, но не по умолчанию.</span></div>
+      <div><b>Место — всегда «корпус, аудиторія»</b><span>«М. Шпака 3, 2.15.1». Без названий спонсорских аудиторий.</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="motion">
+  <span class="eyebrow">Анімації</span>
+  <h2>Отклик на каждое нажатие, без шоу</h2>
+  <p>Дорогое ощущение дают не эффекты, а то, что интерфейс мгновенно и одинаково реагирует на палец. Все анимации короче 250 мс, с вибрацией Telegram. Если в системе включено «уменьшить движение», остаются только смены цвета.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Где</th><th>Что происходит</th><th>Длительность</th><th>Вибрация</th></tr></thead>
+    <tbody>
+      <tr><td>Любая кнопка, строка, карточка</td><td>Сжимается до 97% при нажатии, отпускается пружиной</td><td>100–150 мс</td><td>selection</td></tr>
+      <tr><td>Смена дня в расписании</td><td>Список уезжает в сторону свайпа, выбранный день плавно перекрашивается</td><td>180 мс</td><td>selection</td></tr>
+      <tr><td>Переключение вкладок</td><td>Короткое растворение контента, без сдвигов</td><td>150 мс</td><td>selection</td></tr>
+      <tr><td>Нижний лист (фильтры, бронь)</td><td>Выезжает снизу с лёгкой пружиной, фон затемняется</td><td>240 мс</td><td>—</td></tr>
+      <tr><td>Бронь подтверждена</td><td>Кнопка превращается в галочку, строка брони появляется сверху</td><td>300 мс</td><td>success</td></tr>
+      <tr><td>Ошибка (комната занята)</td><td>Короткое покачивание строки, текст ошибки под ней</td><td>200 мс</td><td>error</td></tr>
+      <tr><td>Загрузка</td><td>Скелетоны в форме будущих строк, без спиннеров на весь экран</td><td>—</td><td>—</td></tr>
+      <tr><td>Онбординг: ответ выбран</td><td>Вариант подсвечивается, через 200 мс — следующий экран</td><td>200 мс</td><td>light</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="day">
+  <span class="eyebrow">Сценарий 2 · обычный день</span>
+  <h2>Вторник студента с KSE Hub</h2>
+  <p>Большая часть жизни продукта — в чате. Mini App открывают по кнопке из сообщения, на 10–30 секунд.</p>
+  <div class="timeline">
+    <div class="tl"><div class="time">08:00</div><div class="rail"></div><div class="body"><span class="ch">чат · пуш</span><h3>Дайджест</h3><p class="small">Пары дня, дедлайны на 3 дня, 2–3 важных письма. Прочитал за 15 секунд. Целевое действие — ничего не делать: всё понятно из текста. Если там дедлайн — «Відкрити день» ведёт в «Сьогодні».</p></div></div>
+    <div class="tl"><div class="time">09:45</div><div class="rail"></div><div class="body"><span class="ch">чат · пуш</span><h3>«MATH111 через 15 хв · М. Шпака 3, 3.05»</h3><p class="small">Самое ценное уведомление. Без кнопки, открывать ничего не надо.</p></div></div>
+    <div class="tl"><div class="time">11:10</div><div class="rail"></div><div class="body"><span class="ch">чат · пуш</span><h3>«ECON100: нова аудиторія 4.08»</h3><p class="small">Тот самый момент, ради которого бота ставят и показывают друзьям. Кнопка «Відкрити розклад» ведёт в нужный день.</p></div></div>
+    <div class="tl"><div class="time">12:55</div><div class="rail"></div><div class="body"><span class="ch">Mini App</span><h3>Перерыв: созвон в Skype Room</h3><p class="small">Вкладка «Кімнати» → «Зараз» → Skype Room 2 → «Забронювати». Три касания, в чат приходит подтверждение.</p></div></div>
+    <div class="tl"><div class="time">16:30</div><div class="rail"></div><div class="body"><span class="ch">Mini App</span><h3>«Где завтра Даня и Оля?»</h3><p class="small">«Навчання» → «Розклад» → выбраны два друга → видно общие пары.</p></div></div>
+    <div class="tl"><div class="time">20:00</div><div class="rail"></div><div class="body"><span class="ch">чат · пуш</span><h3>Дедлайн через 24 часа</h3><p class="small">Кнопка ведёт на экран дедлайна. Оттуда — «Відкрити в Moodle» или «Запитати Copilot».</p></div></div>
+    <div class="tl"><div class="time">21:15</div><div class="rail"></div><div class="body"><span class="ch">чат · Copilot</span><h3>«Що мені здати до п'ятниці?»</h3><p class="small">Ответ по шаблону дедлайнов: список с датами, коротко. Подробности — в сворачиваемой цитате.</p></div></div>
+    <div class="tl"><div class="time">Пн</div><div class="rail"></div><div class="body" style="padding-bottom:0"><span class="ch">чат · пуш, раз в неделю</span><h3>«3 нові можливості для BE»</h3><p class="small">Кнопка ведёт в «Можливості · Для тебе».</p></div></div>
+  </div>
+</section>
+
+<section id="flows">
+  <span class="eyebrow">Сценарии 3–6</span>
+  <h2>Ключевые сценарии и их воронки</h2>
+
+  <div class="flowcard">
+    <h3>Бронь комнаты · цель ≤ 3 касаний</h3>
+    <div class="flow"><span class="node">Вкладка «Кімнати»</span><span class="arr">→</span><span class="node">Коли: «Зараз» (выбрано)</span><span class="arr">→</span><span class="node">Нажал на свободную комнату</span><span class="arr">→</span><span class="node">Лист: время, длительность 30/60/90</span><span class="arr">→</span><span class="node goal">«Забронювати»</span></div>
+    <ul>
+      <li>Входы: вкладка; кнопка «Забронювати ще» в сообщении о брони; Copilot «забронюй скайп рум на 14:00» — показывает подтверждение кнопкой, сам не бронирует.</li>
+      <li>Занятые комнаты не прячем, показываем серыми с «вільна з 14:30».</li>
+      <li>После брони: сообщение в чат с кнопками «Звільнити» и «Продовжити», напоминание за 10 минут.</li>
+      <li>Воронка: <span class="ev">rooms_open</span> → <span class="ev">room_select</span> → <span class="ev">booking_confirm</span>. Смотреть, сколько уходит на шаге выбора времени.</li>
+    </ul>
+  </div>
+
+  <div class="flowcard">
+    <h3>Дедлайн из пуша · цель — сдать вовремя</h3>
+    <div class="flow"><span class="node">Пуш за 24 / 3 год</span><span class="arr">→</span><span class="node">Экран дедлайна</span><span class="arr">→</span><span class="node">«Відкрити в Moodle»</span><span class="arr">→</span><span class="node goal">«Позначити зробленим»</span></div>
+    <ul>
+      <li>На экране: курс, точное время, «залишилось 23 год», ссылка в Moodle, «Запитати Copilot».</li>
+      <li>Общеуниверситетские «General / University» — отдельной свёрнутой группой, без пушей по умолчанию.</li>
+      <li>«Прострочено» показываем только 7 дней, потом в архив. Красный — только для того, что ещё можно спасти.</li>
+      <li>Воронка: <span class="ev">push_deadline_open</span> → <span class="ev">deadline_moodle_open</span> → <span class="ev">deadline_done</span>.</li>
+    </ul>
+  </div>
+
+  <div class="flowcard">
+    <h3>Расписание друзей · цель — найти общие пары</h3>
+    <div class="flow"><span class="node">«Навчання» → «Розклад»</span><span class="arr">→</span><span class="node">«+ Порівняти»</span><span class="arr">→</span><span class="node">Поиск по фамилии</span><span class="arr">→</span><span class="node goal">Аватар в полосе сравнения</span></div>
+    <ul>
+      <li>Добавленные друзья запоминаются, в следующий раз уже в полосе.</li>
+      <li>Если у человека расписание скрыто: «Олена приховала розклад», без поиска в никуда.</li>
+      <li>Воронка: <span class="ev">compare_open</span> → <span class="ev">friend_added</span> → <span class="ev">compare_return_7d</span>.</li>
+    </ul>
+  </div>
+
+  <div class="flowcard">
+    <h3>Можливості · цель — открыть и сохранить подходящую</h3>
+    <div class="flow"><span class="node">Пуш «3 нові для BE»</span><span class="arr">→</span><span class="node">«Для тебе»</span><span class="arr">→</span><span class="node">Карточка: что, для кого, до когда</span><span class="arr">→</span><span class="node goal">«Зберегти» / «Подати»</span></div>
+    <ul>
+      <li>У каждой возможности метка программы: «BE, EBD» или «Усі програми». Чужие не прячем, а опускаем ниже с меткой.</li>
+      <li>Сохранённая возможность получает напоминание за 3 дня до дедлайна подачи.</li>
+      <li>Пустое состояние честное: «Поки нічого для BE. Нові з'являються щопонеділка».</li>
+      <li>Воронка: <span class="ev">opps_open</span> → <span class="ev">opp_view</span> → <span class="ev">opp_saved</span> / <span class="ev">opp_apply_click</span>.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="chat">
+  <span class="eyebrow">Повідомлення в чаті</span>
+  <h2>Шаблоны сообщений</h2>
+  <p>Правила: одно сообщение — одна тема. Первая строка — что и когда. Коды курсов как есть, место — «корпус, аудиторія». Максимум одна кнопка. Детали письма — в сворачиваемую цитату (<code>&lt;blockquote expandable&gt;</code>). Прошедшие события в дайджест не попадают. Если событие уже было в другом сообщении сегодня, второй раз не дублируем.</p>
+  <div class="msgs">
+    <div class="msg"><span class="lbl">Дайджест · 08:00</span>
+      <div class="bubble"><b>Вівторок, 27 жовтня</b>
+
+<b>Пари</b>
+10:00  MATH111 · М. Шпака 3, 3.05
+11:30  ECON100 · М. Шпака 3, 4.08 (нова аудиторія)
+18:00  ENG111 · Мирошниченка 6/11, F3
+
+<b>Дедлайни</b>
+пт 30.10, 15:00 · Фінальний захист проєктів · через 3 дні
+
+<b>Пошта</b>
+Семінар з відбудови економіки · 29.10, ICU Hall, потрібна реєстрація<span class="q">Польсько-український економічний семінар, 10:00–15:00…</span></div>
+      <div class="kb">Відкрити день</div></div>
+    <div class="msg"><span class="lbl">Перенесення пари · одразу</span>
+      <div class="bubble"><b>Пару перенесли</b>
+ENG111 [P11]: пн 2.11 → чт 5.11, 18:00
+Мирошниченка 6/11, F4</div>
+      <div class="kb">Відкрити розклад</div>
+      <span class="lbl" style="margin-top:12px">Пара через 15 хв</span>
+      <div class="bubble"><b>MATH111 через 15 хв</b>
+М. Шпака 3, 3.05</div></div>
+    <div class="msg"><span class="lbl">Відповідь Copilot</span>
+      <div class="bubble"><b>До п'ятниці треба здати 2 речі:</b>
+ср 28.10, 23:59 · ECON100 · Problem set 4
+пт 30.10, 15:00 · KSE101 · Фінальний захист проєктів
+
+Найближче — Problem set 4, залишилось 2 дні.</div>
+      <div class="kb">Відкрити дедлайни</div>
+      <p class="small muted" style="margin-top:6px">Сначала прямой ответ, потом детали. Расписание и дедлайны в ответах — тем же шаблоном, что в дайджесте. Длиннее 8–10 строк — остальное в сворачиваемую цитату.</p></div>
+  </div>
+</section>
+
+<section id="program">
+  <span class="eyebrow">Програма студента</span>
+  <h2>Программа и курс: два варианта и одна цифра</h2>
+  <p>Решение: при регистрации человек выбирает только из двух вариантов — BE или EBD. Вариант заранее выделен по названиям курсов из расписания, поэтому чаще всего нужно просто нажать «Далі». Год поступления не спрашиваем вообще: он в адресе почты.</p>
+  <div class="cols">
+    <div class="src"><span class="conf h">Сильный сигнал</span><h3>Названия курсов в расписании</h3><p class="small">В Google Calendar приходят названия вроде «English for Professional and Study Purposes I (BE, EBD)». Программы в скобках и набор курсов почти однозначно указывают на программу.</p></div>
+    <div class="src"><span class="conf h">Подтверждено</span><h3>Число в адресе почты</h3><p class="small">«имя.фамилия.26@kse.org.ua»: 26 — год поступления. Курс считаем автоматически и пересчитываем каждый сентябрь.</p></div>
+    <div class="src"><span class="conf m">Не работает</span><h3>Адреса рассылок</h3><p class="small">Проверили: письма идут на общий students@, через BCC или через SendPulse. Программу по ним не определить, поэтому этот сигнал не используем.</p></div>
+    <div class="src"><span class="conf m">Дополнительно</span><h3>Список курсов Moodle</h3><p class="small">После подключения iCal видно, на каких курсах человек. Помогает, если расписание пустое.</p></div>
+  </div>
+  <p class="small" style="margin-top:14px">Правило: выделяем вариант по курсам → человек жмёт «Далі» или переключает на второй → фиксируем. В начале семестра снова смотрим на курсы: если набор сменился (например, перевод с BE на EBD), один раз спрашиваем «Ти тепер на EBD?». Возможности без метки программы показываются всем. Письма SDO «Opportunities for Students» разбираем на отдельные возможности и метим программой по тексту.</p>
+</section>
+
+<section id="metrics">
+  <span class="eyebrow">Метрики</span>
+  <h2>Как понять, что стало удобнее</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Метрика</th><th>Как считаем</th><th>Ориентир</th></tr></thead>
+    <tbody>
+      <tr><td>Активация</td><td>Завершил онбординг и открыл пуш на следующий день</td><td>35% от нажавших Start</td></tr>
+      <tr><td>Открываемость пушей</td><td>Нажатия на кнопку / отправленные, отдельно по типам</td><td>Изменения пар выше всех</td></tr>
+      <tr><td>D7 / D30</td><td>Открыл бота или Mini App через 7 и 30 дней</td><td>40% / 25%</td></tr>
+      <tr><td>Касаний до брони</td><td>От открытия вкладки до подтверждения</td><td>≤ 3</td></tr>
+      <tr><td>Discovery</td><td>Доля активных, кто хоть раз открыл каждую вкладку</td><td>Видно, какую функцию не находят</td></tr>
+      <tr><td>Тест на людях</td><td>5 студентов, задачи на время: «где завтра первая пара», «забронируй комнату»</td><td>Каждая задача до 20 с</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small muted" style="margin-top:10px">Ориентиры — стартовые гипотезы, после первого месяца заменить на свои цифры.</p>
+</section>
+
+<section id="refs">
+  <span class="eyebrow">Референси</span>
+  <h2>Что открыть на Mobbin, Refero и Page Flows</h2>
+  <p>Визуальную основу берём из <b>Refero Styles</b> (бесплатно, styles.refero.design): там есть готовый DESIGN.md для Apple и Things — светлая основа и один синий акцент, как и нужно KSE Hub. Экраны реальных приложений и видео сценариев бесплатно смотреть на <b>UILand</b> (uiland.design, есть Flows и Flow Videos). Mobbin и Refero требуют входа. Скрины складывай в <code>design/refs/</code> с подписью, что берёшь.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Для чего</th><th>Смотреть</th><th>Что именно брать</th><th>Запрос</th></tr></thead>
+    <tbody>
+      <tr><td>Расписание</td><td>Fantastical, Notion Calendar, Structured</td><td>Полоса недели сверху, сегодня выбрано, линия «сейчас», свайп по дням</td><td>Mobbin: «week day picker», «calendar day view»</td></tr>
+      <tr><td>«Сьогодні»</td><td>Things 3 (Today), Structured</td><td>Один список по времени, текущее выделено, прошедшее приглушено</td><td>Refero: «today», «timeline»</td></tr>
+      <tr><td>Онбординг</td><td>Revolut, Notion Calendar</td><td>Один вопрос на экран, подключение аккаунта, польза сразу после входа</td><td>Page Flows: «onboarding» в этих приложениях</td></tr>
+      <tr><td>Бронь</td><td>Airbnb, Cal.com, Calendly</td><td>Сначала «когда», потом список; слоты времени; подтверждение в нижнем листе</td><td>Mobbin: «time slot picker», «booking»</td></tr>
+      <tr><td>Можливості</td><td>LinkedIn Jobs, Wellfound</td><td>Карточка вакансии, фильтры в нижнем листе, «сохранить»</td><td>Mobbin: «filter bottom sheet», «job detail»</td></tr>
+      <tr><td>Copilot</td><td>Claude, Perplexity</td><td>Ответ первым, структура, подсказки-стартеры</td><td>Refero: «AI chat»</td></tr>
+      <tr><td>Нативность Telegram</td><td>@wallet, настройки Telegram</td><td>Секции, разделители, BottomButton, поведение темы</td><td>Открыть в самом Telegram</td></tr>
+      <tr><td>Пустые состояния</td><td>Linear, Things 3</td><td>Одна фраза «зачем» и одно действие</td><td>Mobbin: «empty state»</td></tr>
+      <tr><td>Движение</td><td>Revolut, Things 3</td><td>Как ведут себя нажатия, листы и переходы</td><td>Page Flows: видео сценариев</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small muted" style="margin-top:10px">Синий KSE: тёмно-синий как опорный цвет бренда и яркий синий для активного состояния. В Mini App основные фоны остаются из темы Telegram, синий — только акцент.</p>
+</section>
+
+<section id="questions">
+  <span class="eyebrow">Відкриті питання</span>
+  <h2>Решено</h2>
+  <ol class="qs">
+    <li><code>.26</code> в почте — год поступления, курс считаем сами.</li>
+    <li>Программа — только выбор BE или EBD, с подсказкой по курсам.</li>
+    <li>Сравнение расписаний — до 5 друзей.</li>
+    <li>Copilot убираем из вкладок: он в чате и в кнопках «Запитати Copilot».</li>
+    <li>Логотип — антиквенный знак KSE на тёмно-синем. Тёмно-синий берём из него, яркий синий — для активных состояний.</li>
+  </ol>
+</section>
+</main>
+</div>
+
+</body></html>

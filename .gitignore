@@ -7,3 +7,6 @@ dist
 
 # Internal KSE docs with staff/student contacts: kept local, already loaded into the DB
 server/kb-docs/*.md
+
+# Reference screenshots from Dribbble/Mobbin: kept local, not ours to publish
+design/refs/*.jpg
