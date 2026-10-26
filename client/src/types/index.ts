@@ -196,7 +196,7 @@ export interface ChatMessage {
 }
 
 /* ─── Navigation ─── */
-export type TabId = 'rooms' | 'schedule' | 'moodle' | 'venture' | 'careers' | 'copilot';
+export type TabId = 'today' | 'study' | 'rooms' | 'opps';
 
 /* ─── Schedule ─── */
 export interface ClassEvent {
