@@ -200,7 +200,6 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
         <div className="group" style={{ marginTop: 32 }}>
           <button className="row press row--danger" onClick={deleteData}>{tr('Видалити мої дані з KSE Hub', 'Delete my data from KSE Hub')}</button>
         </div>
-        <p className="note" style={{ textAlign: 'center' }}>{tr('Слак-канали цілком зʼявляться, коли ІТ KSE дозволить додати бота.', 'Full Slack channels arrive once KSE IT lets us add the bot.')}</p>
       </div>
 
       {pick && (
