@@ -2,6 +2,9 @@ import { AnalyticsService } from '../services/analyticsService.js';
 import { Hono } from 'hono';
 import { BookingService } from '../services/bookingService.js';
 import { createBookingSchema, hotBookingSchema } from '../utils/validators.js';
+import { InlineKeyboard } from 'grammy';
+import { sendToUser } from '../bot/send.js';
+import { bookingText } from '../bot/messages.js';
 
 const roomRoutes = new Hono();
 
@@ -46,6 +49,15 @@ roomRoutes.post('/book', async (c) => {
     new Date(data.endTime)
   );
   AnalyticsService.track(user.id, 'booking.created', { via: 'app' });
+
+  // Confirmation in the chat, with a way to give the room back without opening the app
+  const en = user.languagePref === 'en';
+  const room = result.room as { name: string; floor: number | null };
+  await sendToUser(
+    user.telegramId,
+    bookingText(en ? 'en' : 'uk', room.name, room.floor, new Date(data.startTime), new Date(data.endTime), new Date()),
+    new InlineKeyboard().text(en ? 'Release' : 'Звільнити', `book:x:${(result.booking as { id: number }).id}`),
+  );
 
   return c.json(result, 201);
 });

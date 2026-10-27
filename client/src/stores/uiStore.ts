@@ -36,13 +36,14 @@ export const useUi = create<UiState>((set) => ({
   closeProfile: () => set({ profileOpen: false }),
 }));
 
-/** startapp=today | day_2026-10-27 | deadline_12 | booking_5 | opps | opp_3 */
+/** startapp=today | day_2026-10-27 | deadlines | deadline_12 | booking_5 | opps | opp_3 */
 export function applyStartParam(param: string | null) {
   if (!param) return;
   const s = useUi.getState();
   const [kind, value] = [param.split('_')[0], param.slice(param.indexOf('_') + 1)];
   if (kind === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(value)) s.openDay(value);
   else if (kind === 'deadline' && Number(value)) s.openDeadline(Number(value));
+  else if (kind === 'deadlines') useUi.setState({ tab: 'study', studyView: 'deadlines' });
   else if (kind === 'booking') s.setTab('rooms');
   else if (kind === 'opp' && Number(value)) useUi.setState({ tab: 'opps', oppsView: 'forYou', oppId: Number(value) });
   else if (kind === 'opps') s.setTab('opps');

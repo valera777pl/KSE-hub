@@ -1,4 +1,7 @@
 import { Hono } from 'hono';
+import { sendToUser } from '../bot/send.js';
+import { appButton, onboardedText } from '../bot/messages.js';
+import { kyivHour } from '../utils/kyivTime.js';
 import { db } from '../db/connection.js';
 import { users } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
@@ -43,7 +46,11 @@ userRoutes.post('/me/onboarding', async (c) => {
     .set({ onboardedAt: user.onboardedAt ?? new Date(), updatedAt: new Date() })
     .where(eq(users.id, user.id))
     .returning();
-  if (!user.onboardedAt) AnalyticsService.track(user.id, 'onboarding.completed');
+  if (!user.onboardedAt) {
+    AnalyticsService.track(user.id, 'onboarding.completed');
+    const hour = kyivHour();
+    await sendToUser(user.telegramId, onboardedText(user.languagePref === 'en' ? 'en' : 'uk', user.digestHour, hour), appButton(user.languagePref === 'en' ? 'Open KSE Hub' : 'Відкрити KSE Hub', 'today'));
+  }
   return c.json({ user: updated });
 });
 

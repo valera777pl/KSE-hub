@@ -1,69 +1,59 @@
 import { db } from '../db/connection.js';
 import { emails, moodleAssignments, moodleCourses, summaries, users, type DigestSource, type EmailSource } from '../db/schema.js';
 import { and, asc, desc, eq, gt, inArray, isNull, lte, ne } from 'drizzle-orm';
-import { escapeHtml } from '../bot/send.js';
-import { formatKyiv, timeLeft } from '../utils/kyivTime.js';
+import { digestText, isGeneralCourse, kyivDay, type Lang } from '../bot/messages.js';
+import { kyivDayStart, kyivHour } from '../utils/kyivTime.js';
+import { ScheduleService } from './scheduleService.js';
 
 type User = typeof users.$inferSelect;
 
-export const SOURCE_LABELS: Record<DigestSource, string> = {
-  moodle: '📚 Moodle',
-  gmail: '📧 Пошта',
-  slack: '💬 Slack',
-};
-
-const EMAILS_PER_SECTION = 10;
+const EMAILS_PER_SECTION = 6;
 const EMAIL_LOOKBACK_MS = 3 * 24 * 3_600_000;
+const DEADLINE_DAYS = 3;
+const HOUR = 3_600_000;
+/** From this Kyiv hour the digest looks at tomorrow's classes */
+const EVENING = 18;
 
 /**
- * Builds the digest text: one section per source the student picked.
- * Sources with nothing new are skipped; returns null when every section is empty.
+ * Builds the daily digest (PRODUCT.md template): the day, its classes, deadlines for 3 days,
+ * important mail. Only sources the student picked; nothing that already happened.
  */
 export class DigestService {
   /**
    * @param markDigested the scheduled digest marks the included emails so they
-   *   don't repeat tomorrow; the /digest preview leaves them alone.
+   *   don't repeat tomorrow; a preview leaves them alone.
+   * @returns the message and the screen its button opens, or null when there's nothing to say
    */
-  static async build(user: User, { markDigested = false } = {}): Promise<string | null> {
-    const sections: string[] = [];
+  static async build(user: User, { markDigested = false, now = new Date() } = {}): Promise<{ text: string; startapp: string } | null> {
+    const lang: Lang = user.languagePref === 'en' ? 'en' : 'uk';
+    // An evening digest is about tomorrow
+    const day = kyivHour(now) >= EVENING ? new Date(now.getTime() + 24 * HOUR) : now;
+    const dayStart = kyivDayStart(kyivDay(day));
+    const classes = (await ScheduleService.events(user.id, dayStart, new Date(dayStart.getTime() + 24 * HOUR)))
+      .filter((e) => e.startAt > now)
+      .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+
+    const deadlines = user.digestSources.includes('moodle')
+      ? (await this.upcomingDeadlines(user.id, now, new Date(now.getTime() + DEADLINE_DAYS * 24 * HOUR), 12))
+          .filter((r) => !isGeneralCourse(r.courseName))
+          .map((r) => ({ title: r.assignment.title, courseName: r.courseName, dueDate: r.assignment.dueDate! }))
+      : [];
+
     const includedEmailIds: number[] = [];
+    const mailFor = async (source: EmailSource) => {
+      if (!user.digestSources.includes(source)) return [];
+      const rows = await this.emailLines(user, source);
+      includedEmailIds.push(...rows.map((r) => r.id));
+      return rows;
+    };
+    const mail = await mailFor('gmail');
+    const slack = await mailFor('slack');
 
-    for (const source of user.digestSources) {
-      const parts: string[] = [];
-      if (source === 'moodle') {
-        const deadlines = await this.moodleDeadlines(user);
-        if (deadlines) parts.push(deadlines);
-      }
-      const mail = await this.emailLines(user, source);
-      if (mail.lines.length) {
-        parts.push(mail.lines.join('\n'));
-        includedEmailIds.push(...mail.ids);
-      }
-      if (parts.length) sections.push(`<b>${SOURCE_LABELS[source]}</b>\n${parts.join('\n\n')}`);
-    }
-
+    const text = digestText({ lang, now, day, classes, deadlines, mail, slack });
     if (markDigested && includedEmailIds.length) {
       await db.update(emails).set({ digestedAt: new Date() }).where(inArray(emails.id, includedEmailIds));
     }
-
-    if (sections.length === 0) return null;
-    return `🗞 <b>Твій дайджест</b>\n\n${sections.join('\n\n')}`;
-  }
-
-  private static async moodleDeadlines(user: User): Promise<string | null> {
-    const now = new Date();
-    const weekAhead = new Date(now.getTime() + 7 * 24 * 3_600_000);
-
-    const rows = await this.upcomingDeadlines(user.id, now, weekAhead, 10);
-    if (rows.length === 0) return null;
-
-    return rows
-      .map(({ assignment, courseName }) => {
-        const due = assignment.dueDate!;
-        const course = courseName ? ` · <i>${escapeHtml(courseName)}</i>` : '';
-        return `• ${escapeHtml(assignment.title)}${course}\n  ⏰ ${formatKyiv(due)} (${timeLeft(due, now)})`;
-      })
-      .join('\n');
+    return text ? { text, startapp: `day_${kyivDay(day)}` } : null;
   }
 
   /** Not-yet-digested emails from this source, important first, newsletters left out. */
@@ -84,13 +74,7 @@ export class DigestService {
       .orderBy(desc(summaries.important), desc(emails.receivedAt))
       .limit(EMAILS_PER_SECTION);
 
-    return {
-      ids: rows.map((r) => r.id),
-      lines: rows.map((r) => {
-        const from = r.fromName ? ` · <i>${escapeHtml(r.fromName)}</i>` : '';
-        return `• <b>${escapeHtml(r.subject ?? '')}</b>${from}\n  ${escapeHtml(r.summary)}`;
-      }),
-    };
+    return rows;
   }
 
   static upcomingDeadlines(userId: number, from: Date, to: Date, limit = 20) {

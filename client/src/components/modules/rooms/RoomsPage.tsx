@@ -253,6 +253,7 @@ function BookSheet({ room, start, leftMin, onClose, onBooked }: {
           <Check strokeWidth={2.25} />
           <b>{tr('Заброньовано', 'Booked')}</b>
           <span className="num">{roomName(room)}, {hm(start)}–{hm(end)}</span>
+          <span>{tr('Підтвердження з кнопкою «Звільнити» — в чаті з ботом.', 'A confirmation with a Release button is in the bot chat.')}</span>
         </div>
       </Sheet>
     );

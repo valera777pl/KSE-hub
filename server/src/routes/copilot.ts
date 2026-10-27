@@ -17,7 +17,7 @@ copilotRoutes.post('/chat', async (c) => {
   } catch (err) {
     if (err instanceof AILimitError) throw err;
     console.error('Assistant failed:', err);
-    throw new AppError('ІІ зараз перевантажений, спробуй за хвилину 🙏', 503);
+    throw new AppError('Copilot зараз перевантажений. Спробуй за хвилину.', 503);
   }
 });
 

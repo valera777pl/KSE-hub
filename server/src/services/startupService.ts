@@ -123,7 +123,7 @@ export class StartupService {
       `<b>${escapeHtml(displayName(applicant))}</b>${role ? ` — ${escapeHtml(role)}` : ''}${about}` +
       (message ? `\n\n«${escapeHtml(message)}»` : '');
     await sendToUser(author.telegramId, text, new InlineKeyboard()
-      .text('✅ Прийняти', `vapp:a:${application.id}`)
+      .text('Прийняти', `vapp:a:${application.id}`)
       .text('Відхилити', `vapp:d:${application.id}`));
 
     return application;

@@ -6,9 +6,11 @@ import { DigestService } from './digestService.js';
 import { GmailService } from './gmailService.js';
 import { AnalyticsService } from './analyticsService.js';
 import { ScheduleService } from './scheduleService.js';
-import { appUrl, escapeHtml, openAppKeyboard, sendToUser } from '../bot/send.js';
-import { InlineKeyboard } from 'grammy';
+import { escapeHtml, sendToUser } from '../bot/send.js';
+import { appButton, deadlineReminderText, isGeneralCourse, weeklyText, type Lang } from '../bot/messages.js';
 import { formatKyiv, kyivHour, kyivWeekday } from '../utils/kyivTime.js';
+
+const langOf = (u: { languagePref: string | null }): Lang => (u.languagePref === 'en' ? 'en' : 'uk');
 
 const HOUR = 3_600_000;
 const CALENDAR_SYNC_EVERY = 3 * HOUR;
@@ -52,13 +54,12 @@ export class CronService {
     for (const user of due) {
       await db.update(users).set({ lastWeeklyAt: now }).where(eq(users.id, user.id));
       if (!user.digestSources.includes('moodle')) continue;
-      const rows = await DigestService.upcomingDeadlines(user.id, now, new Date(now.getTime() + 8 * 24 * HOUR), 25);
+      const rows = (await DigestService.upcomingDeadlines(user.id, now, new Date(now.getTime() + 8 * 24 * HOUR), 25))
+        .filter((r) => !isGeneralCourse(r.courseName));
       if (!rows.length) continue;
-      const lines = rows.map(({ assignment, courseName }) => {
-        const course = courseName ? ` · <i>${escapeHtml(courseName)}</i>` : '';
-        return `• ${escapeHtml(assignment.title)}${course}\n  ⏰ ${formatKyiv(assignment.dueDate!)}`;
-      });
-      if (await sendToUser(user.telegramId, `📅 <b>Дедлайни на тиждень</b>\n\n${lines.join('\n')}`, openAppKeyboard('Відкрити Moodle'))) {
+      const lang = langOf(user);
+      const text = weeklyText(lang, rows.map((r) => ({ title: r.assignment.title, courseName: r.courseName, dueDate: r.assignment.dueDate! })));
+      if (await sendToUser(user.telegramId, text, appButton(lang === 'en' ? 'Open deadlines' : 'Відкрити дедлайни', 'deadlines'))) {
         sent++;
         AnalyticsService.track(user.id, 'weekly.sent');
       }
@@ -135,6 +136,7 @@ export class CronService {
         courseName: moodleCourses.courseName,
         telegramId: users.telegramId,
         digestSources: users.digestSources,
+        languagePref: users.languagePref,
       })
       .from(moodleAssignments)
       .innerJoin(users, eq(moodleAssignments.userId, users.id))
@@ -150,8 +152,9 @@ export class CronService {
       .orderBy(asc(moodleAssignments.dueDate));
 
     let sent = 0;
-    for (const { assignment, courseName, telegramId, digestSources } of rows) {
-      if (!digestSources.includes('moodle')) continue;
+    for (const { assignment, courseName, telegramId, digestSources, languagePref } of rows) {
+      // University-wide events stay in the app without pushes (PRODUCT.md)
+      if (!digestSources.includes('moodle') || isGeneralCourse(courseName)) continue;
 
       const due = assignment.dueDate!;
       const kind = due.getTime() - now.getTime() <= 3 * HOUR ? '3h' : '24h';
@@ -164,10 +167,9 @@ export class CronService {
         .returning();
       if (claimed.length === 0) continue;
 
-      const head = kind === '3h' ? '🔥 <b>Менше 3 годин до дедлайну</b>' : '⏰ <b>Дедлайн завтра</b>';
-      const course = courseName ? `\n<i>${escapeHtml(courseName)}</i>` : '';
-      const text = `${head}\n\n<b>${escapeHtml(assignment.title)}</b>${course}\n${formatKyiv(due)}`;
-      if (await sendToUser(telegramId, text, openAppKeyboard('Відкрити дедлайни'))) {
+      const lang = langOf({ languagePref });
+      const text = deadlineReminderText(lang, kind, { title: assignment.title, courseName, dueDate: due });
+      if (await sendToUser(telegramId, text, appButton(lang === 'en' ? 'Open deadline' : 'Відкрити дедлайн', `deadline_${assignment.id}`))) {
         sent++;
         AnalyticsService.track(assignment.userId, 'reminder.sent', { kind });
       }
@@ -179,7 +181,7 @@ export class CronService {
   static async sendSavedOpportunityReminders() {
     const now = new Date();
     const rows = await db
-      .select({ userId: savedOpportunities.userId, opp: opportunities, telegramId: users.telegramId })
+      .select({ userId: savedOpportunities.userId, opp: opportunities, telegramId: users.telegramId, languagePref: users.languagePref })
       .from(savedOpportunities)
       .innerJoin(opportunities, eq(savedOpportunities.opportunityId, opportunities.id))
       .innerJoin(users, eq(savedOpportunities.userId, users.id))
@@ -191,15 +193,15 @@ export class CronService {
       ));
 
     let sent = 0;
-    for (const { userId, opp, telegramId } of rows) {
+    for (const { userId, opp, telegramId, languagePref } of rows) {
       // Claim first so two overlapping ticks can't both send it
       const claimed = await db.update(savedOpportunities).set({ remindedAt: now })
         .where(and(eq(savedOpportunities.userId, userId), eq(savedOpportunities.opportunityId, opp.id), isNull(savedOpportunities.remindedAt)))
         .returning();
       if (claimed.length === 0) continue;
-      const text = `<b>Подача закінчується ${formatKyiv(opp.deadline!)}</b>\n${escapeHtml(opp.title)} · ${escapeHtml(opp.company)}`;
-      const keyboard = new InlineKeyboard().webApp('Відкрити можливість', `${appUrl()}/?startapp=opp_${opp.id}`);
-      if (await sendToUser(telegramId, text, keyboard)) sent++;
+      const en = languagePref === 'en';
+      const text = `<b>${en ? 'Applications close' : 'Подача закінчується'} ${formatKyiv(opp.deadline!)}</b>\n${escapeHtml(opp.title)} · ${escapeHtml(opp.company)}`;
+      if (await sendToUser(telegramId, text, appButton(en ? 'Open' : 'Відкрити', `opp_${opp.id}`))) sent++;
     }
     return sent;
   }
@@ -223,11 +225,11 @@ export class CronService {
     for (const user of due) {
       // Stamp first: a crash mid-send must not turn into a duplicate digest
       await db.update(users).set({ lastDigestAt: new Date() }).where(eq(users.id, user.id));
-      const text = await DigestService.build(user, { markDigested: true });
-      if (!text) {
+      const digest = await DigestService.build(user, { markDigested: true });
+      if (!digest) {
         // Nothing new in the chosen sources: no message, but visible in the admin dashboard
         AnalyticsService.track(user.id, 'digest.empty');
-      } else if (await sendToUser(user.telegramId, text, openAppKeyboard())) {
+      } else if (await sendToUser(user.telegramId, digest.text, appButton(user.languagePref === 'en' ? 'Open the day' : 'Відкрити день', digest.startapp))) {
         sent++;
         AnalyticsService.track(user.id, 'digest.sent');
       } else {

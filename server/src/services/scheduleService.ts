@@ -6,7 +6,8 @@ import { AppError } from '../middleware/errorHandler.js';
 import { toLatin } from '../utils/translit.js';
 import { formatKyiv, kyivWeekStart } from '../utils/kyivTime.js';
 import { diffSchedule, type ScheduleChange } from '../utils/scheduleDiff.js';
-import { escapeHtml, openAppKeyboard, sendToUser } from '../bot/send.js';
+import { sendToUser } from '../bot/send.js';
+import { appButton, changeDay, classSoonText, scheduleChangeText } from '../bot/messages.js';
 import { AnalyticsService } from './analyticsService.js';
 
 type Account = typeof googleAccounts.$inferSelect;
@@ -133,7 +134,7 @@ export class ScheduleService {
   /** One message per student for all changes in this course section. */
   private static async notifyChanges(calendar: CourseCalendar, changes: ScheduleChange[]) {
     const subscribers = await db
-      .select({ id: users.id, telegramId: users.telegramId })
+      .select({ id: users.id, telegramId: users.telegramId, languagePref: users.languagePref })
       .from(userCalendars)
       .innerJoin(users, eq(users.id, userCalendars.userId))
       .where(and(
@@ -144,24 +145,11 @@ export class ScheduleService {
       ));
     if (!subscribers.length) return;
 
-    const course = `<b>${escapeHtml(calendar.courseCode)} [${escapeHtml(calendar.section ?? '')}]</b>`;
-    const lines = changes.slice(0, 8).map((c) => {
-      switch (c.kind) {
-        case 'moved':
-          return `🔄 ${formatKyiv(c.before.startAt)} → <b>${formatKyiv(c.after.startAt)}</b>${c.after.location ? ` · ${escapeHtml(c.after.location)}` : ''}`;
-        case 'room':
-          return `🚪 ${formatKyiv(c.after.startAt)}: тепер <b>${escapeHtml(c.after.location ?? 'без аудиторії')}</b>`;
-        case 'cancelled':
-          return `❌ ${formatKyiv(c.before.startAt)} — скасовано`;
-        case 'added':
-          return `➕ ${formatKyiv(c.after.startAt)}${c.after.location ? ` · ${escapeHtml(c.after.location)}` : ''}`;
-      }
-    });
-    const more = changes.length > 8 ? `\n…і ще ${changes.length - 8}` : '';
-    const text = `📅 Зміни в розкладі ${course}\n\n${lines.join('\n')}${more}`;
-
+    const day = changeDay(changes[0]);
     for (const s of subscribers) {
-      if (await sendToUser(s.telegramId, text, openAppKeyboard('Відкрити розклад'))) {
+      const lang = s.languagePref === 'en' ? 'en' : 'uk';
+      const text = scheduleChangeText(lang, calendar.courseCode, calendar.section, changes);
+      if (await sendToUser(s.telegramId, text, appButton(lang === 'en' ? 'Open schedule' : 'Відкрити розклад', `day_${day}`))) {
         AnalyticsService.track(s.id, 'schedule.change_sent', { changes: changes.length });
       }
     }
@@ -204,7 +192,7 @@ export class ScheduleService {
     const now = Date.now();
     const rows = await db
       .select({
-        userId: users.id, telegramId: users.telegramId,
+        userId: users.id, telegramId: users.telegramId, languagePref: users.languagePref,
         calendarId: calendarEvents.calendarId, googleEventId: calendarEvents.googleEventId,
         courseCode: courseCalendars.courseCode, section: courseCalendars.section,
         location: calendarEvents.location, startAt: calendarEvents.startAt,
@@ -228,8 +216,7 @@ export class ScheduleService {
         .onConflictDoNothing().returning();
       if (!claimed.length) continue;
       const minutes = Math.round((r.startAt.getTime() - now) / 60_000);
-      const where = r.location ? `\n📍 ${escapeHtml(r.location)}` : '';
-      if (await sendToUser(r.telegramId, `⏰ Через ${minutes} хв: <b>${escapeHtml(r.courseCode)} [${escapeHtml(r.section ?? '')}]</b>${where}`)) {
+      if (await sendToUser(r.telegramId, classSoonText(r.languagePref === 'en' ? 'en' : 'uk', r.courseCode, r.section, minutes, r.location))) {
         sent++;
         AnalyticsService.track(r.userId, 'class_reminder.sent');
       }

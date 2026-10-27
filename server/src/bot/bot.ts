@@ -7,7 +7,9 @@ import { AIService, AILimitError } from '../ai/aiService.js';
 import { AnalyticsService } from '../services/analyticsService.js';
 import { StartupService, contactLink, displayName } from '../services/startupService.js';
 import { signState } from '../utils/crypto.js';
-import { appUrl, chunkHtml, escapeHtml, openAppKeyboard } from './send.js';
+import { appUrl, chunkHtml, escapeHtml } from './send.js';
+import { appButton } from './messages.js';
+import { BookingService } from '../services/bookingService.js';
 
 /**
  * The chat is for talking to the assistant and for receiving digests and pushes.
@@ -44,21 +46,18 @@ export function getBot(): Bot<BotContext> {
   bot.command('start', async (ctx) => {
     const name = escapeHtml(ctx.from!.first_name);
     AnalyticsService.track(ctx.dbUser.id, 'bot.start');
+    const en = ctx.dbUser.languagePref === 'en';
     if (!ctx.dbUser.onboardedAt) {
-      await ctx.reply(
-        `Привіт, ${name}! 👋\n\n` +
-          `Я <b>KSE Hub</b> — Moodle, пошта, розклад і ІІ-помічник в одному місці.\n\n` +
-          `Щоб почати, зареєструйся в міні-застосунку: увійди поштою @kse.org.ua — це хвилина 👇`,
-        { parse_mode: 'HTML', reply_markup: openAppKeyboard('🚀 Зареєструватися') }
-      );
+      await ctx.reply(en ? `Hi, ${name}. Setup takes a minute.` : `Привіт, ${name}. Налаштування займе хвилину.`, {
+        parse_mode: 'HTML', reply_markup: appButton(en ? 'Open KSE Hub' : 'Відкрити KSE Hub'),
+      });
       return;
     }
     await ctx.reply(
-      `Привіт, ${name}! 👋\n\n` +
-        `Я <b>KSE Hub</b>. Сюди приходитимуть дайджести з Moodle, пошти та Slack і нагадування про дедлайни.\n\n` +
-        `А ще мені можна просто написати: «які в мене дедлайни на тижні?», «що писали про стажування?».\n\n` +
-        `Підключення та налаштування — в міні-застосунку 👇`,
-      { parse_mode: 'HTML', reply_markup: openAppKeyboard() }
+      en
+        ? `Hi, ${name}. Your digest, class changes and deadline reminders arrive here.\n\nYou can also just ask: “what's due by Friday?”`
+        : `Привіт, ${name}. Сюди приходять дайджест, перенесення пар і нагадування про дедлайни.\n\nА ще можна просто спитати: «що мені здати до пʼятниці?»`,
+      { parse_mode: 'HTML', reply_markup: appButton(en ? 'Open KSE Hub' : 'Відкрити KSE Hub', 'today') }
     );
   });
 
@@ -74,8 +73,8 @@ export function getBot(): Bot<BotContext> {
   // Everything below needs a finished sign-up
   bot.use(async (ctx, next) => {
     if (ctx.dbUser.onboardedAt) return next();
-    await ctx.reply('Спершу зареєструйся в міні-застосунку — увійди поштою @kse.org.ua 👇', {
-      reply_markup: openAppKeyboard('🚀 Зареєструватися'),
+    await ctx.reply('Спершу увійди поштою @kse.org.ua — це хвилина.', {
+      reply_markup: appButton('Відкрити KSE Hub'),
     });
   });
 
@@ -94,9 +93,21 @@ export function getBot(): Bot<BotContext> {
     }
   });
 
+  // "Звільнити" under a booking confirmation
+  bot.callbackQuery(/^book:x:(\d+)$/, async (ctx) => {
+    const en = ctx.dbUser.languagePref === 'en';
+    try {
+      await BookingService.cancelBooking(parseInt(ctx.match[1], 10), ctx.dbUser.id);
+      await ctx.answerCallbackQuery(en ? 'Released' : 'Звільнено');
+      await ctx.editMessageText(`${escapeHtml(ctx.callbackQuery.message?.text ?? '')}\n\n${en ? 'Released.' : 'Звільнено.'}`, { parse_mode: 'HTML' });
+    } catch (err: any) {
+      await ctx.answerCallbackQuery(err?.message ?? (en ? "Couldn't release" : 'Не вийшло звільнити'));
+    }
+  });
+
   bot.command('new', async (ctx) => {
     await AIService.clearHistory(ctx.dbUser.id);
-    await ctx.reply('Почали нову розмову ✨ Про що спитаєш?');
+    await ctx.reply('Почали нову розмову. Про що спитаєш?');
   });
 
   bot.on('message:text', async (ctx) => {
@@ -111,7 +122,7 @@ export function getBot(): Bot<BotContext> {
       }
       console.error('Assistant failed:', err);
       AnalyticsService.track(ctx.dbUser.id, 'ai.error', { source: 'bot' });
-      await ctx.reply('ІІ зараз перевантажений, спробуй за хвилину 🙏');
+      await ctx.reply('Copilot зараз перевантажений. Спробуй за хвилину.');
       return;
     }
     for (const chunk of chunkHtml(markdownToTelegramHtml(content))) {
@@ -138,5 +149,9 @@ export function markdownToTelegramHtml(md: string): string {
     .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
     .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, '$1<i>$2</i>')
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>')
-    .replace(/^#{1,6}\s+(.+)$/gm, '<b>$1</b>');
+    .replace(/^#{1,6}\s+(.+)$/gm, '<b>$1</b>')
+    // "> " lines (escaped to "&gt; ") become one collapsible quote: details stay out of the way
+    .replace(/(?:^&gt;[ \t]?.*(?:\n|$))+/gm, (block) =>
+      `<blockquote expandable>${block.replace(/^&gt;[ \t]?/gm, '').trimEnd()}</blockquote>\n`)
+    .trimEnd();
 }

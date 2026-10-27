@@ -28,12 +28,13 @@ googleCallback.get('/callback', async (c) => {
         .then((account) => account && ScheduleService.syncAccount(account))
         .catch((err) => console.error('Initial schedule sync failed:', err))
     );
-    const [user] = await db.select({ telegramId: users.telegramId }).from(users).where(eq(users.id, userId)).limit(1);
-    if (user) {
-      await sendToUser(user.telegramId,
-        `✅ Пошту <b>${escapeHtml(email)}</b> підключено.\n\nПерші листи з'являться в дайджесті протягом 10 хвилин. Що й коли надсилати — у міні-застосунку → Профіль.`);
+    // During sign-up the mini app carries on by itself and the chat gets one "Готово" at the end;
+    // a reconnect from the profile is worth a line in the chat
+    const [user] = await db.select({ telegramId: users.telegramId, onboardedAt: users.onboardedAt }).from(users).where(eq(users.id, userId)).limit(1);
+    if (user?.onboardedAt) {
+      await sendToUser(user.telegramId, `Пошту <b>${escapeHtml(email)}</b> підключено знову.`);
     }
-    return c.html(page('Готово ✅', `Пошту ${email} підключено. Можна повертатися в Telegram.`));
+    return c.html(page('Готово', `Пошту ${email} підключено. Повертайся в Telegram — продовжимо там.`));
   } catch (err: any) {
     console.error('Google callback failed:', err);
     return c.html(page('Не вийшло', err?.message ?? 'Спробуй ще раз пізніше.'), err?.status ?? 500);

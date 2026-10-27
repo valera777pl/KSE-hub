@@ -194,7 +194,7 @@ export const toolDefinitions: OpenAI.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'search_startups',
-      description: 'Student startups at KSE that are looking for teammates. Applying is done in the mini app (tab «Метч» → Стартапи).',
+      description: 'Student startups at KSE that are looking for teammates. Applying is done in the mini app («Можливості» → «Стартапи»).',
       parameters: {
         type: 'object',
         properties: {
