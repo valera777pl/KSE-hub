@@ -55,7 +55,8 @@ export const useVentureStore = create<VentureState>((set, get) => ({
       isLike,
     });
 
-    if (result.matched) {
+    // A skip can never be mutual, whatever comes back
+    if (isLike && result.matched) {
       set({ matchResult: result });
     }
 

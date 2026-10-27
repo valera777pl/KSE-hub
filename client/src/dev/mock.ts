@@ -335,7 +335,13 @@ const routes: [string, RegExp, Handler][] = [
   })],
   ['GET', /^\/venture\/profile$/, () => ({ profile: null })],
   ['GET', /^\/venture\/deck$/, () => ({ cards: empty ? [] : DECK })],
-  ['POST', /^\/venture\/swipe$/, () => { DECK.shift(); return { matched: true, matchedUser: { id: 3, telegramId: 3, username: 'okoval', fullName: 'Олена Коваленко', avatarUrl: null } }; }],
+  // Олена has already said "Цікаво" to us, so only our own "Цікаво" makes it mutual
+  ['POST', /^\/venture\/swipe$/, (_m, _u, b) => {
+    DECK.shift();
+    return (b as { isLike: boolean }).isLike
+      ? { matched: true, matchedUser: { id: 3, telegramId: 3, username: 'okoval', fullName: 'Олена Коваленко', avatarUrl: null } }
+      : { matched: false };
+  }],
 ];
 
 const realFetch = window.fetch.bind(window);
