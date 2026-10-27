@@ -7,34 +7,20 @@ import { addDays, dayKey, dayTitle, hm, mondayOf, now, todayKey } from '../../li
 import { shortPlace } from '../../lib/place';
 import { cloud, haptic, openExternal, useBackButton, useMainButton } from '../../lib/telegram';
 import { MoodleConnectForm } from '../modules/deadlines/MoodleConnect';
+import { programName, programsFromSchedule } from '../../lib/programs';
+import { tr } from '../../lib/i18n';
 
 const STEPS = ['mail', 'synced', 'program', 'digest', 'moodle', 'visibility'] as const;
 type Step = (typeof STEPS)[number];
 const STEP_KEY = 'onboarding_step';
 const AUTO_ADVANCE_MS = 200;
 
-const PROGRAMS = [
-  { id: 'BE', title: 'Business Economics' },
-  { id: 'EBD', title: 'Economics and Big Data' },
+const digestOptions = () => [
+  { hour: 8, title: tr('Зранку, 08:00', 'Morning, 08:00') },
+  { hour: 13, title: tr('В обід, 13:00', 'At lunch, 13:00') },
+  { hour: 20, title: tr('Увечері, 20:00', 'Evening, 20:00') },
+  { hour: -1, title: tr('Не надсилати', 'Don\'t send') },
 ];
-const DIGEST = [
-  { hour: 8, title: 'Зранку, 08:00' },
-  { hour: 13, title: 'В обід, 13:00' },
-  { hour: 20, title: 'Увечері, 20:00' },
-  { hour: -1, title: 'Не надсилати' },
-];
-
-/** Course titles carry their programmes, e.g. "… (BE, EBD)". Whichever appears alone more often is the guess. */
-function guessProgram(events: ClassEvent[]): string | null {
-  const score: Record<string, number> = { BE: 0, EBD: 0 };
-  for (const title of new Set(events.map((e) => e.title))) {
-    const tags = title.match(/\(([^)]*)\)\s*$/)?.[1].split(/[,\s]+/) ?? [];
-    const hits = tags.filter((t) => t in score);
-    if (hits.length === 1) score[hits[0]]++;
-  }
-  if (score.BE === score.EBD) return null;
-  return score.BE > score.EBD ? 'BE' : 'EBD';
-}
 
 /**
  * First run, one question per screen. Mail is required (everything else is built on it),
@@ -77,6 +63,7 @@ export function Onboarding() {
     cloud.set(STEP_KEY, next);
     track(`onboarding.step.${next}`);
   };
+  const programs = useMemo(() => programsFromSchedule(events ?? []), [events]);
   const index = step ? STEPS.indexOf(step) : 0;
   const next = () => (index < STEPS.length - 1 ? go(STEPS[index + 1]) : finish());
 
@@ -110,31 +97,36 @@ export function Onboarding() {
       <div className="onb__body" key={step}>
         {step === 'mail' && <MailStep google={google} />}
         {step === 'synced' && <SyncedStep email={google?.email ?? null} events={events} synced={synced} onRecheck={loadSchedule} onNext={next} />}
-        {step === 'program' && (
-          <Question title="Твоя програма" sub={guessProgram(events ?? []) ? 'Підказали за твоїми курсами. Так стажування й гранти будуть саме для тебе.' : 'Так стажування й гранти будуть саме для твоєї програми.'}
-            options={PROGRAMS.map((p) => ({ key: p.id, title: p.title, sub: p.id }))}
-            value={user?.faculty && PROGRAMS.some((p) => p.id === user.faculty) ? user.faculty : guessProgram(events ?? [])}
-            onPick={(id) => answer(() => updateUser({ faculty: id }))} />
-        )}
+        {step === 'program' && (programs.length > 0 ? (
+          <Question title={tr('Твоя програма', 'Your programme')}
+            sub={programs.length === 1
+              ? tr('Знайшли в назвах твоїх курсів. Так стажування й гранти будуть саме для тебе.', 'Found in your course titles. Internships and grants will match it.')
+              : tr('Ці програми є в назвах твоїх курсів. Обери свою — так стажування й гранти будуть саме для тебе.', 'These programmes appear in your course titles. Pick yours so internships and grants match it.')}
+            options={programs.map((code) => ({ key: code, title: programName(code), sub: programName(code) !== code ? code : undefined }))}
+            value={user?.faculty && programs.includes(user.faculty) ? user.faculty : programs.length === 1 ? programs[0] : null}
+            onPick={(code) => answer(() => updateUser({ faculty: code }))} />
+        ) : (
+          <NoProgramYet onNext={next} />
+        ))}
         {step === 'digest' && (
-          <Question title="Коли надсилати дайджест?" sub="Пари, дедлайни й важливі листи одним повідомленням."
-            options={DIGEST.map((d) => ({ key: String(d.hour), title: d.title }))}
+          <Question title={tr('Коли надсилати дайджест?', 'When should the digest arrive?')} sub={tr('Пари, дедлайни й важливі листи одним повідомленням.', 'Classes, deadlines and important mail in one message.')}
+            options={digestOptions().map((d) => ({ key: String(d.hour), title: d.title }))}
             value={user ? String(user.digestHour) : null}
             onPick={(h) => answer(() => updateUser({ digestHour: Number(h) }))}
-            note="Нагадування про дедлайни й перенесення пар приходять одразу, незалежно від цього." />
+            note={tr('Нагадування про дедлайни й перенесення пар приходять одразу, незалежно від цього.', 'Deadline reminders and class changes arrive right away either way.')} />
         )}
         {step === 'moodle' && (
           <>
-            <h1 className="onb__title">Додай дедлайни з Moodle</h1>
-            <p className="onb__sub">Хвилина — і бот нагадає про кожну здачу за 24 і за 3 години.</p>
+            <h1 className="onb__title">{tr('Додай дедлайни з Moodle', 'Add deadlines from Moodle')}</h1>
+            <p className="onb__sub">{tr('Хвилина — і бот нагадає про кожну здачу за 24 і за 3 години.', 'One minute, and the bot reminds you of every deadline 24 and 3 hours before.')}</p>
             <MoodleConnectForm onSaved={next} skip={() => { track('onboarding.skip.moodle'); next(); }} />
           </>
         )}
         {step === 'visibility' && (
-          <Question title="Показувати твій розклад одногрупникам?" sub="Тоді друзі побачать ваші спільні пари."
+          <Question title={tr('Показувати твій розклад одногрупникам?', 'Show your schedule to classmates?')} sub={tr('Тоді друзі побачать ваші спільні пари.', 'Then friends see the classes you share.')}
             options={[
-              { key: 'show', title: 'Показувати', sub: 'Тебе можна знайти за прізвищем' },
-              { key: 'hide', title: 'Приховати', sub: 'Змінити можна в профілі' },
+              { key: 'show', title: tr('Показувати', 'Show'), sub: tr('Тебе можна знайти за прізвищем', 'Classmates can find you by surname') },
+              { key: 'hide', title: tr('Приховати', 'Hide'), sub: tr('Змінити можна в профілі', 'You can change it in your profile') },
             ]}
             value={user ? (user.scheduleVisible ? 'show' : 'hide') : null}
             disabled={finishing}
@@ -162,7 +154,7 @@ function MailStep({ google }: { google: GoogleStatus | null }) {
     }
   };
 
-  useMainButton({ text: google?.needsReconnect ? 'Підключити знову' : 'Увійти через Google', onClick: connect });
+  useMainButton({ text: google?.needsReconnect ? tr('Підключити знову', 'Reconnect') : tr('Увійти через Google', 'Sign in with Google'), onClick: connect });
 
   return (
     <>
@@ -171,16 +163,16 @@ function MailStep({ google }: { google: GoogleStatus | null }) {
         <span className="connect__dash" />
         <span className="connect__mark connect__mark--g">G</span>
       </div>
-      <h1 className="onb__title">Увійди через пошту KSE</h1>
-      <p className="onb__sub">Потрібна адреса @kse.org.ua. З неї підтягнемо розклад і листи.</p>
+      <h1 className="onb__title">{tr('Увійди через пошту KSE', 'Sign in with your KSE mail')}</h1>
+      <p className="onb__sub">{tr('Потрібна адреса @kse.org.ua. З неї підтягнемо розклад і листи.', 'You need an @kse.org.ua address. We\'ll bring in your schedule and mail from it.')}</p>
       <div className="group">
-        <div className="row"><CalendarDays className="row-icon" strokeWidth={1.75} /><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>Твій розклад і перенесення пар</div></div></div>
-        <div className="row"><Mail className="row-icon" strokeWidth={1.75} /><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>Важливі листи коротко, раз на день</div></div></div>
-        <div className="row"><ShieldCheck className="row-icon" strokeWidth={1.75} /><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>Лише читання</div><div className="row__meta">Нічого не надсилаємо від твого імені</div></div></div>
+        <div className="row"><CalendarDays className="row-icon" strokeWidth={1.75} /><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Твій розклад і перенесення пар', 'Your schedule and class changes')}</div></div></div>
+        <div className="row"><Mail className="row-icon" strokeWidth={1.75} /><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Важливі листи коротко, раз на день', 'Important mail in short, once a day')}</div></div></div>
+        <div className="row"><ShieldCheck className="row-icon" strokeWidth={1.75} /><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Лише читання', 'Read-only')}</div><div className="row__meta">{tr('Нічого не надсилаємо від твого імені', 'We never send anything on your behalf')}</div></div></div>
       </div>
-      {google?.needsReconnect && <p className="note" style={{ color: 'var(--danger)' }}>Google відкликав доступ. Увійди ще раз тією ж поштою.</p>}
+      {google?.needsReconnect && <p className="note" style={{ color: 'var(--danger)' }}>{tr('Google відкликав доступ. Увійди ще раз тією ж поштою.', 'Google revoked access. Sign in again with the same mail.')}</p>}
       {error && <p className="note" style={{ color: 'var(--danger)' }}>{error}</p>}
-      {waiting && !error && <p className="note">Після входу повернись сюди — продовжимо самі.</p>}
+      {waiting && !error && <p className="note">{tr('Після входу повернись сюди — продовжимо самі.', 'After signing in, come back here and we\'ll continue.')}</p>}
     </>
   );
 }
@@ -194,7 +186,7 @@ function SyncedStep({ email, events, synced, onRecheck, onNext }: {
   const nextClass = useMemo(() => (events ?? []).filter((e) => new Date(e.startAt).getTime() > t).sort((a, b) => a.startAt.localeCompare(b.startAt))[0], [events]);
   const weekCount = (events ?? []).filter((e) => mondayOf(dayKey(new Date(e.startAt))) === mondayOf(todayKey())).length;
 
-  useMainButton({ text: synced ? 'Далі' : 'Пізніше', onClick: onNext, visible: events !== null });
+  useMainButton({ text: synced ? tr('Далі', 'Next') : tr('Пізніше', 'Later'), onClick: onNext, visible: events !== null });
 
   const recheck = async () => {
     setChecking(true);
@@ -204,11 +196,11 @@ function SyncedStep({ email, events, synced, onRecheck, onNext }: {
   };
 
   const k = nextClass && dayKey(new Date(nextClass.startAt));
-  const when = k === todayKey() ? 'Сьогодні наступна пара' : k === addDays(todayKey(), 1) ? 'Завтра перша пара' : k ? `${dayTitle(k)}, перша пара` : '';
+  const when = k === todayKey() ? tr('Сьогодні наступна пара', 'Next class today') : k === addDays(todayKey(), 1) ? tr('Завтра перша пара', 'Tomorrow, first class') : k ? `${dayTitle(k)}, ${tr('перша пара', 'first class')}` : '';
 
   return (
     <>
-      <h1 className="onb__title">Пошта підключена</h1>
+      <h1 className="onb__title">{tr('Пошта підключена', 'Mail connected')}</h1>
       <p className="onb__sub">{email}</p>
 
       {events === null ? (
@@ -221,21 +213,21 @@ function SyncedStep({ email, events, synced, onRecheck, onNext }: {
             <div className="now__title">{nextClass.courseCode}{nextClass.section ? ` [${nextClass.section}]` : ''}</div>
             <div className="now__place">{shortPlace(nextClass.location)}</div>
           </div>
-          <p className="note"><Check size={14} strokeWidth={2.25} style={{ verticalAlign: -2, color: 'var(--accent)' }} /> Цього тижня {weekCount} пар — уже у вкладці «Навчання»</p>
+          <p className="note"><Check size={14} strokeWidth={2.25} style={{ verticalAlign: -2, color: 'var(--accent)' }} /> {tr(`Цього тижня ${weekCount} пар — уже у вкладці «Навчання»`, `${weekCount} classes this week, already in the Study tab`)}</p>
         </>
       ) : (
         <>
           <div className="group">
             <div className="row"><div className="row__main">
-              <div className="row__title">Ще один крок для розкладу</div>
-              <div className="row__meta" style={{ lineHeight: 1.45 }}>На schedule.kse.ua натисни своє імʼя вгорі справа → Sync with Google Calendar. KSE додає пари кілька хвилин.</div>
+              <div className="row__title">{tr('Ще один крок для розкладу', 'One more step for your schedule')}</div>
+              <div className="row__meta" style={{ lineHeight: 1.45 }}>{tr('На schedule.kse.ua натисни своє імʼя вгорі справа → Sync with Google Calendar. KSE додає пари кілька хвилин.', 'On schedule.kse.ua tap your name at the top right → Sync with Google Calendar. KSE takes a few minutes to add classes.')}</div>
             </div></div>
-            <button className="row press" style={{ color: 'var(--accent)', fontWeight: 500 }} onClick={() => openExternal('https://schedule.kse.ua/')}>Відкрити schedule.kse.ua</button>
+            <button className="row press" style={{ color: 'var(--accent)', fontWeight: 500 }} onClick={() => openExternal('https://schedule.kse.ua/')}>{tr('Відкрити schedule.kse.ua', 'Open schedule.kse.ua')}</button>
             <button className="row press" style={{ color: 'var(--accent)', fontWeight: 500, gap: 8 }} onClick={recheck} disabled={checking}>
-              <RefreshCw size={18} strokeWidth={1.75} /> {checking ? 'Перевіряю…' : 'Перевірити ще раз'}
+              <RefreshCw size={18} strokeWidth={1.75} /> {checking ? tr('Перевіряю…', 'Checking…') : tr('Перевірити ще раз', 'Check again')}
             </button>
           </div>
-          <p className="note">Можна й пізніше — пари підтягнуться самі, коли зʼявляться.</p>
+          <p className="note">{tr('Можна й пізніше — пари підтягнуться самі, коли зʼявляться.', 'You can do it later: classes will appear on their own.')}</p>
         </>
       )}
     </>
@@ -265,6 +257,17 @@ function Question({ title, sub, options, value, onPick, note, disabled }: {
         ))}
       </div>
       {note && <p className="note" style={{ paddingTop: 16 }}>{note}</p>}
+    </>
+  );
+}
+
+/** No schedule yet, so nothing to pick from: say when it will be asked, don't make one up. */
+function NoProgramYet({ onNext }: { onNext: () => void }) {
+  useMainButton({ text: tr('Далі', 'Next'), onClick: onNext });
+  return (
+    <>
+      <h1 className="onb__title">{tr('Твоя програма', 'Your programme')}</h1>
+      <p className="onb__sub">{tr('Візьмемо її з назв твоїх курсів, щойно підтягнеться розклад. Змінити можна в профілі.', "We'll take it from your course titles as soon as your schedule arrives. You can change it in your profile.")}</p>
     </>
   );
 }

@@ -9,7 +9,9 @@ import { cloud, haptic, openExternal } from '../../../lib/telegram';
 import { useUi } from '../../../stores/uiStore';
 import { Sheet } from '../../ui/Sheet';
 import { EmptyState, SkeletonRows } from '../../ui/States';
+import { AskPanel } from '../../ui/AskPanel';
 import { track } from '../../../api/client';
+import { tr } from '../../../lib/i18n';
 
 const OFFICIAL_SCHEDULE = 'https://schedule.kse.ua/';
 const MAX_FRIENDS = 5;
@@ -67,7 +69,7 @@ function useFriends(monday: string) {
         .catch((e: Error) => {
           // Hidden since we added them: say so once and drop them from the strip
           if (!cancelled) {
-            setNotice(`${f.name.split(' ')[0]} приховує розклад — прибрали зі списку`);
+            setNotice(tr(`${f.name.split(' ')[0]} приховує розклад — прибрали зі списку`, `${f.name.split(' ')[0]} hid their schedule, removed from the list`));
             save(friends.filter((x) => x.userId !== f.userId));
           }
           return [f.userId, null, e] as const;
@@ -144,15 +146,15 @@ export function SchedulePage() {
       <div className="group">
         <EmptyState
           icon={CalendarCheck}
-          title={week.connected ? 'Один крок, щоб побачити пари' : 'Підключи пошту KSE'}
+          title={week.connected ? tr('Один крок, щоб побачити пари', 'One step to see your classes') : tr('Підключи пошту KSE', 'Connect your KSE mail')}
           text={week.connected
-            ? 'На schedule.kse.ua натисни на своє імʼя вгорі справа → Sync with Google Calendar. Потім повернись і онови.'
-            : 'Розклад підтягується з календаря KSE тим самим входом Google.'}
-          action={week.connected ? { label: 'Відкрити schedule.kse.ua', onClick: () => openExternal(OFFICIAL_SCHEDULE) } : undefined}
+            ? tr('На schedule.kse.ua натисни на своє імʼя вгорі справа → Sync with Google Calendar. Потім повернись і онови.', 'On schedule.kse.ua tap your name at the top right → Sync with Google Calendar. Then come back and refresh.')
+            : tr('Розклад підтягується з календаря KSE тим самим входом Google.', 'Your schedule comes from the KSE calendar through the same Google sign-in.')}
+          action={week.connected ? { label: tr('Відкрити schedule.kse.ua', 'Open schedule.kse.ua'), onClick: () => openExternal(OFFICIAL_SCHEDULE) } : undefined}
         />
         {week.connected && (
           <button className="btn-plain press" style={{ borderTop: '0.5px solid var(--separator)', borderRadius: 0 }} onClick={refresh} disabled={refreshing}>
-            <RefreshCw strokeWidth={1.75} /> {refreshing ? 'Перевіряю…' : 'Я синхронізував, оновити'}
+            <RefreshCw strokeWidth={1.75} /> {refreshing ? tr('Перевіряю…', 'Checking…') : tr('Я синхронізував, оновити', 'I\'ve synced, refresh')}
           </button>
         )}
       </div>
@@ -165,12 +167,12 @@ export function SchedulePage() {
   return (
     <>
       <div className="week-nav">
-        <button className="icon-btn press" aria-label="Попередній тиждень" onClick={() => go(addDays(monday, -7))}><ChevronLeft strokeWidth={1.75} /></button>
+        <button className="icon-btn press" aria-label={tr('Попередній тиждень', 'Previous week')} onClick={() => go(addDays(monday, -7))}><ChevronLeft strokeWidth={1.75} /></button>
         <span className="week-nav__label num">{range}</span>
-        <button className="icon-btn press" aria-label="Наступний тиждень" onClick={() => go(addDays(monday, 7))}><ChevronRight strokeWidth={1.75} /></button>
+        <button className="icon-btn press" aria-label={tr('Наступний тиждень', 'Next week')} onClick={() => go(addDays(monday, 7))}><ChevronRight strokeWidth={1.75} /></button>
       </div>
 
-      <div className="daystrip" role="group" aria-label="День тижня">
+      <div className="daystrip" role="group" aria-label={tr('День тижня', 'Day of the week')}>
         {days.map((k) => (
           <button key={k} className={`day press${k === today ? ' day--today' : ''}`} aria-pressed={k === day} onClick={() => go(k)}
             aria-label={dayTitle(k)}>
@@ -181,7 +183,7 @@ export function SchedulePage() {
         ))}
       </div>
 
-      <div className="friends" aria-label="Порівняти з друзями">
+      <div className="friends" aria-label={tr('Порівняти з друзями', 'Compare with friends')}>
         {pals.friends.map((f) => (
           <button key={f.userId} className="friend press" aria-pressed={pals.active.has(f.userId)} onClick={() => { haptic.select(); pals.toggle(f.userId); }}>
             <span className="mini">{initials(f.name)}</span>{f.name.split(' ')[0]}
@@ -189,16 +191,16 @@ export function SchedulePage() {
         ))}
         {pals.friends.length < MAX_FRIENDS && (
           <button className="friend friend--add press" onClick={() => setAdding(true)}>
-            <Plus strokeWidth={2} />{pals.friends.length ? 'Додати' : 'Порівняти з друзями'}
+            <Plus strokeWidth={2} />{pals.friends.length ? tr('Додати', 'Add') : tr('Порівняти з друзями', 'Compare with friends')}
           </button>
         )}
       </div>
 
       <div className="caption" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-        <span>{day === today ? 'Сьогодні' : dayTitle(day)}</span>
+        <span>{day === today ? tr('Сьогодні', 'Today') : dayTitle(day)}</span>
         {day !== today
-          ? <button className="link-btn" style={{ textTransform: 'none', letterSpacing: 0, fontSize: 15, padding: 0 }} onClick={() => go(today)}>Сьогодні</button>
-          : pals.active.size > 0 && <span style={{ textTransform: 'none', letterSpacing: 0 }}>Спільних цього тижня: {sharedThisWeek}</span>}
+          ? <button className="link-btn" style={{ textTransform: 'none', letterSpacing: 0, fontSize: 15, padding: 0 }} onClick={() => go(today)}>{tr('Сьогодні', 'Today')}</button>
+          : pals.active.size > 0 && <span style={{ textTransform: 'none', letterSpacing: 0 }}>{tr('Спільних цього тижня', 'Shared this week')}: {sharedThisWeek}</span>}
       </div>
 
       {pals.notice && <p className="note" style={{ paddingTop: 0, paddingBottom: 8 }} onClick={pals.clearNotice}>{pals.notice}</p>}
@@ -207,13 +209,13 @@ export function SchedulePage() {
         <div key={day} className={dir ? `slide-${dir}` : undefined}>
           {error ? (
             <div className="group">
-              <EmptyState icon={CalendarX2} title="Не вдалося завантажити розклад" text={error} action={{ label: 'Спробувати ще раз', onClick: () => setReloadKey((k) => k + 1) }} />
+              <EmptyState icon={CalendarX2} title={tr('Не вдалося завантажити розклад', 'Couldn\'t load the schedule')} text={error} action={{ label: tr('Спробувати ще раз', 'Try again'), onClick: () => setReloadKey((k) => k + 1) }} />
             </div>
           ) : !week ? (
             <SkeletonRows rows={3} />
           ) : list.length === 0 ? (
             <div className="group">
-              <EmptyState icon={Coffee} title={day < today ? 'Цього дня пар не було' : 'Цього дня пар немає'} />
+              <EmptyState icon={Coffee} title={day < today ? tr('Цього дня пар не було', 'No classes that day') : tr('Цього дня пар немає', 'No classes this day')} />
             </div>
           ) : (
             <div className="group">
@@ -243,13 +245,13 @@ function ClassRow({ e, friends, onOpen }: { e: ClassEvent; friends: Friend[]; on
         <div className="class__code">
           {e.courseCode}{e.section && <small>[{e.section}]</small>}
           {friends.length > 0 && (
-            <span className="avatars" aria-label={`Разом з: ${friends.map((f) => f.name).join(', ')}`}>
+            <span className="avatars" aria-label={`${tr('Разом з', 'With')}: ${friends.map((f) => f.name).join(', ')}`}>
               {friends.slice(0, 3).map((f) => <span key={f.userId} className="mini">{initials(f.name)}</span>)}
             </span>
           )}
         </div>
         <div className="class__place">
-          {status === 'now' ? `${shortPlace(e.location) ?? ''} · ще ${spanText(end - t)}` : shortPlace(e.location)}
+          {status === 'now' ? `${shortPlace(e.location) ?? ''} · ${tr(`ще ${spanText(end - t)}`, `${spanText(end - t)} left`)}` : shortPlace(e.location)}
         </div>
         {status === 'now' && <div className="progress"><i style={{ width: `${progress}%` }} /></div>}
       </div>
@@ -260,18 +262,29 @@ function ClassRow({ e, friends, onOpen }: { e: ClassEvent; friends: Friend[]; on
 function ClassSheet({ e, friends, onClose }: { e: ClassEvent; friends: Friend[]; onClose: () => void }) {
   const key = dayKey(new Date(e.startAt));
   const kind = classKind(e.section);
+  const [asking, setAsking] = useState(false);
+  const code = `${e.courseCode}${e.section ? ` [${e.section}]` : ''}`;
+  if (asking) {
+    return (
+      <Sheet onClose={() => setAsking(false)} label="Copilot">
+        <AskPanel about={code} onBack={() => setAsking(false)}
+          context={`${code} ${e.title}, ${dayTitle(key)} ${hm(e.startAt)}–${hm(e.endAt)}, ${shortPlace(e.location) ?? ''}`}
+          starters={[tr('Що в мене після цієї пари?', 'What do I have after this class?'), tr('Які дедлайни з цього курсу найближчі?', "What's due soon for this course?")]} />
+      </Sheet>
+    );
+  }
   return (
     <Sheet onClose={onClose} label={e.courseCode}>
       <div className="sheet__title">{e.courseCode}{e.section ? ` [${e.section}]` : ''}</div>
       <div className="sheet__sub">{e.title}</div>
-      <div className="caption">Коли і де</div>
+      <div className="caption">{tr('Коли і де', 'When and where')}</div>
       <div className="group">
-        <div className="row"><div className="row__main"><div className="row__title num">{hm(e.startAt)}–{hm(e.endAt)}</div><div className="row__meta">{key === todayKey() ? 'сьогодні' : dayTitle(key)}{kind ? ` · ${kind}` : ''}</div></div></div>
-        <div className="row"><div className="row__main"><div className="row__title">{shortPlace(e.location) ?? 'Аудиторію не вказано'}</div></div></div>
+        <div className="row"><div className="row__main"><div className="row__title num">{hm(e.startAt)}–{hm(e.endAt)}</div><div className="row__meta">{key === todayKey() ? tr('сьогодні', 'today') : dayTitle(key)}{kind ? ` · ${kind}` : ''}</div></div></div>
+        <div className="row"><div className="row__main"><div className="row__title">{shortPlace(e.location) ?? tr('Аудиторію не вказано', 'Room not given')}</div></div></div>
       </div>
       {friends.length > 0 && (
         <>
-          <div className="caption">Там же</div>
+          <div className="caption">{tr('Там же', 'Also there')}</div>
           <div className="group">
             {friends.map((f) => (
               <div className="row" key={f.userId}><span className="mini" style={{ width: 28, height: 28, fontSize: 12 }}>{initials(f.name)}</span><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{f.name}</div></div></div>
@@ -279,6 +292,7 @@ function ClassSheet({ e, friends, onClose }: { e: ClassEvent; friends: Friend[];
           </div>
         </>
       )}
+      <button className="btn-plain press" style={{ marginTop: 16 }} onClick={() => setAsking(true)}>{tr('Запитати Copilot', 'Ask Copilot')}</button>
     </Sheet>
   );
 }
@@ -301,12 +315,12 @@ function AddFriendSheet({ taken, onPick, onRemove, onClose }: {
   const takenIds = new Set(taken.map((f) => f.userId));
 
   return (
-    <Sheet onClose={onClose} label="Порівняти з друзями">
-      <div className="sheet__title">Порівняти з друзями</div>
-      <div className="sheet__sub">Покажемо спільні пари. До {MAX_FRIENDS} людей.</div>
+    <Sheet onClose={onClose} label={tr('Порівняти з друзями', 'Compare with friends')}>
+      <div className="sheet__title">{tr('Порівняти з друзями', 'Compare with friends')}</div>
+      <div className="sheet__sub">{tr(`Покажемо спільні пари. До ${MAX_FRIENDS} людей.`, `We'll show the classes you share. Up to ${MAX_FRIENDS} people.`)}</div>
       <div className="field-wrap" style={{ marginTop: 16 }}>
         <Search strokeWidth={1.75} />
-        <input className="field" autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Прізвище" enterKeyHint="search" />
+        <input className="field" autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tr('Прізвище', 'Surname')} enterKeyHint="search" />
       </div>
 
       {found && found.length > 0 && (
@@ -316,26 +330,26 @@ function AddFriendSheet({ taken, onPick, onRemove, onClose }: {
               <span className="mini" style={{ width: 32, height: 32, fontSize: 13 }}>{initials(s.name)}</span>
               <div className="row__main">
                 <div className="row__title" style={{ fontWeight: 500 }}>{s.name}</div>
-                <div className="row__meta">{[s.cohort && `вступ ${s.cohort}`, s.username && `@${s.username}`].filter(Boolean).join(' · ')}</div>
+                <div className="row__meta">{[s.cohort && `${tr('вступ', 'class of')} ${s.cohort}`, s.username && `@${s.username}`].filter(Boolean).join(' · ')}</div>
               </div>
-              <span className="row__side">{takenIds.has(s.userId) ? 'Уже додано' : ''}</span>
+              <span className="row__side">{takenIds.has(s.userId) ? tr('Уже додано', 'Added') : ''}</span>
             </button>
           ))}
         </div>
       )}
       {found && found.length === 0 && (
-        <EmptyState icon={Users} title="Нікого не знайдено" text="Видно лише тих, хто підключив пошту в KSE Hub і не приховав розклад." />
+        <EmptyState icon={Users} title={tr('Нікого не знайдено', 'No one found')} text={tr('Видно лише тих, хто підключив пошту в KSE Hub і не приховав розклад.', 'Only students who connected their mail to KSE Hub and keep their schedule visible show up.')} />
       )}
 
       {!found && taken.length > 0 && (
         <>
-          <div className="caption">Уже порівнюєш</div>
+          <div className="caption">{tr('Уже порівнюєш', 'Comparing with')}</div>
           <div className="group">
             {taken.map((f) => (
               <div className="row" key={f.userId}>
                 <span className="mini" style={{ width: 32, height: 32, fontSize: 13 }}>{initials(f.name)}</span>
                 <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{f.name}</div></div>
-                <button className="link-btn" style={{ color: 'var(--danger)' }} onClick={() => { haptic.tap(); onRemove(f.userId); }}>Прибрати</button>
+                <button className="link-btn" style={{ color: 'var(--danger)' }} onClick={() => { haptic.tap(); onRemove(f.userId); }}>{tr('Прибрати', 'Remove')}</button>
               </div>
             ))}
           </div>

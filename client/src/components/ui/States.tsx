@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import { tr } from '../../lib/i18n';
 
 /** One sentence on why it's empty and at most one thing to do about it. */
 export function EmptyState({ icon: Icon, title, text, action }: {
@@ -17,7 +18,7 @@ export function EmptyState({ icon: Icon, title, text, action }: {
 /** Grey placeholders shaped like the rows that are about to load. */
 export function SkeletonRows({ rows = 3 }: { rows?: number }) {
   return (
-    <div className="group" aria-busy="true" aria-label="Завантаження">
+    <div className="group" aria-busy="true" aria-label={tr('Завантаження', 'Loading')}>
       {Array.from({ length: rows }, (_, i) => (
         <div className="class" key={i}>
           <div><div className="skel" style={{ height: 14, width: 40 }} /><div className="skel" style={{ height: 12, width: 34, marginTop: 6 }} /></div>

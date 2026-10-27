@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, track } from '../../../api/client';
 import { useAuthStore } from '../../../stores/authStore';
 import { haptic, openExternal, useMainButton } from '../../../lib/telegram';
+import { tr } from '../../../lib/i18n';
 
 const EXPORT_PAGE = 'https://teaching.kse.org.ua/calendar/export.php';
 const isMoodleUrl = (s: string) => /^https:\/\/teaching\.kse\.org\.ua\/calendar\/export_execute\.php\?/.test(s.trim());
@@ -42,31 +43,31 @@ export function MoodleConnectForm({ onSaved, skip }: { onSaved: () => void; skip
       onSaved();
     } catch (e) {
       haptic.error();
-      setError((e as Error).message || 'Не вдалося зберегти. Перевір посилання.');
+      setError((e as Error).message || tr('Не вдалося зберегти. Перевір посилання.', 'Couldn\'t save. Check the link.'));
     } finally {
       setSaving(false);
     }
   };
 
   // Until there's a link, the main action is the first step: go get it
-  useMainButton({ text: valid ? 'Зберегти' : 'Відкрити Moodle', onClick: valid ? save : () => openExternal(EXPORT_PAGE), loading: saving });
+  useMainButton({ text: valid ? tr('Зберегти', 'Save') : tr('Відкрити Moodle', 'Open Moodle'), onClick: valid ? save : () => openExternal(EXPORT_PAGE), loading: saving });
 
   return (
     <>
       <ol className="group steps">
         <li className="row">
           <span className="steps__n">1</span>
-          <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>Відкрий експорт календаря в Moodle</div></div>
+          <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Відкрий експорт календаря в Moodle', 'Open calendar export in Moodle')}</div></div>
         </li>
-        <li className="row"><span className="steps__n">2</span><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>Обери «Усі події» і «Останні та наступні 60 днів»</div></div></li>
-        <li className="row"><span className="steps__n">3</span><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>«Отримати URL календаря» — скопіюй посилання</div></div></li>
+        <li className="row"><span className="steps__n">2</span><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Обери «Усі події» і «Останні та наступні 60 днів»', 'Pick “All events” and “Recent and next 60 days”')}</div></div></li>
+        <li className="row"><span className="steps__n">3</span><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('«Отримати URL календаря» — скопіюй посилання', '“Get calendar URL”, then copy the link')}</div></div></li>
       </ol>
       <input className="field" style={{ marginTop: 12 }} value={url} onChange={(e) => setUrl(e.target.value)} inputMode="url"
         placeholder="https://teaching.kse.org.ua/calendar/export_execute.php?…" aria-invalid={!!url && !valid} />
       <p className="note" style={{ color: error || (url && !valid) ? 'var(--danger)' : undefined }}>
-        {error ?? (url && !valid ? 'Це не посилання експорту Moodle. Воно починається з teaching.kse.org.ua/calendar/export_execute.php' : 'Повернешся з Moodle зі скопійованим посиланням — вставимо його самі.')}
+        {error ?? (url && !valid ? tr('Це не посилання експорту Moodle. Воно починається з teaching.kse.org.ua/calendar/export_execute.php', 'That\'s not a Moodle export link. It starts with teaching.kse.org.ua/calendar/export_execute.php') : tr('Повернешся з Moodle зі скопійованим посиланням — вставимо його самі.', 'Come back from Moodle with the link copied and we\'ll paste it for you.'))}
       </p>
-      {skip && <button className="btn-plain press" style={{ marginTop: 8, background: 'transparent' }} onClick={skip}>Пропустити</button>}
+      {skip && <button className="btn-plain press" style={{ marginTop: 8, background: 'transparent' }} onClick={skip}>{tr('Пропустити', 'Skip')}</button>}
     </>
   );
 }

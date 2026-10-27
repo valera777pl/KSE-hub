@@ -8,6 +8,7 @@ import { ScreenHead } from '../../ui/ScreenHead';
 import { Sheet } from '../../ui/Sheet';
 import { EmptyState, SkeletonRows } from '../../ui/States';
 import { Wheel } from '../../ui/Wheel';
+import { tr } from '../../../lib/i18n';
 
 type When = 'now' | 'soon' | 'pick';
 type Kind = 'all' | 'skype_room' | 'silent_box';
@@ -20,7 +21,7 @@ const DEFAULT_MIN = 60;
 
 /** "Skype Room 1 (2nd floor)" → "Skype Room 1" */
 const roomName = (r: Room) => r.name.replace(/\s*\(.*\)\s*$/, '');
-const roomMeta = (r: Room) => [r.floor && `${r.floor} поверх`, r.capacity > 1 ? `до ${r.capacity} людей` : 'на одного'].filter(Boolean).join(', ');
+const roomMeta = (r: Room) => [r.floor && tr(`${r.floor} поверх`, `floor ${r.floor}`), r.capacity > 1 ? tr(`до ${r.capacity} людей`, `up to ${r.capacity} people`) : tr('на одного', 'for one')].filter(Boolean).join(', ');
 const RoomIcon = ({ r }: { r: Room }) => (r.type === 'silent_box' ? <Headphones className="room__icon" strokeWidth={1.75} /> : <Video className="room__icon" strokeWidth={1.75} />);
 
 function RoomRow({ r, from, disabled, onPick }: { r: RoomFree; from: Date | null; disabled: boolean; onPick: (r: RoomFree, from: Date) => void }) {
@@ -31,13 +32,16 @@ function RoomRow({ r, from, disabled, onPick }: { r: RoomFree; from: Date | null
         <div className="row__title">{roomName(r)}</div>
         <div className="row__meta">{roomMeta(r)}</div>
       </div>
-      {!r.available && <span className="room__free">{from ? `вільна з ${hm(from)}` : 'до кінця дня'}</span>}
+      {!r.available && <span className="room__free">{from ? `${tr('вільна з', 'free from')} ${hm(from)}` : tr('до кінця дня', 'until end of day')}</span>}
     </button>
   );
 }
 
 /** "15 хв", "1 год", "1 год 45 хв" */
-const durLabel = (m: number) => (m < 60 ? `${m} хв` : m % 60 ? `${Math.floor(m / 60)} год ${m % 60} хв` : `${m / 60} год`);
+const durLabel = (m: number) => {
+  const [h, mm] = [tr('год', 'h'), tr('хв', 'min')];
+  return m < 60 ? `${m} ${mm}` : m % 60 ? `${Math.floor(m / 60)} ${h} ${m % 60} ${mm}` : `${m / 60} ${h}`;
+};
 
 const roundUp = (d: Date, step: number) => new Date(Math.ceil(d.getTime() / (step * MIN)) * step * MIN);
 
@@ -82,7 +86,7 @@ export function RoomsPage() {
 
   useEffect(() => { track('rooms.open'); }, []);
 
-  // A room I already hold isn't something to pick again; it lives in "Твоя бронь"
+  // A room I already hold isn't something to pick again; it lives in tr('Твоя бронь', 'Your booking')
   const heldNow = new Set(mine.filter(({ booking: b }) => new Date(b.startTime) <= start && new Date(b.endTime) > start).map(({ room }) => room.id));
   const shown = (rooms ?? []).filter((r) => (kind === 'all' || r.type === kind) && !heldNow.has(r.id));
   const free = shown.filter((r) => r.available);
@@ -107,15 +111,15 @@ export function RoomsPage() {
 
   const whenLabel = picked && when === 'pick'
     ? `${dayKey(picked) === todayKey() ? '' : `${weekdayShort(dayKey(picked))} `}${hm(picked)}`
-    : 'Обрати час';
+    : tr('Обрати час', 'Pick a time');
 
   return (
     <div className="screen">
-      <ScreenHead title="Кімнати" />
+      <ScreenHead title={tr('Кімнати', 'Rooms')} />
 
       {mine.length > 0 && (
         <>
-          <div className="caption" style={{ marginTop: 0 }}>Твоя бронь</div>
+          <div className="caption" style={{ marginTop: 0 }}>{tr('Твоя бронь', 'Your booking')}</div>
           <div className="group" style={{ marginBottom: 8 }}>
             {mine.map(({ booking: b, room }) => {
               const live = new Date(b.startTime).getTime() <= now().getTime();
@@ -125,10 +129,10 @@ export function RoomsPage() {
                   <div className="row__main">
                     <div className="row__title">{roomName(room)}</div>
                     <div className="row__meta num">
-                      {live ? `зараз, до ${hm(b.endTime)}` : `${dayKey(new Date(b.startTime)) === todayKey() ? 'сьогодні' : dayTitle(dayKey(new Date(b.startTime)))}, ${hm(b.startTime)}–${hm(b.endTime)}`}
+                      {live ? `${tr('зараз, до', 'now, until')} ${hm(b.endTime)}` : `${dayKey(new Date(b.startTime)) === todayKey() ? tr('сьогодні', 'today') : dayTitle(dayKey(new Date(b.startTime)))}, ${hm(b.startTime)}–${hm(b.endTime)}`}
                     </div>
                   </div>
-                  <button className="link-btn" style={{ color: 'var(--danger)' }} onClick={() => cancel(b.id)}>{live ? 'Звільнити' : 'Скасувати'}</button>
+                  <button className="link-btn" style={{ color: 'var(--danger)' }} onClick={() => cancel(b.id)}>{live ? tr('Звільнити', 'Release') : tr('Скасувати', 'Cancel')}</button>
                 </div>
               );
             })}
@@ -136,33 +140,33 @@ export function RoomsPage() {
         </>
       )}
 
-      <div className="seg" role="group" aria-label="Коли">
-        <button aria-pressed={when === 'now'} onClick={() => pickWhen('now')}>Зараз</button>
-        <button aria-pressed={when === 'soon'} onClick={() => pickWhen('soon')}>Через 30 хв</button>
+      <div className="seg" role="group" aria-label={tr('Коли', 'When')}>
+        <button aria-pressed={when === 'now'} onClick={() => pickWhen('now')}>{tr('Зараз', 'Now')}</button>
+        <button aria-pressed={when === 'soon'} onClick={() => pickWhen('soon')}>{tr('Через 30 хв', 'In 30 min')}</button>
         <button aria-pressed={when === 'pick'} onClick={() => pickWhen('pick')} className="num">{whenLabel}</button>
       </div>
 
-      <div className="pills" role="group" aria-label="Тип кімнати">
-        {([['all', 'Усі'], ['skype_room', 'Skype'], ['silent_box', 'Silent Box']] as [Kind, string][]).map(([k, l]) => (
+      <div className="pills" role="group" aria-label={tr('Тип кімнати', 'Room type')}>
+        {([['all', tr('Усі', 'All')], ['skype_room', 'Skype'], ['silent_box', 'Silent Box']] as [Kind, string][]).map(([k, l]) => (
           <button key={k} className="press" aria-pressed={kind === k} onClick={() => { if (k !== kind) { haptic.select(); setKind(k); } }}>{l}</button>
         ))}
       </div>
 
       {error ? (
-        <div className="group" style={{ marginTop: 16 }}><EmptyState icon={WifiOff} title="Не вдалося завантажити кімнати" text="Перевір інтернет." action={{ label: 'Спробувати ще раз', onClick: () => setReload((n) => n + 1) }} /></div>
+        <div className="group" style={{ marginTop: 16 }}><EmptyState icon={WifiOff} title={tr('Не вдалося завантажити кімнати', 'Couldn\'t load rooms')} text={tr('Перевір інтернет.', 'Check your connection.')} action={{ label: tr('Спробувати ще раз', 'Try again'), onClick: () => setReload((n) => n + 1) }} /></div>
       ) : !rooms ? (
         <div style={{ marginTop: 16 }}><SkeletonRows rows={4} /></div>
       ) : (
         <>
-          <div className="caption num">{when === 'now' ? 'Вільні зараз' : `Вільні ${dayKey(start) === todayKey() ? 'о' : `${dayTitle(dayKey(start))}, о`} ${hm(start)}`}</div>
+          <div className="caption num">{when === 'now' ? tr('Вільні зараз', 'Free now') : `${tr('Вільні', 'Free')} ${dayKey(start) === todayKey() ? tr('о', 'at') : `${dayTitle(dayKey(start))}, ${tr('о', 'at')}`} ${hm(start)}`}</div>
           {free.length === 0 ? (
-            <div className="group"><EmptyState icon={DoorClosed} title="Вільних кімнат немає" text={busy.length ? 'Нижче — коли звільняться.' : undefined} /></div>
+            <div className="group"><EmptyState icon={DoorClosed} title={tr('Вільних кімнат немає', 'No free rooms')} text={busy.length ? tr('Нижче — коли звільняться.', 'Below: when they free up.') : undefined} /></div>
           ) : (
             <div className="group">{free.map((r) => <RoomRow key={r.id} r={r} from={start} disabled={outOfQuota} onPick={pick} />)}</div>
           )}
           {busy.length > 0 && (
             <>
-              <div className="caption">Зайняті</div>
+              <div className="caption">{tr('Зайняті', 'Taken')}</div>
               <div className="group">{busy.map((r) => <RoomRow key={r.id} r={r} from={r.freeFrom && dayKey(new Date(r.freeFrom)) === dayKey(start) ? new Date(r.freeFrom) : null} disabled={outOfQuota} onPick={pick} />)}</div>
             </>
           )}
@@ -171,7 +175,7 @@ export function RoomsPage() {
 
       {quota && (
         <p className="note num">
-          {outOfQuota ? 'Квоту на сьогодні використано. Завтра знову 3 год.' : `Сьогодні можна ще ${durLabel(Math.floor(leftMin / STEP) * STEP)} із ${quota.max} год.`}
+          {outOfQuota ? tr('Квоту на сьогодні використано. Завтра знову 3 год.', 'Today\'s quota is used up. Tomorrow you get 3 h again.') : tr(`Сьогодні можна ще ${durLabel(Math.floor(leftMin / STEP) * STEP)} із ${quota.max} год.`, `You can book ${durLabel(Math.floor(leftMin / STEP) * STEP)} more today, of ${quota.max} h.`)}
         </p>
       )}
 
@@ -240,14 +244,14 @@ function BookSheet({ room, start, leftMin, onClose, onBooked }: {
     }
   };
 
-  useMainButton({ text: `Забронювати до ${hm(end)}`, onClick: book, loading: saving, visible: !done });
+  useMainButton({ text: `${tr('Забронювати до', 'Book until')} ${hm(end)}`, onClick: book, loading: saving, visible: !done });
 
   if (done) {
     return (
-      <Sheet onClose={onClose} label="Заброньовано">
+      <Sheet onClose={onClose} label={tr('Заброньовано', 'Booked')}>
         <div className="done-mark">
           <Check strokeWidth={2.25} />
-          <b>Заброньовано</b>
+          <b>{tr('Заброньовано', 'Booked')}</b>
           <span className="num">{roomName(room)}, {hm(start)}–{hm(end)}</span>
         </div>
       </Sheet>
@@ -263,10 +267,10 @@ function BookSheet({ room, start, leftMin, onClose, onBooked }: {
 
       <div key={shakeKey} className={shakeKey ? 'shake' : undefined}>
         <div className="range">{hm(start)}–{hm(end)}</div>
-        <div className="range-sub">{isToday ? 'сьогодні' : dayTitle(dayKey(start))}{nextTaken && values[values.length - 1] < Math.min(MAX_MIN, leftMin) ? ` · о ${hm(nextTaken)} кімнату вже забронювали` : ''}</div>
+        <div className="range-sub">{isToday ? tr('сьогодні', 'today') : dayTitle(dayKey(start))}{nextTaken && values[values.length - 1] < Math.min(MAX_MIN, leftMin) ? tr(` · о ${hm(nextTaken)} кімнату вже забронювали`, ` · someone has it from ${hm(nextTaken)}`) : ''}</div>
       </div>
 
-      <Wheel values={values} value={minutes} onChange={setMinutes} label={durLabel} ariaLabel="Тривалість броні" />
+      <Wheel values={values} value={minutes} onChange={setMinutes} label={durLabel} ariaLabel={tr('Тривалість броні', 'Booking length')} />
 
       {error && <p className="note" style={{ color: 'var(--danger)', textAlign: 'center' }}>{error}</p>}
     </Sheet>
@@ -285,17 +289,17 @@ function TimeSheet({ value, onPick, onClose }: { value: Date | null; onPick: (d:
   const slots = Array.from({ length: 28 }, (_, i) => `${String(8 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
 
   return (
-    <Sheet onClose={onClose} label="Обрати час">
-      <div className="sheet__title">Коли потрібна кімната?</div>
-      <div className="daystrip" style={{ marginTop: 16 }} role="group" aria-label="День">
+    <Sheet onClose={onClose} label={tr('Обрати час', 'Pick a time')}>
+      <div className="sheet__title">{tr('Коли потрібна кімната?', 'When do you need a room?')}</div>
+      <div className="daystrip" style={{ marginTop: 16 }} role="group" aria-label={tr('День', 'Day')}>
         {days.map((k) => (
           <button key={k} className={`day press${k === today ? ' day--today' : ''}`} aria-pressed={k === day} onClick={() => { haptic.select(); setDay(k); }}>
             {weekdayShort(k)}<b className="num">{dayNum(k)}</b><i className="none" />
           </button>
         ))}
       </div>
-      {day === today && slots.every((s) => slotAt(s).getTime() < t - 15 * MIN) && <p className="note">На сьогодні вільних годин уже немає — обери інший день.</p>}
-      <div className="slots" role="group" aria-label="Час">
+      {day === today && slots.every((s) => slotAt(s).getTime() < t - 15 * MIN) && <p className="note">{tr('На сьогодні вільних годин уже немає — обери інший день.', 'No more slots today. Pick another day.')}</p>}
+      <div className="slots" role="group" aria-label={tr('Час', 'Time')}>
         {slots.filter((s) => slotAt(s).getTime() >= t - 15 * MIN).map((s) => {
           const d = slotAt(s);
           return (

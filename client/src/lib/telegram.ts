@@ -163,6 +163,19 @@ export function useMainButton({ text, onClick, visible = true, disabled = false,
   }, [text, visible, disabled, loading]);
 }
 
+/* Back is a stack: a sheet opened over the profile takes Back first, and when it closes
+   the profile gets it back. The arrow shows while anything is on the stack. */
+const backStack: { current: (() => void) | null }[] = [];
+let backBound = false;
+const onBackPressed = () => backStack[backStack.length - 1]?.current?.();
+
+function syncBack() {
+  const btn = tg()?.BackButton;
+  if (!btn) return;
+  if (!backBound) { btn.onClick(onBackPressed); backBound = true; }
+  if (backStack.length) btn.show(); else btn.hide();
+}
+
 /** Telegram's own back arrow in the header, while `onBack` is set. */
 export function useBackButton(onBack: (() => void) | null) {
   const handler = useRef(onBack);
@@ -170,12 +183,13 @@ export function useBackButton(onBack: (() => void) | null) {
   const active = !!onBack;
 
   useEffect(() => {
-    const btn = tg()?.BackButton;
-    if (!btn || !active) return;
-    const cb = () => handler.current?.();
-    btn.onClick(cb);
-    btn.show();
-    return () => { btn.offClick(cb); btn.hide(); };
+    if (!active) return;
+    backStack.push(handler);
+    syncBack();
+    return () => {
+      backStack.splice(backStack.indexOf(handler), 1);
+      syncBack();
+    };
   }, [active]);
 }
 

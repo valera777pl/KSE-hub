@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useLang } from './lib/i18n';
 import { useAuthStore } from './stores/authStore';
 import { applyStartParam, useUi } from './stores/uiStore';
 import { initTelegram, haptic, startParam } from './lib/telegram';
 import { track } from './api/client';
 import { TabBar } from './components/layout/TabBar';
-import { ProfileDrawer } from './components/layout/ProfileDrawer';
+import { ProfilePage } from './components/layout/ProfilePage';
 import { Onboarding } from './components/layout/Onboarding';
 import { TodayPage } from './components/modules/today/TodayPage';
 import { StudyPage } from './components/modules/study/StudyPage';
@@ -16,7 +16,7 @@ import type { TabId } from './types';
 export default function App() {
   const { fetchUser, user, loading } = useAuthStore();
   const { tab, setTab, profileOpen, closeProfile } = useUi();
-  const { i18n } = useTranslation();
+  const { lang, setLang } = useLang();
 
   useEffect(() => {
     initTelegram();
@@ -26,7 +26,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user?.languagePref) i18n.changeLanguage(user.languagePref);
+    if (!user?.languagePref) return;
+    setLang(user.languagePref);
   }, [user?.languagePref]);
 
   const changeTab = (next: TabId) => {
@@ -42,21 +43,22 @@ export default function App() {
   if (user && !user.onboardedAt) {
     return (
       <div className="shell">
-        <main className="shell__main"><Onboarding /></main>
+        <main className="shell__main" key={lang}><Onboarding /></main>
       </div>
     );
   }
 
   return (
     <div className="shell">
-      <main className="shell__main" key={tab}>
+      {/* Keyed by language too: every screen re-reads its strings when the student switches */}
+      <main className="shell__main" key={`${tab}-${lang}`}>
         {tab === 'today' && <TodayPage />}
         {tab === 'study' && <StudyPage />}
         {tab === 'rooms' && <RoomsPage />}
         {tab === 'opps' && <OpportunitiesPage />}
       </main>
-      <TabBar active={tab} onChange={changeTab} />
-      {profileOpen && <ProfileDrawer onClose={closeProfile} />}
+      <TabBar key={`tabs-${lang}`} active={tab} onChange={changeTab} />
+      {profileOpen && <ProfilePage key={`profile-${lang}`} onClose={closeProfile} />}
     </div>
   );
 }

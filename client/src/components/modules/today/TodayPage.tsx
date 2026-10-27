@@ -9,6 +9,7 @@ import { useUi } from '../../../stores/uiStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { ScreenHead } from '../../ui/ScreenHead';
 import { EmptyState } from '../../ui/States';
+import { tr } from '../../../lib/i18n';
 
 type Week = { connected: boolean; synced: boolean; events: ClassEvent[] };
 type Mail = { id: number; subject: string | null; from: string | null; summary: string; receivedAt: string; url: string };
@@ -64,34 +65,34 @@ export function TodayPage() {
 
   return (
     <div className="screen">
-      <ScreenHead title="Сьогодні" sub={dayTitle(today)} />
+      <ScreenHead title={tr('Сьогодні', 'Today')} sub={dayTitle(today)} />
 
       {failed ? (
-        <div className="group"><EmptyState icon={WifiOff} title="Не вдалося завантажити" text="Перевір інтернет." action={{ label: 'Спробувати ще раз', onClick: () => setReload((n) => n + 1) }} /></div>
+        <div className="group"><EmptyState icon={WifiOff} title={tr('Не вдалося завантажити', 'Couldn\'t load')} text={tr('Перевір інтернет.', 'Check your connection.')} action={{ label: tr('Спробувати ще раз', 'Try again'), onClick: () => setReload((n) => n + 1) }} /></div>
       ) : !weeks ? (
         <div className="now" aria-busy="true"><div className="skel" style={{ height: 13, width: 110 }} /><div className="skel" style={{ height: 52, width: 150, margin: '10px 0 14px' }} /><div className="skel" style={{ height: 18, width: '60%' }} /></div>
       ) : !synced ? (
         <button className="now press" style={{ width: '100%', textAlign: 'left' }} onClick={() => openDay(today)}>
-          <div className="now__label">Розклад</div>
-          <div className="now__title" style={{ marginTop: 6 }}>Пари ще не підтягнулись</div>
-          <div className="now__place">Один крок на schedule.kse.ua — покажемо як</div>
+          <div className="now__label">{tr('Розклад', 'Schedule')}</div>
+          <div className="now__title" style={{ marginTop: 6 }}>{tr('Пари ще не підтягнулись', 'Classes haven\'t arrived yet')}</div>
+          <div className="now__place">{tr('Один крок на schedule.kse.ua — покажемо як', 'One step on schedule.kse.ua, we\'ll show you how')}</div>
         </button>
       ) : (
         <NowCard current={current} next={current ? laterToday[0] : upcoming[0]} after={laterToday.slice(1, 3)} today={today} onOpen={(d) => { haptic.tap(); openDay(d); }} />
       )}
 
-      {deadlinesFailed ? null : <div className="caption">Дедлайни · 48 год</div>}
+      {deadlinesFailed ? null : <div className="caption">{tr('Дедлайни · 48 год', 'Deadlines · 48 h')}</div>}
       {deadlinesFailed ? null : deadlines === null ? (
         <div className="group"><div className="row"><div className="row__main"><div className="skel" style={{ height: 14, width: '55%' }} /><div className="skel" style={{ height: 12, width: '30%', marginTop: 6 }} /></div></div></div>
       ) : !user?.calendarUrl && deadlines.length === 0 ? (
         <div className="group">
           <button className="row press" onClick={() => useUi.getState().openProfile()}>
-            <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>Додати дедлайни з Moodle</div><div className="row__meta">Хвилина — і нагадаємо за 24 і за 3 години</div></div>
+            <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Додати дедлайни з Moodle', 'Add deadlines from Moodle')}</div><div className="row__meta">{tr('Хвилина — і нагадаємо за 24 і за 3 години', 'One minute, and we\'ll remind you 24 and 3 hours before')}</div></div>
             <ChevronRight className="chev" strokeWidth={1.75} />
           </button>
         </div>
       ) : soon.length === 0 ? (
-        <p className="note" style={{ paddingTop: 0 }}>Найближчі два дні нічого здавати не треба.</p>
+        <p className="note" style={{ paddingTop: 0 }}>{tr('Найближчі два дні нічого здавати не треба.', 'Nothing is due in the next two days.')}</p>
       ) : (
         <div className="group">
           {soon.map(({ assignment: a, courseName }) => {
@@ -111,7 +112,7 @@ export function TodayPage() {
 
       {mail.length > 0 && (
         <>
-          <div className="caption">Пошта</div>
+          <div className="caption">{tr('Пошта', 'Mail')}</div>
           <div className="group">
             {mail.map((m) => (
               <button key={m.id} className="row press" style={{ alignItems: 'flex-start' }} onClick={() => openExternal(m.url)}>
@@ -139,9 +140,9 @@ function NowCard({ current, next, after, today, onOpen }: {
   if (!focus) {
     return (
       <div className="now">
-        <div className="now__label">Розклад</div>
-        <div className="now__title" style={{ marginTop: 6 }}>Попереду пар немає</div>
-        <div className="now__place">Цього й наступного тижня — вільно</div>
+        <div className="now__label">{tr('Розклад', 'Schedule')}</div>
+        <div className="now__title" style={{ marginTop: 6 }}>{tr('Попереду пар немає', 'No classes ahead')}</div>
+        <div className="now__place">{tr('Цього й наступного тижня — вільно', 'Free this week and next')}</div>
       </div>
     );
   }
@@ -151,13 +152,13 @@ function NowCard({ current, next, after, today, onOpen }: {
   let label: string;
   let big: { value: string; unit: string };
   if (current) {
-    label = 'Зараз · до кінця пари';
+    label = tr('Зараз · до кінця пари', 'Now · until the end');
     big = duration(new Date(current.endAt).getTime() - t);
   } else if (focusDay === today && startsIn <= 90 * 60_000) {
-    label = 'Наступна пара · через';
+    label = tr('Наступна пара · через', 'Next class · in');
     big = duration(startsIn);
   } else {
-    label = focusDay === today ? 'Наступна пара' : focusDay === addDays(today, 1) ? 'Завтра · перша пара' : `${dayTitle(focusDay)} · перша пара`;
+    label = focusDay === today ? tr('Наступна пара', 'Next class') : focusDay === addDays(today, 1) ? tr('Завтра · перша пара', 'Tomorrow · first class') : `${dayTitle(focusDay)} · ${tr('перша пара', 'first class')}`;
     big = { value: hm(focus.startAt), unit: '' };
   }
 
@@ -168,11 +169,11 @@ function NowCard({ current, next, after, today, onOpen }: {
       <div className="now__label">{label}</div>
       <div className="now__big">{big.value}{big.unit && <small>{big.unit}</small>}</div>
       <div className="now__title">{code(focus)}</div>
-      <div className="now__place">{[shortPlace(focus.location), current ? `до ${hm(focus.endAt)}` : !big.unit ? `до ${hm(focus.endAt)}` : hm(focus.startAt)].filter(Boolean).join(' · ')}</div>
+      <div className="now__place">{[shortPlace(focus.location), current || !big.unit ? `${tr('до', 'until')} ${hm(focus.endAt)}` : hm(focus.startAt)].filter(Boolean).join(' · ')}</div>
       {current && <div className="progress"><i style={{ width: `${((t - new Date(current.startAt).getTime()) / (new Date(current.endAt).getTime() - new Date(current.startAt).getTime())) * 100}%` }} /></div>}
       {followUps.length > 0 && (
         <div className="now__next">
-          <div style={{ marginBottom: 2 }}>Далі</div>
+          <div style={{ marginBottom: 2 }}>{tr('Далі', 'Next')}</div>
           {followUps.map((e) => (
             <div key={e.id} className="now__line">
               <b className="num">{hm(e.startAt)}</b><b>{code(e)}</b><span>{shortPlace(e.location)}</span>
