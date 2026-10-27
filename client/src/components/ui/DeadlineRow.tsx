@@ -2,14 +2,13 @@ import type { DeadlineWithCourse } from '../../types';
 import { dayKey, dayNum, hm, now, weekdayShort } from '../../lib/time';
 import { tr } from '../../lib/i18n';
 
-// Overdue shows in red; the group title already says "Прострочено"
-
 /** "ECON100 Principles of Economics" → "ECON100" */
 export const courseCode = (name: string | null) => name?.match(/^[A-Z]{2,5}\d{3}/)?.[0] ?? name ?? '';
 
 /**
  * A deadline (DESIGN.md → DeadlineRow): the date in a column on the left, what and when on the right,
  * nothing at the far right. "MATH101 · до 23:59"; an event is a time, not a cut-off: "KSE101 · 11:30".
+ * Overdue shows in red; its group title already says "Прострочено".
  */
 export function DeadlineRow({ d, onOpen }: { d: DeadlineWithCourse; onOpen: () => void }) {
   const { assignment: a } = d;
