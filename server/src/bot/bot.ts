@@ -156,7 +156,7 @@ export function getBot(): Bot<BotContext> {
 /** The assistant answers in light Markdown; Telegram wants its HTML subset. */
 export function markdownToTelegramHtml(md: string): string {
   return escapeHtml(md)
-    .replace(/^[ \t]*[-*][ \t]+/gm, '• ') // bullets first, so "* item" isn't read as italics
+    .replace(/^[ \t]*[-*•][ \t]+/gm, '') // list markers go first ("* item" isn't italics); lines read as a list on their own
     .replace(/```(?:\w+)?\n?([\s\S]*?)```/g, '<pre>$1</pre>')
     .replace(/`([^`\n]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')

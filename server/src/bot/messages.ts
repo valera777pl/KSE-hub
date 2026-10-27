@@ -137,9 +137,26 @@ export function scheduleChangeText(lang: Lang, code: string, section: string | n
 export const changeDay = (c: Change) => kyivDay(c.kind === 'cancelled' ? c.before.startAt : c.after.startAt);
 
 /** "MATH111 через 15 хв" + place. No button: everything needed is in the text. */
-export function classSoonText(lang: Lang, code: string, section: string | null, minutes: number, location: string | null) {
+export function classSoonText(lang: Lang, code: string, section: string | null, minutes: number, location: string | null, startAt: Date) {
   const place = shortPlace(location, lang);
-  return `<b>${escapeHtml(courseLabel(code, section))} ${t(lang, `через ${minutes} хв`, `in ${minutes} min`)}</b>${place ? `\n${escapeHtml(place)}` : ''}`;
+  const when = t(lang, `через ${minutes} хв, о ${hm(startAt)}`, `in ${minutes} min, at ${hm(startAt)}`);
+  return `<b>${escapeHtml(courseLabel(code, section))} ${when}</b>${place ? `\n${escapeHtml(place)}` : ''}`;
+}
+
+/**
+ * Classes over several days for the assistant to copy as they are: a day heading "Вт 27.10",
+ * then one line per class "11:30–12:50  ECON100 [P6] · M. Shpaka 3, 4.08".
+ */
+export function scheduleByDay(events: { courseCode: string; section: string | null; location: string | null; startAt: Date; endAt: Date }[], lang: Lang) {
+  const days = new Map<string, string[]>();
+  for (const e of [...events].sort((a, b) => a.startAt.getTime() - b.startAt.getTime())) {
+    const d = shortDay(e.startAt, lang);
+    const heading = d.charAt(0).toUpperCase() + d.slice(1);
+    const place = shortPlace(e.location, lang);
+    const line = `${hm(e.startAt)}–${hm(e.endAt)}  ${courseLabel(e.courseCode, e.section)}${place ? ` · ${place}` : ''}`;
+    days.set(heading, [...(days.get(heading) ?? []), line]);
+  }
+  return [...days].map(([day, classes]) => ({ day, classes }));
 }
 
 /** 24 h and 3 h before a Moodle deadline. */

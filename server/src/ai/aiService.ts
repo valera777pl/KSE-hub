@@ -1,4 +1,4 @@
-import { shortPlace } from '../bot/messages.js';
+import { scheduleByDay, shortPlace } from '../bot/messages.js';
 import type OpenAI from 'openai';
 import { BookingService } from '../services/bookingService.js';
 import { MoodleService } from '../services/moodleService.js';
@@ -45,7 +45,8 @@ function systemPrompt(): string {
 - Спершу пряма відповідь одним реченням, потім деталі. Без вступів і без емодзі.
 - Пари пиши рядками «10:00  MATH111 · M. Shpaka 3, 3.05», дедлайни — «пт 30.10, 15:00 · ECON100 · Problem set 4 · через 3 дні». Коди курсів як є, місце — латиницею, як у полі where («M. Shpaka 3, 4.08»), без назв спонсорів.
 - Якщо відповідь довша за 8 рядків, решту деталей пиши рядками, що починаються з "> " — студент розгорне їх сам.
-- Форматування: лише **жирний**, *курсив*, \`код\`, [посилання](url) і списки з "• ". Без таблиць і заголовків.
+- Форматування: лише **жирний**, *курсив*, \`код\` і [посилання](url). Списки — окремими рядками без маркерів («•», «-»). Без таблиць і заголовків.
+- Розклад на кілька днів — по днях: рядок **Вт 27.10**, під ним пари цього дня. get_my_schedule уже групує по днях і дає готові рядки — переписуй їх як є.
 - Дані про студента бери тільки з інструментів. Нічого не вигадуй: якщо даних немає — так і скажи.
 - Бронювання: спершу перевір вільні кімнати (get_available_rooms), запропонуй варіант і бронюй лише після згоди студента. Час — за Києвом, передавай у ISO 8601 з київським поясом з рядка «Зараз».
 - Якщо інструмент повернув "error" — дія НЕ виконана. Скажи студенту, що саме не вийшло, і не пиши, що все готово.
@@ -165,7 +166,8 @@ export class AIService {
         const days = Math.min(Math.max(Number(args.days) || 1, 1), 14);
         const start = kyivDayStart(fromDay);
         const events = await ScheduleService.events(userId, start, new Date(start.getTime() + days * 86_400_000));
-        return events.length ? events.map(describeClass) : { note: 'Пар немає (або пошту ще не підключено в KSE Hub).' };
+        // Grouped by day with ready lines, so every answer looks like the digest
+        return events.length ? { days: scheduleByDay(events, 'uk'), details: events.map(describeClass) } : { note: 'Пар немає (або пошту ще не підключено в KSE Hub).' };
       }
 
       case 'compare_schedule': {

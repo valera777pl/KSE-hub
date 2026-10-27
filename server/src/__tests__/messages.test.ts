@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { markdownToTelegramHtml } from '../bot/bot.js';
-import { classSoonText, digestText, inTime, onboardedText, scheduleChangeText, shortDay, shortPlace } from '../bot/messages.js';
+import { classSoonText, digestText, inTime, onboardedText, scheduleByDay, scheduleChangeText, shortDay, shortPlace } from '../bot/messages.js';
 
 // Kyiv is UTC+2 in late October 2026 (winter time from 25 Oct)
 const kyiv = (s: string) => new Date(`${s}+02:00`);
@@ -48,8 +48,22 @@ test('a moved class says so in the first line', () => {
   assert.equal(text, '<b>Пару перенесли</b>\nENG111 [P11]: пн 2.11 → <b>чт 5.11, 18:00</b>\nY. Myroshnychenko 6/11, F4');
 });
 
-test('class in 15 minutes: code, time, place, nothing else', () => {
-  assert.equal(classSoonText('uk', 'MATH111', 'P6', 15, 'M. Shpaka 3, 3.05 Genesis'), '<b>MATH111 [P6] через 15 хв</b>\nM. Shpaka 3, 3.05');
+test('class in 15 minutes: code, when it starts, place, nothing else', () => {
+  assert.equal(classSoonText('uk', 'MATH111', 'P6', 15, 'M. Shpaka 3, 3.05 Genesis', kyiv('2026-10-27T11:30:00')), '<b>MATH111 [P6] через 15 хв, о 11:30</b>\nM. Shpaka 3, 3.05');
+  assert.equal(classSoonText('en', 'MATH111', null, 15, null, kyiv('2026-10-27T11:30:00')), '<b>MATH111 in 15 min, at 11:30</b>');
+});
+
+test('assistant schedule: grouped by day, one ready line per class', () => {
+  const c = (from: string, to: string, code: string, section: string, location: string) =>
+    ({ courseCode: code, section, location, startAt: kyiv(from), endAt: kyiv(to) });
+  assert.deepEqual(scheduleByDay([
+    c('2026-10-28T13:30:00', '2026-10-28T14:50:00', 'ECON100', 'P4', 'M. Shpaka 3, 2.15.2'),
+    c('2026-10-27T11:30:00', '2026-10-27T12:50:00', 'ECON100', 'P6', 'M. Shpaka 3, 4.08 TAS Group Classroom'),
+    c('2026-10-27T18:00:00', '2026-10-27T19:20:00', 'ENG111', 'P11', 'Y. Myroshnychenko 6/11, F2'),
+  ], 'uk'), [
+    { day: 'Вт 27.10', classes: ['11:30–12:50  ECON100 [P6] · M. Shpaka 3, 4.08', '18:00–19:20  ENG111 [P11] · Y. Myroshnychenko 6/11, F2'] },
+    { day: 'Ср 28.10', classes: ['13:30–14:50  ECON100 [P4] · M. Shpaka 3, 2.15.2'] },
+  ]);
 });
 
 test('first digest is today when its hour is still ahead', () => {

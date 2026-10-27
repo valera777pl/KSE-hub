@@ -216,7 +216,7 @@ export class ScheduleService {
         .onConflictDoNothing().returning();
       if (!claimed.length) continue;
       const minutes = Math.round((r.startAt.getTime() - now) / 60_000);
-      if (await sendToUser(r.telegramId, classSoonText(r.languagePref === 'en' ? 'en' : 'uk', r.courseCode, r.section, minutes, r.location))) {
+      if (await sendToUser(r.telegramId, classSoonText(r.languagePref === 'en' ? 'en' : 'uk', r.courseCode, r.section, minutes, r.location, r.startAt))) {
         sent++;
         AnalyticsService.track(r.userId, 'class_reminder.sent');
       }

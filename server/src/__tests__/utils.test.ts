@@ -54,7 +54,7 @@ test('long Telegram messages split without breaking tags', () => {
 test('assistant Markdown becomes Telegram HTML', () => {
   assert.equal(
     markdownToTelegramHtml('**Дедлайни:**\n* Есе — *пт*\n- Quiz <3>'),
-    '<b>Дедлайни:</b>\n• Есе — <i>пт</i>\n• Quiz &lt;3&gt;'
+    '<b>Дедлайни:</b>\nЕсе — <i>пт</i>\nQuiz &lt;3&gt;'
   );
 });
 
