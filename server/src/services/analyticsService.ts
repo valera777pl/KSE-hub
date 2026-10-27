@@ -5,7 +5,8 @@ import { and, count, eq, gte } from 'drizzle-orm';
 import { kyivDate, kyivDayStart } from '../utils/kyivTime.js';
 
 /** Events the mini app may report itself; everything else is recorded server-side. */
-export const CLIENT_EVENTS = /^(app\.open|tab\.(rooms|schedule|moodle|venture|careers|copilot)|onboarding\.(step|skip)\.[a-z]+)$/;
+// Screen views and funnel steps the mini app may report (PRODUCT.md → funnels)
+export const CLIENT_EVENTS = /^(app\.open|tab\.(today|study|rooms|opps|schedule|moodle|venture|careers|copilot)|rooms\.open|room\.select|deadline\.(done|moodle_open)|moodle\.connected|schedule\.friend_added|onboarding\.(step|skip)\.[a-z]+)$/;
 
 export class AnalyticsService {
   /**

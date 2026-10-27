@@ -5,7 +5,21 @@ import { AppError } from '../middleware/errorHandler.js';
 import { getDayBounds, diffInHours } from '../utils/dateUtils.js';
 
 const MAX_DAILY_HOURS = 3;
+
+/** Earliest moment at or after `from` when a slot of `durationMs` fits between these (sorted) bookings. */
+export function freeFrom(taken: { startTime: Date; endTime: Date }[], from: Date, durationMs: number): string {
+  let t = from.getTime();
+  for (const b of taken) {
+    if (b.startTime.getTime() < t + durationMs && b.endTime.getTime() > t) t = b.endTime.getTime();
+  }
+  return new Date(t).toISOString();
+}
 const HOT_BOOKING_MINUTES = 30;
+
+const formatHours = (h: number) => {
+  const min = Math.max(0, Math.round(h * 60));
+  return min < 60 ? `${min} хв` : min % 60 ? `${Math.floor(min / 60)} год ${min % 60} хв` : `${min / 60} год`;
+};
 
 export class BookingService {
   /**
@@ -43,8 +57,8 @@ export class BookingService {
 
       if (currentHours + requestedHours > MAX_DAILY_HOURS) {
         throw new AppError(
-          `Daily quota exceeded. Used: ${currentHours.toFixed(1)}h / ${MAX_DAILY_HOURS}h. ` +
-          `Requested: ${requestedHours.toFixed(1)}h. Remaining: ${(MAX_DAILY_HOURS - currentHours).toFixed(1)}h`,
+          `Денна квота — ${MAX_DAILY_HOURS} год. Сьогодні лишилось ${formatHours(MAX_DAILY_HOURS - currentHours)}, ` +
+          `а ти просиш ${formatHours(requestedHours)}`,
           409
         );
       }
@@ -54,7 +68,7 @@ export class BookingService {
         SELECT * FROM rooms WHERE id = ${roomId} FOR UPDATE
       `;
       if (!room) {
-        throw new AppError('Room not found', 404);
+        throw new AppError('Такої кімнати немає', 404);
       }
 
       // 3. Check for overlapping bookings
@@ -67,7 +81,7 @@ export class BookingService {
       `;
 
       if (overlap.cnt > 0) {
-        throw new AppError('Time slot already booked', 409);
+        throw new AppError('Цей час уже хтось забронював. Обери інший або іншу кімнату', 409);
       }
 
       // 4. One room at a time per student
@@ -79,7 +93,7 @@ export class BookingService {
           AND end_time > ${startIso}
       `;
       if (own.cnt > 0) {
-        throw new AppError('You already have a booking at this time', 409);
+        throw new AppError('На цей час у тебе вже є бронь', 409);
       }
 
       // 5. Insert booking
@@ -121,7 +135,7 @@ export class BookingService {
       .returning();
 
     if (!booking) {
-      throw new AppError('Booking not found or already cancelled', 404);
+      throw new AppError('Бронь не знайдено або її вже скасовано', 404);
     }
 
     return booking;
@@ -135,23 +149,20 @@ export class BookingService {
       ? await db.select().from(rooms).where(eq(rooms.type, roomType as any))
       : await db.select().from(rooms);
 
-    // Find rooms with overlapping active bookings
-    const bookedRoomIds = await db
-      .select({ roomId: bookings.roomId })
+    // Active bookings that touch the window or the rest of that day: enough to say both
+    // "busy" and from when the room is free again for the same length
+    const { end: dayEnd } = getDayBounds(startTime);
+    const dayBookings = await db
+      .select({ roomId: bookings.roomId, startTime: bookings.startTime, endTime: bookings.endTime })
       .from(bookings)
-      .where(
-        and(
-          eq(bookings.status, 'active'),
-          lt(bookings.startTime, endTime),
-          gt(bookings.endTime, startTime)
-        )
-      );
+      .where(and(eq(bookings.status, 'active'), lt(bookings.startTime, dayEnd), gt(bookings.endTime, startTime)))
+      .orderBy(bookings.startTime);
 
-    const bookedIds = new Set(bookedRoomIds.map((b) => b.roomId));
-    return allRooms.map((room) => ({
-      ...room,
-      available: !bookedIds.has(room.id),
-    }));
+    return allRooms.map((room) => {
+      const own = dayBookings.filter((b) => b.roomId === room.id);
+      const available = !own.some((b) => b.startTime < endTime && b.endTime > startTime);
+      return { ...room, available, freeFrom: available ? null : freeFrom(own, startTime, endTime.getTime() - startTime.getTime()) };
+    });
   }
 
   /**
