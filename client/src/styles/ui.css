@@ -346,3 +346,13 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
 .deck-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
 
 [data-theme='dark'] .sheet .btn-plain:not(.btn-accent) { background: color-mix(in srgb, var(--text) 8%, var(--surface)); }
+
+/* ─── Stale data banner (design: Немає звʼязку) ─── */
+.stale { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 14px; border-radius: 12px; background: var(--surface); }
+.stale > svg { width: 18px; height: 18px; flex: none; color: var(--warn); }
+.stale__text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.stale__text b { font-size: 14px; font-weight: 600; }
+.stale__text span { font-size: 13px; color: var(--hint); }
+.stale .link-btn { font-weight: 600; padding: 6px 2px; flex: none; }
+
+.screen--center { min-height: 100%; display: flex; flex-direction: column; justify-content: center; }

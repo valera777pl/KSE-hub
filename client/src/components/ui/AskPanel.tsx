@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import { ArrowUp } from 'lucide-react';
-import { api } from '../../api/client';
+import { api, errorText } from '../../api/client';
 import { tr } from '../../lib/i18n';
 import { haptic, tg } from '../../lib/telegram';
 
@@ -33,7 +33,7 @@ export function AskPanel({ about, context, starters, onBack }: { about: string; 
       setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, a: r.content } : x)));
     } catch (e) {
       haptic.error();
-      setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, a: (e as Error).message, error: true } : x)));
+      setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, a: errorText(e), error: true } : x)));
     }
   };
 

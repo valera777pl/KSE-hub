@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bookmark, BookmarkCheck, Compass, Mail, Search, SlidersHorizontal, WifiOff } from 'lucide-react';
+import { Bookmark, BookmarkCheck, Compass, Mail, Search, SlidersHorizontal } from 'lucide-react';
 import { api, track } from '../../../api/client';
 import type { Opportunity } from '../../../types';
 import { tr } from '../../../lib/i18n';
@@ -8,7 +8,8 @@ import { programName } from '../../../lib/programs';
 import { haptic, openExternal, useMainButton } from '../../../lib/telegram';
 import { useAuthStore } from '../../../stores/authStore';
 import { Sheet } from '../../ui/Sheet';
-import { EmptyState, SkeletonRows } from '../../ui/States';
+import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from '../../ui/States';
+import { useCached } from '../../../lib/cache';
 import { AskPanel } from '../../ui/AskPanel';
 
 type Category = '' | Opportunity['category'];
@@ -29,9 +30,6 @@ const initial = (o: Opportunity) => (o.company.trim()[0] ?? '?').toUpperCase();
 export function ForYou({ openId }: { openId: number | null }) {
   const user = useAuthStore((s) => s.user);
   const program = user?.faculty ?? null;
-  const [list, setList] = useState<Opportunity[] | null>(null);
-  const [error, setError] = useState(false);
-  const [reload, setReload] = useState(0);
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [filtering, setFiltering] = useState(false);
@@ -39,26 +37,30 @@ export function ForYou({ openId }: { openId: number | null }) {
 
   useEffect(() => { track('opps.open'); }, []);
 
+  // Typing waits a beat before asking the server
+  const [search, setSearch] = useState('');
   useEffect(() => {
-    let cancelled = false;
-    setError(false);
-    const params = new URLSearchParams();
-    if (filters.category) params.set('category', filters.category);
-    if (filters.fromMail) params.set('source', 'email');
-    if (filters.saved) params.set('saved', 'true');
-    if (query.trim()) params.set('search', query.trim());
-    const t = setTimeout(() => {
-      api.get<{ opportunities: Opportunity[] }>(`/careers${params.size ? `?${params}` : ''}`)
-        .then((r) => {
-          if (cancelled) return;
-          setList(r.opportunities);
-          // From the bot: "opp_12" opens that one
-          if (openId) setOpen((o) => o ?? r.opportunities.find((x) => x.id === openId) ?? null);
-        })
-        .catch(() => !cancelled && setError(true));
-    }, query ? 250 : 0);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [filters, query, reload]);
+    const t = setTimeout(() => setSearch(query.trim()), query ? 250 : 0);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const params = new URLSearchParams();
+  if (filters.category) params.set('category', filters.category);
+  if (filters.fromMail) params.set('source', 'email');
+  if (filters.saved) params.set('saved', 'true');
+  if (search) params.set('search', search);
+  // Only the plain list is kept for offline; filtered and searched views are asked fresh
+  const q = useCached(`opps${params.size ? `?${params}` : ''}`,
+    () => api.get<{ opportunities: Opportunity[] }>(`/careers${params.size ? `?${params}` : ''}`).then((r) => r.opportunities),
+    { persist: params.size === 0 });
+  // Local copy so "Зберегти" shows at once
+  const [list, setList] = useState<Opportunity[] | null>(q.data);
+  useEffect(() => setList(q.data), [q.data]);
+
+  // From the bot: "opp_12" opens that one
+  useEffect(() => {
+    if (openId && list) setOpen((o) => o ?? list.find((x) => x.id === openId) ?? null);
+  }, [list]);
 
   // Grant students don't need contract-only offers and vice versa; "all" fits everyone
   const fits = (o: Opportunity) => o.eligibility === 'all' || o.eligibility === user?.studentType;
@@ -88,8 +90,9 @@ export function ForYou({ openId }: { openId: number | null }) {
         </button>
       </div>
 
-      {error ? (
-        <div className="group" style={{ marginTop: 16 }}><EmptyState icon={WifiOff} title={tr('Не вдалося завантажити', "Couldn't load")} text={tr('Перевір інтернет.', 'Check your connection.')} action={{ label: tr('Спробувати ще раз', 'Try again'), onClick: () => setReload((n) => n + 1) }} /></div>
+      {q.staleAt && <div style={{ marginTop: 16 }}><StaleBanner at={q.staleAt} error={q.error} busy={q.loading} onRetry={q.refresh} /></div>}
+      {!list && q.error ? (
+        <div style={{ marginTop: 16 }}><ErrorState error={q.error} onRetry={q.refresh} /></div>
       ) : !list ? (
         <div style={{ marginTop: 16 }}><SkeletonRows rows={4} /></div>
       ) : mine.length + others.length === 0 ? (

@@ -5,7 +5,7 @@ import { api } from '../api/client';
 interface AuthState {
   user: User | null;
   loading: boolean;
-  error: string | null;
+  error: unknown;
   fetchUser: () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
 }
@@ -20,8 +20,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ loading: true, error: null });
       const { user } = await api.get<{ user: User }>('/users/me');
       set({ user, loading: false });
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
+    } catch (err) {
+      set({ error: err, loading: false });
     }
   },
 

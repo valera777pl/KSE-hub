@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronRight, Inbox, Plus, Rocket, Search, WifiOff } from 'lucide-react';
-import { api } from '../../../api/client';
+import { api, errorText } from '../../../api/client';
 import type { Application, StartupCard, VentureProject } from '../../../types';
 import { tr } from '../../../lib/i18n';
 import { haptic, tg, useMainButton } from '../../../lib/telegram';
@@ -132,7 +132,7 @@ function StartupSheet({ card, onClose, onApplied }: { card: StartupCard; onClose
       await api.post(`/venture/projects/${p.id}/apply`, { role: role || undefined, message: message.trim() || undefined });
       haptic.success();
       onApplied();
-    } catch (e) { haptic.error(); setError((e as Error).message); }
+    } catch (e) { haptic.error(); setError(errorText(e)); }
     setBusy(false);
   };
 
@@ -186,7 +186,7 @@ function ProjectSheet({ project, onClose, onDone }: { project: VentureProject | 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError(null);
-    try { await fn(); haptic.success(); onDone(); } catch (e) { haptic.error(); setError((e as Error).message); }
+    try { await fn(); haptic.success(); onDone(); } catch (e) { haptic.error(); setError(errorText(e)); }
     setBusy(false);
   };
   const save = () => run(() => {
@@ -230,7 +230,7 @@ function ApplicationsSheet({ apps, onClose, onChanged }: { apps: { incoming: App
   const decide = async (id: number, accept: boolean) => {
     setError(null);
     try { await api.post(`/venture/applications/${id}/decide`, { accept }); haptic.success(); onChanged(); }
-    catch (e) { haptic.error(); setError((e as Error).message); }
+    catch (e) { haptic.error(); setError(errorText(e)); }
   };
 
   return (

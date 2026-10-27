@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDrag } from '@use-gesture/react';
-import { CalendarCheck, CalendarX2, ChevronLeft, ChevronRight, Coffee, Plus, RefreshCw, Search, Users } from 'lucide-react';
+import { CalendarCheck, ChevronLeft, ChevronRight, Coffee, Plus, RefreshCw, Search, Users } from 'lucide-react';
 import { api } from '../../../api/client';
 import type { ClassEvent, ScheduleCompare, StudentMatch } from '../../../types';
 import { addDays, dayKey, dayMonth, dayNum, dayTitle, hm, mondayOf, now, spanText, todayKey, weekdayShort, weekOf } from '../../../lib/time';
@@ -8,7 +8,8 @@ import { classKind, initials, shortPlace } from '../../../lib/place';
 import { cloud, haptic, openExternal } from '../../../lib/telegram';
 import { useUi } from '../../../stores/uiStore';
 import { Sheet } from '../../ui/Sheet';
-import { EmptyState, SkeletonRows } from '../../ui/States';
+import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from '../../ui/States';
+import { useCached } from '../../../lib/cache';
 import { AskPanel } from '../../ui/AskPanel';
 import { track } from '../../../api/client';
 import { tr } from '../../../lib/i18n';
@@ -20,26 +21,8 @@ const FRIENDS_KEY = 'compare_friends';
 type Friend = { userId: number; name: string };
 type Week = { connected: boolean; synced: boolean; events: ClassEvent[] };
 
-/** One week of my classes per Monday, fetched once and kept while the screen is open. */
-function useWeek(monday: string, reloadKey: number) {
-  const cache = useRef(new Map<string, Week>());
-  const [week, setWeek] = useState<Week | null>(cache.current.get(monday) ?? null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const hit = cache.current.get(monday);
-    setWeek(hit ?? null);
-    setError(null);
-    if (hit && reloadKey === 0) return;
-    api.get<Week>(`/schedule/week?start=${monday}`)
-      .then((w) => { if (cancelled) return; cache.current.set(monday, w); setWeek(w); })
-      .catch((e) => !cancelled && setError(e.message));
-    return () => { cancelled = true; };
-  }, [monday, reloadKey]);
-
-  return { week, error };
-}
+/** One week of my classes per Monday; the last good copy shows at once and when offline. */
+const useWeek = (monday: string) => useCached(`week:${monday}`, () => api.get<Week>(`/schedule/week?start=${monday}`));
 
 /** Friends I compare with: remembered in Telegram cloud storage, their weeks loaded in parallel. */
 function useFriends(monday: string) {
@@ -100,14 +83,14 @@ export function SchedulePage() {
   const requested = useUi((s) => s.scheduleDay);
   const [day, setDay] = useState(requested ?? today);
   const [dir, setDir] = useState<'next' | 'prev' | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [open, setOpen] = useState<ClassEvent | null>(null);
   const [adding, setAdding] = useState(false);
 
   const monday = mondayOf(day);
   const days = useMemo(() => weekOf(day), [monday]);
-  const { week, error } = useWeek(monday, reloadKey);
+  const weekQ = useWeek(monday);
+  const week = weekQ.data;
   const pals = useFriends(monday);
 
   const byDay = useMemo(() => {
@@ -132,7 +115,7 @@ export function SchedulePage() {
 
   const refresh = async () => {
     setRefreshing(true);
-    try { await api.post('/schedule/refresh'); setReloadKey((k) => k + 1); } catch { /* error shows on reload */ }
+    try { await api.post('/schedule/refresh'); weekQ.refresh(); } catch { /* error shows on reload */ }
     setRefreshing(false);
   };
 
@@ -166,6 +149,7 @@ export function SchedulePage() {
 
   return (
     <>
+      {weekQ.staleAt && <StaleBanner at={weekQ.staleAt} error={weekQ.error} busy={weekQ.loading} onRetry={weekQ.refresh} />}
       <div className="week-nav">
         <button className="icon-btn press" aria-label={tr('Попередній тиждень', 'Previous week')} onClick={() => go(addDays(monday, -7))}><ChevronLeft strokeWidth={1.75} /></button>
         <span className="week-nav__label num">{range}</span>
@@ -207,10 +191,8 @@ export function SchedulePage() {
 
       <div {...bind()} style={{ touchAction: 'pan-y' }}>
         <div key={day} className={dir ? `slide-${dir}` : undefined}>
-          {error ? (
-            <div className="group">
-              <EmptyState icon={CalendarX2} title={tr('Не вдалося завантажити розклад', 'Couldn\'t load the schedule')} text={error} action={{ label: tr('Спробувати ще раз', 'Try again'), onClick: () => setReloadKey((k) => k + 1) }} />
-            </div>
+          {!week && weekQ.error ? (
+            <ErrorState error={weekQ.error} onRetry={weekQ.refresh} />
           ) : !week ? (
             <SkeletonRows rows={3} />
           ) : list.length === 0 ? (

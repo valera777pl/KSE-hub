@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, DoorClosed, Headphones, Video, WifiOff } from 'lucide-react';
-import { api, track } from '../../../api/client';
+import { Check, DoorClosed, Headphones, Video } from 'lucide-react';
+import { api, errorText, track } from '../../../api/client';
 import type { BookingWithRoom, QuotaInfo, Room } from '../../../types';
 import { addDays, dayKey, dayTitle, hm, now, todayKey, weekdayShort, dayNum } from '../../../lib/time';
 import { haptic, useMainButton } from '../../../lib/telegram';
 import { ScreenHead } from '../../ui/ScreenHead';
 import { Sheet } from '../../ui/Sheet';
-import { EmptyState, SkeletonRows } from '../../ui/States';
+import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from '../../ui/States';
+import { useCached } from '../../../lib/cache';
 import { Wheel } from '../../ui/Wheel';
 import { tr } from '../../../lib/i18n';
 
@@ -50,10 +51,6 @@ export function RoomsPage() {
   const [when, setWhen] = useState<When>('now');
   const [picked, setPicked] = useState<Date | null>(null);
   const [kind, setKind] = useState<Kind>('all');
-  const [rooms, setRooms] = useState<RoomFree[] | null>(null);
-  const [mine, setMine] = useState<BookingWithRoom[]>([]);
-  const [quota, setQuota] = useState<QuotaInfo | null>(null);
-  const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
   const [booking, setBooking] = useState<{ room: RoomFree; start: Date } | null>(null);
   const [picking, setPicking] = useState(false);
@@ -66,23 +63,19 @@ export function RoomsPage() {
     return when === 'soon' ? roundUp(new Date(n.getTime() + 30 * MIN), 5) : new Date(Math.floor(n.getTime() / MIN) * MIN);
   }, [when, picked, reload]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setError(false);
-    setRooms(null);
+  // "Зараз" and "Через 30 хв" keep one cached copy each; a picked time is cached by its slot
+  const q = useCached(`rooms:${when === 'pick' ? start.toISOString() : when}`, async () => {
     const params = new URLSearchParams({ start: start.toISOString(), end: new Date(start.getTime() + STEP * MIN).toISOString() });
-    Promise.all([
+    const [r, b, quota] = await Promise.all([
       api.get<{ rooms: RoomFree[] }>(`/rooms/available?${params}`),
       api.get<{ bookings: BookingWithRoom[] }>('/rooms/my-bookings'),
       api.get<QuotaInfo>('/rooms/quota'),
-    ]).then(([r, b, q]) => {
-      if (cancelled) return;
-      setRooms(r.rooms);
-      setMine(b.bookings);
-      setQuota(q);
-    }).catch(() => !cancelled && setError(true));
-    return () => { cancelled = true; };
-  }, [start.getTime(), reload]);
+    ]);
+    return { rooms: r.rooms, mine: b.bookings, quota };
+  }, { version: start.getTime() });
+  const rooms = q.data?.rooms ?? null;
+  const mine = q.data?.mine ?? [];
+  const quota = q.data?.quota ?? null;
 
   useEffect(() => { track('rooms.open'); }, []);
 
@@ -116,6 +109,7 @@ export function RoomsPage() {
   return (
     <div className="screen">
       <ScreenHead title={tr('Кімнати', 'Rooms')} />
+      {q.staleAt && <StaleBanner at={q.staleAt} error={q.error} busy={q.loading} onRetry={q.refresh} />}
 
       {mine.length > 0 && (
         <>
@@ -152,13 +146,13 @@ export function RoomsPage() {
         ))}
       </div>
 
-      {error ? (
-        <div className="group" style={{ marginTop: 16 }}><EmptyState icon={WifiOff} title={tr('Не вдалося завантажити кімнати', 'Couldn\'t load rooms')} text={tr('Перевір інтернет.', 'Check your connection.')} action={{ label: tr('Спробувати ще раз', 'Try again'), onClick: () => setReload((n) => n + 1) }} /></div>
+      {!rooms && q.error ? (
+        <div style={{ marginTop: 16 }}><ErrorState error={q.error} onRetry={q.refresh} /></div>
       ) : !rooms ? (
         <div style={{ marginTop: 16 }}><SkeletonRows rows={4} /></div>
       ) : (
         <>
-          <div className="caption num">{when === 'now' ? tr('Вільні зараз', 'Free now') : `${tr('Вільні', 'Free')} ${dayKey(start) === todayKey() ? tr('о', 'at') : `${dayTitle(dayKey(start))}, ${tr('о', 'at')}`} ${hm(start)}`}</div>
+          <div className="caption num">{when === 'now' && q.staleAt ? `${tr('Вільні о', 'Free at')} ${hm(new Date(q.staleAt))}` : when === 'now' ? tr('Вільні зараз', 'Free now') : `${tr('Вільні', 'Free')} ${dayKey(start) === todayKey() ? tr('о', 'at') : `${dayTitle(dayKey(start))}, ${tr('о', 'at')}`} ${hm(start)}`}</div>
           {free.length === 0 ? (
             <div className="group"><EmptyState icon={DoorClosed} title={tr('Вільних кімнат немає', 'No free rooms')} text={busy.length ? tr('Нижче — коли звільняться.', 'Below: when they free up.') : undefined} /></div>
           ) : (
@@ -237,7 +231,7 @@ function BookSheet({ room, start, leftMin, onClose, onBooked }: {
       setTimeout(() => onBooked(r.booking.id), 900);
     } catch (e) {
       haptic.error();
-      setError((e as Error).message);
+      setError(errorText(e));
       setShakeKey((k) => k + 1);
     } finally {
       setSaving(false);

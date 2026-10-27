@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, track } from '../../../api/client';
+import { api, errorText, track } from '../../../api/client';
 import { useAuthStore } from '../../../stores/authStore';
 import { haptic, openExternal, useMainButton } from '../../../lib/telegram';
 import { tr } from '../../../lib/i18n';
@@ -43,7 +43,7 @@ export function MoodleConnectForm({ onSaved, skip }: { onSaved: () => void; skip
       onSaved();
     } catch (e) {
       haptic.error();
-      setError((e as Error).message || tr('Не вдалося зберегти. Перевір посилання.', 'Couldn\'t save. Check the link.'));
+      setError(errorText(e));
     } finally {
       setSaving(false);
     }

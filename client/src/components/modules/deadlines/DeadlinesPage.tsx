@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BookCheck, ChevronDown, Link2, WifiOff } from 'lucide-react';
+import { BookCheck, ChevronDown, Link2 } from 'lucide-react';
 import { api, track } from '../../../api/client';
 import type { DeadlineWithCourse } from '../../../types';
 import { addDays, dayKey, dayTitle, hm, now, plural, spanText, todayKey, weekdayShort } from '../../../lib/time';
@@ -7,7 +7,8 @@ import { haptic, openExternal, useMainButton } from '../../../lib/telegram';
 import { useAuthStore } from '../../../stores/authStore';
 import { useUi } from '../../../stores/uiStore';
 import { Sheet } from '../../ui/Sheet';
-import { EmptyState, SkeletonRows } from '../../ui/States';
+import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from '../../ui/States';
+import { useCached } from '../../../lib/cache';
 import { MoodleConnectForm } from './MoodleConnect';
 import { AskPanel } from '../../ui/AskPanel';
 import { tr } from '../../../lib/i18n';
@@ -30,19 +31,14 @@ type Group = { title: string; items: DeadlineWithCourse[] };
 export function DeadlinesPage() {
   const user = useAuthStore((s) => s.user);
   const { deadlineId } = useUi();
-  const [all, setAll] = useState<DeadlineWithCourse[] | null>(null);
-  const [error, setError] = useState(false);
-  const [reload, setReload] = useState(0);
+  const q = useCached('deadlines', () => api.get<{ deadlines: DeadlineWithCourse[] }>('/moodle/deadlines?completed=true').then((r) => r.deadlines));
+  // Local copy so "Позначити зробленим" shows at once, before the server answers
+  const [all, setAll] = useState<DeadlineWithCourse[] | null>(q.data);
+  useEffect(() => setAll(q.data), [q.data]);
   const [openId, setOpenId] = useState<number | null>(deadlineId);
   const [showGeneral, setShowGeneral] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [connecting, setConnecting] = useState(false);
-
-  useEffect(() => {
-    setError(false);
-    api.get<{ deadlines: DeadlineWithCourse[] }>('/moodle/deadlines?completed=true')
-      .then((r) => setAll(r.deadlines)).catch(() => setError(true));
-  }, [reload]);
 
   // A deep link from the bot opened this deadline; forget it so the tab opens plainly next time
   useEffect(() => { if (deadlineId) useUi.setState({ deadlineId: null }); }, []);
@@ -77,25 +73,25 @@ export function DeadlinesPage() {
       if (!was) track('deadline.done');
     } catch {
       haptic.error();
-      setReload((n) => n + 1);
+      q.refresh();
     }
   };
 
   const opened = all?.find((d) => d.assignment.id === openId) ?? null;
 
-  if (error) {
-    return <div className="group"><EmptyState icon={WifiOff} title={tr('Не вдалося завантажити дедлайни', 'Couldn\'t load deadlines')} text={tr('Перевір інтернет.', 'Check your connection.')} action={{ label: tr('Спробувати ще раз', 'Try again'), onClick: () => setReload((n) => n + 1) }} /></div>;
-  }
+  if (!all && q.error) return <ErrorState error={q.error} onRetry={q.refresh} />;
   if (!all) return <SkeletonRows rows={4} />;
+  const stale = q.staleAt ? <StaleBanner at={q.staleAt} error={q.error} busy={q.loading} onRetry={q.refresh} /> : null;
 
   if (!user?.calendarUrl && all.length === 0) {
     return (
       <>
+        {stale}
         <div className="group">
           <EmptyState icon={Link2} title={tr('Додай дедлайни з Moodle', 'Add deadlines from Moodle')} text={tr('Хвилина — і всі здачі будуть тут, а бот нагадає за 24 і за 3 години.', 'One minute, and every due date lands here with reminders 24 and 3 hours before.')}
             action={{ label: tr('Підключити Moodle', 'Connect Moodle'), onClick: () => setConnecting(true) }} />
         </div>
-        {connecting && <ConnectSheet onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); setReload((n) => n + 1); }} />}
+        {connecting && <ConnectSheet onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); q.refresh(); }} />}
       </>
     );
   }
@@ -104,6 +100,7 @@ export function DeadlinesPage() {
 
   return (
     <>
+      {stale}
       {nothingOpen && (
         <div className="group"><EmptyState icon={BookCheck} title={tr('Усе здано', 'All done')} text={tr('Нові дедлайни зʼявляться тут, щойно викладач додасть їх у Moodle.', 'New deadlines appear here as soon as they\'re added in Moodle.')} /></div>
       )}
@@ -150,7 +147,7 @@ export function DeadlinesPage() {
       </p>
 
       {opened && <DeadlineSheet d={opened} onClose={() => setOpenId(null)} onToggle={() => { toggle(opened.assignment.id); setOpenId(null); }} />}
-      {connecting && <ConnectSheet onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); setReload((n) => n + 1); }} />}
+      {connecting && <ConnectSheet onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); q.refresh(); }} />}
     </>
   );
 }

@@ -2,7 +2,11 @@ import type { Context, Next } from 'hono';
 import { validateTelegramInitData, type TelegramUser } from '../utils/telegramHash.js';
 import { db } from '../db/connection.js';
 import { users } from '../db/schema.js';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { verifyState } from '../utils/crypto.js';
+
+export const SESSION_PURPOSE = 'session';
+export const SESSION_TTL_S = 24 * 60 * 60;
 
 // Extend Hono context with user data
 declare module 'hono' {
@@ -41,17 +45,28 @@ export async function telegramAuth(c: Context, next: Next) {
     }
   }
 
-  // Get initData from Authorization header
   const authHeader = c.req.header('Authorization');
+
+  // "Session <token>": what the mini app trades its initData for on open (routes/auth.ts)
+  if (authHeader?.startsWith('Session ')) {
+    const userId = verifyState(authHeader.slice(8), SESSION_PURPOSE);
+    const [dbUser] = userId ? await db.select().from(users).where(eq(users.id, userId)) : [];
+    if (!dbUser) return c.json({ error: 'Session expired', code: 'session_expired' }, 401);
+    c.set('telegramUser', { id: dbUser.telegramId, first_name: dbUser.fullName, username: dbUser.username ?? undefined });
+    c.set('dbUser', dbUser);
+    return next();
+  }
+
+  // "tma <initData>": straight from Telegram.WebApp.initData
   if (!authHeader?.startsWith('tma ')) {
-    return c.json({ error: 'Missing Telegram authorization' }, 401);
+    return c.json({ error: 'Missing Telegram authorization', code: 'auth_missing' }, 401);
   }
 
   const initData = authHeader.slice(4); // Remove "tma " prefix
   const { valid, user } = validateTelegramInitData(initData, botToken);
 
   if (!valid || !user) {
-    return c.json({ error: 'Invalid Telegram authorization' }, 401);
+    return c.json({ error: 'Invalid Telegram authorization', code: 'auth_invalid' }, 401);
   }
 
   // Upsert user in database

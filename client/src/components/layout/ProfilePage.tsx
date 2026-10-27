@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Check, ChevronRight } from 'lucide-react';
-import { api } from '../../api/client';
+import { api, errorText } from '../../api/client';
+import { clearCache } from '../../lib/cache';
 import { useAuthStore } from '../../stores/authStore';
 import type { ClassEvent, DigestSource, GoogleStatus, User } from '../../types';
 import { tr, useLang, type Lang } from '../../lib/i18n';
@@ -61,7 +62,7 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
 
   const save = async (patch: Partial<User>) => {
     setError(null);
-    try { await updateUser(patch); } catch (e) { haptic.error(); setError((e as Error).message); }
+    try { await updateUser(patch); } catch (e) { haptic.error(); setError(errorText(e)); }
   };
 
   const toggleSource = (s: DigestSource, on: boolean) =>
@@ -87,6 +88,7 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
     ));
     if (!ok) return;
     await api.delete('/users/me');
+    clearCache();
     const app = tg() as unknown as { close?: () => void } | null;
     if (app?.close) app.close(); else location.reload();
   };

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useDrag } from '@use-gesture/react';
 import { ChevronRight, UserRound, Users } from 'lucide-react';
-import { api } from '../../../api/client';
+import { api, errorText } from '../../../api/client';
 import { useVentureStore } from '../../../stores/ventureStore';
 import type { SwipeCardProfile, VentureProfile } from '../../../types';
 import { tr } from '../../../lib/i18n';
@@ -106,7 +106,7 @@ function ProfileSheet({ profile, onClose, onDone }: { profile: VentureProfile | 
       await api.post('/venture/profile', { title: form.title.trim(), bio: form.bio.trim(), skills: splitList(form.skills), lookingFor: splitList(form.lookingFor) });
       haptic.success();
       onDone();
-    } catch (e) { haptic.error(); setError((e as Error).message); }
+    } catch (e) { haptic.error(); setError(errorText(e)); }
     setBusy(false);
   };
 

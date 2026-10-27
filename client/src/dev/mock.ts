@@ -2,7 +2,9 @@
  * Dev-only stand-in for Telegram and the API: http://localhost:5173/?mock=1&theme=dark
  *   &theme=light|dark   Telegram theme (default: system)
  *   &now=11:45          pretend it's this time today (default 11:45, so a class is in progress)
- *   &state=empty|error  every list empty / every request fails
+ *   &state=empty|error  every list empty / every request fails with a server error
+ *   &state=stale        offline: every request fails, screens show what the last normal visit cached
+ *   &state=auth         sign-in expired: the session can't be renewed
  *   &onboarding=1       a student who hasn't finished sign-up
  *   &startapp=day_2026-10-27   deep link, as from a bot button
  * Loaded from main.tsx behind import.meta.env.DEV, so none of this reaches the production bundle.
@@ -352,7 +354,10 @@ window.fetch = async (input, init) => {
   const path = url.pathname.slice(4);
   const method = (init?.method || 'GET').toUpperCase();
   await new Promise((r) => setTimeout(r, 250));
-  if (state === 'error' && path !== '/users/me') return ok({ error: 'Не вдалося завантажити. Перевір інтернет і спробуй ще раз.' }, 500);
+  if (state === 'auth' && path !== '/users/me') return ok({ error: 'Invalid Telegram authorization', code: 'auth_invalid' }, 401);
+  if (path === '/auth/session') return ok({ token: 'mock-session', expiresAt: iso(new Date(Date.now() + 86_400_000)) });
+  if (state === 'stale' && path !== '/users/me') throw new TypeError('Failed to fetch');
+  if (state === 'error' && path !== '/users/me') return ok({ error: 'Internal server error' }, 500);
   for (const [m, re, handler] of routes) {
     const match = method === m && path.match(re);
     if (!match) continue;

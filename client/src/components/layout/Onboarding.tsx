@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Check, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
-import { api, track } from '../../api/client';
+import { api, errorText, track } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
 import type { ClassEvent, GoogleStatus } from '../../types';
 import { addDays, dayKey, dayTitle, hm, mondayOf, now, todayKey } from '../../lib/time';
@@ -150,7 +150,7 @@ function MailStep({ google }: { google: GoogleStatus | null }) {
       openExternal(url);
     } catch (e) {
       haptic.error();
-      setError((e as Error).message);
+      setError(errorText(e));
     }
   };
 

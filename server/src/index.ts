@@ -21,6 +21,7 @@ import { googleCallback, googleRoutes } from './routes/google.js';
 import { scheduleRoutes } from './routes/schedule.js';
 import { adminRoutes } from './routes/admin.js';
 import { mailRoutes } from './routes/mail.js';
+import { authRoutes } from './routes/auth.js';
 
 const app = new Hono();
 
@@ -58,6 +59,7 @@ api.route('/notifications', notificationRoutes);
 api.route('/google', googleRoutes);
 api.route('/schedule', scheduleRoutes);
 api.route('/mail', mailRoutes);
+api.route('/auth', authRoutes);
 
 app.route('/api', api);
 

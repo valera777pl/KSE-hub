@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, WifiOff } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { api } from '../../../api/client';
 import type { ClassEvent, DeadlineWithCourse } from '../../../types';
 import { addDays, dayKey, dayTitle, duration, hm, mondayOf, now, relDay, spanText, todayKey } from '../../../lib/time';
@@ -8,7 +8,8 @@ import { haptic, openExternal } from '../../../lib/telegram';
 import { useUi } from '../../../stores/uiStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { ScreenHead } from '../../ui/ScreenHead';
-import { EmptyState } from '../../ui/States';
+import { ErrorState, StaleBanner } from '../../ui/States';
+import { useCached } from '../../../lib/cache';
 import { tr } from '../../../lib/i18n';
 
 type Week = { connected: boolean; synced: boolean; events: ClassEvent[] };
@@ -24,26 +25,23 @@ const courseShort = (name: string | null) => (name?.match(/^[A-Z]{2,5}\d{3}/)?.[
 /** Сьогодні: what's on right now, what's due soon, what in the mail needs action. */
 export function TodayPage() {
   const today = todayKey();
-  const [weeks, setWeeks] = useState<Week[] | null>(null);
-  const [deadlines, setDeadlines] = useState<DeadlineWithCourse[] | null>(null);
-  const [mail, setMail] = useState<Mail[]>([]);
-  const [failed, setFailed] = useState(false);
-  const [deadlinesFailed, setDeadlinesFailed] = useState(false);
-  const [reload, setReload] = useState(0);
   const [, tick] = useState(0);
   const user = useAuthStore((s) => s.user);
   const { openDay, openDeadline } = useUi();
 
-  useEffect(() => {
-    setFailed(false);
-    setDeadlinesFailed(false);
-    // This week plus next: on Sunday evening "next class" lives in the following week
-    const mon = mondayOf(today);
-    Promise.all([mon, addDays(mon, 7)].map((m) => api.get<Week>(`/schedule/week?start=${m}`)))
-      .then(setWeeks).catch(() => { setWeeks(null); setFailed(true); });
-    api.get<{ deadlines: DeadlineWithCourse[] }>('/moodle/deadlines').then((r) => setDeadlines(r.deadlines)).catch(() => { setDeadlines([]); setDeadlinesFailed(true); });
-    api.get<{ emails: Mail[] }>('/mail/important').then((r) => setMail(r.emails)).catch(() => setMail([]));
-  }, [reload]);
+  // This week plus next: on Sunday evening "next class" lives in the following week
+  const mon = mondayOf(today);
+  const weeksQ = useCached(`today.weeks:${mon}`, () => Promise.all([mon, addDays(mon, 7)].map((m) => api.get<Week>(`/schedule/week?start=${m}`))));
+  const deadlinesQ = useCached('deadlines', () => api.get<{ deadlines: DeadlineWithCourse[] }>('/moodle/deadlines?completed=true').then((r) => r.deadlines));
+  // Mail keeps only subject, sender and time on the device, never the text
+  const mailQ = useCached('mail.important', () => api.get<{ emails: Mail[] }>('/mail/important').then((r) => r.emails),
+    { keep: (list) => list.map((m) => ({ id: m.id, subject: m.subject, from: m.from, receivedAt: m.receivedAt, summary: '', url: '' })) });
+  const weeks = weeksQ.data;
+  const deadlines = deadlinesQ.data;
+  const deadlinesFailed = !deadlines && !!deadlinesQ.error;
+  const mail = mailQ.data ?? [];
+  const stale = [weeksQ, deadlinesQ, mailQ].find((q) => q.staleAt);
+  const retry = () => { weeksQ.refresh(); deadlinesQ.refresh(); mailQ.refresh(); };
 
   // Re-render every 30 s so the countdown and the progress bar stay true
   useEffect(() => {
@@ -67,8 +65,10 @@ export function TodayPage() {
     <div className="screen">
       <ScreenHead title={tr('Сьогодні', 'Today')} sub={dayTitle(today)} />
 
-      {failed ? (
-        <div className="group"><EmptyState icon={WifiOff} title={tr('Не вдалося завантажити', 'Couldn\'t load')} text={tr('Перевір інтернет.', 'Check your connection.')} action={{ label: tr('Спробувати ще раз', 'Try again'), onClick: () => setReload((n) => n + 1) }} /></div>
+      {stale && <StaleBanner at={stale.staleAt!} error={stale.error} busy={stale.loading} onRetry={retry} />}
+
+      {!weeks && weeksQ.error ? (
+        <ErrorState error={weeksQ.error} onRetry={retry} />
       ) : !weeks ? (
         <div className="now" aria-busy="true"><div className="skel" style={{ height: 13, width: 110 }} /><div className="skel" style={{ height: 52, width: 150, margin: '10px 0 14px' }} /><div className="skel" style={{ height: 18, width: '60%' }} /></div>
       ) : !synced ? (
@@ -115,10 +115,10 @@ export function TodayPage() {
           <div className="caption">{tr('Пошта', 'Mail')}</div>
           <div className="group">
             {mail.map((m) => (
-              <button key={m.id} className="row press" style={{ alignItems: 'flex-start' }} onClick={() => openExternal(m.url)}>
+              <button key={m.id} className="row press" style={{ alignItems: 'flex-start' }} disabled={!m.url} onClick={() => m.url && openExternal(m.url)}>
                 <div className="row__main">
                   <div className="row__title" style={{ fontWeight: 500 }}>{m.subject}</div>
-                  <div className="row__meta clamp2" style={{ color: 'var(--text)', opacity: 0.8 }}>{m.summary}</div>
+                  {m.summary && <div className="row__meta clamp2" style={{ color: 'var(--text)', opacity: 0.8 }}>{m.summary}</div>}
                   {m.from && <div className="row__meta">{m.from}</div>}
                 </div>
               </button>

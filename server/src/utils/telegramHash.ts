@@ -1,4 +1,11 @@
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
+
+/**
+ * How old initData may be. It is only traded for a session token when the mini app opens
+ * (see routes/auth.ts), so an hour covers a web view Telegram restores from the background
+ * without letting a leaked string work for long.
+ */
+export const INIT_DATA_MAX_AGE_S = 60 * 60;
 
 /**
  * Validates Telegram WebApp initData using HMAC-SHA256.
@@ -6,7 +13,8 @@ import { createHmac } from 'crypto';
  */
 export function validateTelegramInitData(
   initData: string,
-  botToken: string
+  botToken: string,
+  nowS = Math.floor(Date.now() / 1000)
 ): { valid: boolean; user: TelegramUser | null } {
   try {
     const params = new URLSearchParams(initData);
@@ -25,18 +33,15 @@ export function validateTelegramInitData(
       .update(dataCheckString)
       .digest('hex');
 
-    if (computedHash !== hash) {
+    const a = Buffer.from(computedHash);
+    const b = Buffer.from(hash);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
       return { valid: false, user: null };
     }
 
-    // Check auth_date is not too old (5 minutes tolerance)
-    const authDate = params.get('auth_date');
-    if (authDate) {
-      const authTimestamp = parseInt(authDate, 10);
-      const now = Math.floor(Date.now() / 1000);
-      if (now - authTimestamp > 300) {
-        return { valid: false, user: null };
-      }
+    const authDate = parseInt(params.get('auth_date') ?? '', 10);
+    if (!Number.isFinite(authDate) || nowS - authDate > INIT_DATA_MAX_AGE_S) {
+      return { valid: false, user: null };
     }
 
     // Parse user data
