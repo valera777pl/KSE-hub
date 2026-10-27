@@ -1,21 +1,26 @@
-import { useState } from 'react';
 import { ScreenHead } from '../../ui/ScreenHead';
 import { haptic } from '../../../lib/telegram';
-import { CareersPage } from '../careers/CareersPage';
-import { VenturePage } from '../venture/VenturePage';
+import { tr } from '../../../lib/i18n';
+import { useUi } from '../../../stores/uiStore';
+import { ForYou } from './ForYou';
+import { Startups } from './Startups';
+import { People } from './People';
 
-/** Можливості: internships and grants for you, and student startups. Rebuilt in block 3. */
+/** Можливості: internships and grants for your programme, student startups, people to team up with. */
 export function OpportunitiesPage() {
-  const [view, setView] = useState<'forYou' | 'startups'>('forYou');
-  const pick = (v: typeof view) => { if (v !== view) { haptic.select(); setView(v); } };
+  const { oppsView: view, setOppsView, oppId } = useUi();
+  const pick = (v: typeof view) => { if (v !== view) { haptic.select(); setOppsView(v); } };
   return (
     <div className="screen">
-      <ScreenHead title="Можливості" />
-      <div className="seg" role="group" aria-label="Розділ">
-        <button aria-pressed={view === 'forYou'} onClick={() => pick('forYou')}>Для тебе</button>
-        <button aria-pressed={view === 'startups'} onClick={() => pick('startups')}>Стартапи і люди</button>
+      <ScreenHead title={tr('Можливості', 'Opportunities')} />
+      <div className="seg" role="group" aria-label={tr('Розділ', 'Section')}>
+        <button aria-pressed={view === 'forYou'} onClick={() => pick('forYou')}>{tr('Для тебе', 'For you')}</button>
+        <button aria-pressed={view === 'startups'} onClick={() => pick('startups')}>{tr('Стартапи', 'Startups')}</button>
+        <button aria-pressed={view === 'people'} onClick={() => pick('people')}>{tr('Люди', 'People')}</button>
       </div>
-      {view === 'forYou' ? <CareersPage /> : <VenturePage />}
+      {view === 'forYou' && <ForYou openId={oppId} />}
+      {view === 'startups' && <Startups />}
+      {view === 'people' && <People />}
     </div>
   );
 }

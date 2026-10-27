@@ -172,6 +172,9 @@ export interface Opportunity {
   createdAt: string;
   source: 'email' | 'manual';
   emailUrl: string | null;
+  /** Programme codes from the letter; empty = open to everyone */
+  programs?: string[];
+  saved?: boolean;
 }
 
 /* ─── Notifications ─── */

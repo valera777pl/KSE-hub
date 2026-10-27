@@ -8,6 +8,9 @@ interface UiState {
   scheduleDay: string | null;
   deadlineId: number | null;
   profileOpen: boolean;
+  oppsView: 'forYou' | 'startups' | 'people';
+  oppId: number | null;
+  setOppsView: (v: 'forYou' | 'startups' | 'people') => void;
   setTab: (tab: TabId) => void;
   setStudyView: (v: 'schedule' | 'deadlines') => void;
   openDay: (day: string) => void;
@@ -22,6 +25,9 @@ export const useUi = create<UiState>((set) => ({
   scheduleDay: null,
   deadlineId: null,
   profileOpen: false,
+  oppsView: 'forYou',
+  oppId: null,
+  setOppsView: (oppsView) => set({ oppsView }),
   setTab: (tab) => set({ tab }),
   setStudyView: (studyView) => set({ studyView }),
   openDay: (scheduleDay) => set({ tab: 'study', studyView: 'schedule', scheduleDay }),
@@ -38,6 +44,7 @@ export function applyStartParam(param: string | null) {
   if (kind === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(value)) s.openDay(value);
   else if (kind === 'deadline' && Number(value)) s.openDeadline(Number(value));
   else if (kind === 'booking') s.setTab('rooms');
-  else if (kind === 'opps' || kind === 'opp') s.setTab('opps');
+  else if (kind === 'opp' && Number(value)) useUi.setState({ tab: 'opps', oppsView: 'forYou', oppId: Number(value) });
+  else if (kind === 'opps') s.setTab('opps');
   else s.setTab('today');
 }

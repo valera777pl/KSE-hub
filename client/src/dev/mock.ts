@@ -167,18 +167,18 @@ const LOC = {
 
 type Ev = { calendarId: number; courseCode: string; section: string; title: string; location: string; day: number; from: string; to: string };
 const WEEK: Ev[] = [
-  { calendarId: 1, courseCode: 'MATH111', section: 'P6', title: 'Introduction to Calculus', location: LOC.s305, day: 0, from: '10:00', to: '11:20' },
-  { calendarId: 2, courseCode: 'ECON100', section: 'P6', title: 'Principles of Economics', location: LOC.s408, day: 0, from: '11:30', to: '12:50' },
-  { calendarId: 3, courseCode: 'KSE101', section: 'L3', title: 'How to study at KSE', location: LOC.s2081, day: 0, from: '15:00', to: '16:20' },
+  { calendarId: 1, courseCode: 'MATH111', section: 'P6', title: 'Introduction to Calculus (BE, EBD)', location: LOC.s305, day: 0, from: '10:00', to: '11:20' },
+  { calendarId: 2, courseCode: 'ECON100', section: 'P6', title: 'Principles of Economics (BE)', location: LOC.s408, day: 0, from: '11:30', to: '12:50' },
+  { calendarId: 3, courseCode: 'KSE101', section: 'L3', title: 'How to study at KSE (BE, EBD, SE)', location: LOC.s2081, day: 0, from: '15:00', to: '16:20' },
   { calendarId: 4, courseCode: 'ENG111', section: 'P11', title: 'English for Professional and Study Purposes I (BE, EBD)', location: LOC.f3, day: 0, from: '18:00', to: '19:20' },
-  { calendarId: 1, courseCode: 'MATH111', section: 'P7', title: 'Introduction to Calculus', location: LOC.s2081, day: 1, from: '13:30', to: '14:50' },
-  { calendarId: 2, courseCode: 'ECON100', section: 'L1', title: 'Principles of Economics', location: LOC.s2151, day: 1, from: '15:00', to: '16:20' },
+  { calendarId: 1, courseCode: 'MATH111', section: 'P7', title: 'Introduction to Calculus (BE, EBD)', location: LOC.s2081, day: 1, from: '13:30', to: '14:50' },
+  { calendarId: 2, courseCode: 'ECON100', section: 'L1', title: 'Principles of Economics (BE)', location: LOC.s2151, day: 1, from: '15:00', to: '16:20' },
   { calendarId: 5, courseCode: 'MATH101', section: 'P8', title: 'Introduction to Mathematics', location: LOC.s1082, day: 2, from: '11:30', to: '12:50' },
   { calendarId: 4, courseCode: 'ENG111', section: 'P11', title: 'English for Professional and Study Purposes I (BE, EBD)', location: LOC.f3, day: 2, from: '18:00', to: '19:20' },
   { calendarId: 5, courseCode: 'MATH101', section: 'P8', title: 'Introduction to Mathematics', location: LOC.s1082, day: 3, from: '11:30', to: '12:50' },
-  { calendarId: 3, courseCode: 'KSE101', section: 'L3', title: 'How to study at KSE', location: LOC.s2081, day: 3, from: '15:00', to: '16:20' },
-  { calendarId: 1, courseCode: 'MATH111', section: 'P6', title: 'Introduction to Calculus', location: LOC.s305, day: 4, from: '10:00', to: '11:20' },
-  { calendarId: 3, courseCode: 'KSE101', section: 'L3', title: 'How to study at KSE', location: LOC.online, day: 4, from: '11:30', to: '12:50' },
+  { calendarId: 3, courseCode: 'KSE101', section: 'L3', title: 'How to study at KSE (BE, EBD, SE)', location: LOC.s2081, day: 3, from: '15:00', to: '16:20' },
+  { calendarId: 1, courseCode: 'MATH111', section: 'P6', title: 'Introduction to Calculus (BE, EBD)', location: LOC.s305, day: 4, from: '10:00', to: '11:20' },
+  { calendarId: 3, courseCode: 'KSE101', section: 'L3', title: 'How to study at KSE (BE, EBD, SE)', location: LOC.online, day: 4, from: '11:30', to: '12:50' },
 ];
 
 function weekEvents(start: string | null, list = WEEK) {
@@ -198,7 +198,7 @@ const STUDENTS: { userId: number; name: string; fullName: string; cohort: number
 const user = {
   id: 1, telegramId: 100500, username: 'student', fullName: 'Валерій Плетьминцев', avatarUrl: null,
   moodleToken: null, calendarUrl: 'https://teaching.kse.org.ua/calendar/export_execute.php?mock',
-  studentType: 'contract', faculty: null, year: 2026, languagePref: 'uk', digestSources: ['moodle', 'gmail', 'slack'],
+  studentType: 'contract', faculty: null, year: 2026, languagePref: (q.get('lang') === 'en' ? 'en' : 'uk'), digestSources: ['moodle', 'gmail', 'slack'],
   digestHour: 8, scheduleVisible: true, onboardedAt: q.get('onboarding') ? null : iso(new Date(NOW.getTime() - 3 * DAY)),
   notifyScheduleChanges: true, classReminders: true, isAdmin: false, program: 'BE',
   createdAt: iso(new Date(NOW.getTime() - 3 * DAY)), updatedAt: iso(NOW),
@@ -244,8 +244,18 @@ const MAIL = [
 ];
 
 const OPPS = [
-  { id: 1, title: 'Junior Data Analyst (intern)', company: 'Kyivstar', domain: 'Data', eligibility: 'all', category: 'internship', deadline: hours(24 * 9), url: 'https://example.com', description: 'Аналітика клієнтських даних, SQL і Python. 20 год/тиждень.', salaryInfo: null, createdAt: iso(NOW), source: 'email', emailUrl: 'https://mail.google.com/', programs: ['BE', 'EBD'] },
-  { id: 2, title: 'Research Assistant', company: 'KSE Institute', domain: 'Research', eligibility: 'all', category: 'research', deadline: hours(24 * 5), url: 'https://example.com', description: 'Допомога в дослідженні ринку праці.', salaryInfo: null, createdAt: iso(NOW), source: 'email', emailUrl: null, programs: ['EBD'] },
+  { id: 1, title: 'Junior Data Analyst (стажування)', company: 'Kyivstar', domain: 'Data', eligibility: 'all', category: 'internship', deadline: hours(24 * 9), url: 'https://example.com', description: 'Аналітика клієнтських даних, SQL і Python. 20 год на тиждень, можна поєднувати з навчанням.', salaryInfo: null, createdAt: iso(NOW), source: 'email', emailUrl: 'https://mail.google.com/', programs: ['BE', 'EBD'], saved: false },
+  { id: 2, title: 'Research Assistant', company: 'KSE Institute', domain: 'Research', eligibility: 'all', category: 'research', deadline: hours(24 * 2), url: 'https://example.com', description: 'Допомога в дослідженні ринку праці: збір даних, огляд літератури.', salaryInfo: null, createdAt: iso(NOW), source: 'email', emailUrl: null, programs: [], saved: true },
+  { id: 3, title: 'Грант на літню школу економіки', company: 'SDO KSE', domain: 'Education', eligibility: 'grant', category: 'grant', deadline: hours(24 * 20), url: 'https://example.com', description: 'Покриття участі в літній школі для грантистів.', salaryInfo: null, createdAt: iso(NOW), source: 'email', emailUrl: 'https://mail.google.com/', programs: [], saved: false },
+  { id: 4, title: 'Software Engineering Intern', company: 'Grammarly', domain: 'IT', eligibility: 'all', category: 'internship', deadline: hours(24 * 14), url: 'https://example.com', description: 'Літнє стажування для студентів SE.', salaryInfo: null, createdAt: iso(NOW), source: 'email', emailUrl: null, programs: ['SE'], saved: false },
+];
+
+const STARTUPS = [
+  { project: { id: 21, userId: 4, title: 'StudyBuddy', pitch: 'Застосунок, що підбирає партнера для підготовки до іспитів за розкладом і курсами.', problem: 'Важко знайти, з ким вчитися перед сесією.', requiredRoles: ['Frontend', 'Designer'], commitmentLevel: '5–10 год на тиждень', isActive: true, createdAt: iso(NOW), updatedAt: iso(NOW) }, author: { id: 4, name: 'Марко Шевчук' }, myStatus: null },
+  { project: { id: 22, userId: 2, title: 'CampusEats', pitch: 'Передзамовлення їжі в кафе кампусу між парами.', problem: null, requiredRoles: ['Backend', 'Marketing'], commitmentLevel: null, isActive: true, createdAt: iso(NOW), updatedAt: iso(NOW) }, author: { id: 2, name: 'Данило Гнатенко' }, myStatus: 'pending' },
+];
+const DECK = [
+  { profile: { id: 31, userId: 3, title: 'Product designer, 2 курс EBD', bio: 'Роблю інтерфейси для студентських проєктів, люблю дослідження користувачів.', skills: ['Figma', 'UX research'], lookingFor: ['Стартап', 'Хакатон'], githubUrl: null, portfolioUrl: null, isActive: true, createdAt: iso(NOW), updatedAt: iso(NOW) }, user: { id: 3, fullName: 'Олена Коваленко', username: 'okoval', avatarUrl: null, faculty: 'EBD', year: 2 } },
 ];
 
 const ok = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -306,12 +316,26 @@ const routes: [string, RegExp, Handler][] = [
     if (b) b.status = 'cancelled';
     return { booking: b };
   }],
-  ['GET', /^\/careers$/, () => ({ opportunities: empty ? [] : OPPS })],
-  ['GET', /^\/venture\/startups$/, () => ({ startups: [] })],
+  ['GET', /^\/careers$/, (_m, u) => {
+    const cat = u.searchParams.get('category');
+    const qq = (u.searchParams.get('search') || '').toLowerCase();
+    return { opportunities: empty ? [] : OPPS.filter((o) => (!cat || o.category === cat) && (u.searchParams.get('saved') !== 'true' || o.saved) && (!qq || `${o.title} ${o.company}`.toLowerCase().includes(qq))) };
+  }],
+  ['POST', /^\/careers\/(\d+)\/save$/, (m, _u, b) => {
+    const o = OPPS.find((x) => x.id === Number(m[1]));
+    if (o) o.saved = (b as { saved: boolean }).saved;
+    return { saved: o?.saved };
+  }],
+  ['POST', /^\/copilot\/chat$/, () => ({ content: 'Ось план на 3 кроки:\n\n1. Перечитай умову і виділи, що саме треба здати.\n2. Заклади **2 години** на чернетку сьогодні ввечері.\n3. Завтра зранку — перевірка і здача до 10:00.', toolCalls: [] })],
+  ['GET', /^\/venture\/startups$/, () => ({ startups: empty ? [] : STARTUPS })],
   ['GET', /^\/venture\/projects$/, () => ({ projects: [] })],
-  ['GET', /^\/venture\/applications$/, () => ({ incoming: [], outgoing: [] })],
+  ['GET', /^\/venture\/applications$/, () => ({
+    incoming: [],
+    outgoing: [{ id: 41, projectId: 22, role: 'Backend', message: null, status: 'pending', createdAt: iso(NOW), project: { id: 22, title: 'CampusEats' }, author: { name: 'Данило Гнатенко', contact: null } }],
+  })],
   ['GET', /^\/venture\/profile$/, () => ({ profile: null })],
-  ['GET', /^\/venture\/deck$/, () => ({ cards: [] })],
+  ['GET', /^\/venture\/deck$/, () => ({ cards: empty ? [] : DECK })],
+  ['POST', /^\/venture\/swipe$/, () => { DECK.shift(); return { matched: true, matchedUser: { id: 3, telegramId: 3, username: 'okoval', fullName: 'Олена Коваленко', avatarUrl: null } }; }],
 ];
 
 const realFetch = window.fetch.bind(window);
