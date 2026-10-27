@@ -105,6 +105,19 @@ export function getBot(): Bot<BotContext> {
     }
   });
 
+  // "Продовжити на 30 хв" under the "ends soon" reminder
+  bot.callbackQuery(/^book:e:(\d+)$/, async (ctx) => {
+    const en = ctx.dbUser.languagePref === 'en';
+    try {
+      const { endTime } = await BookingService.extend(parseInt(ctx.match[1], 10), ctx.dbUser.id);
+      const until = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Kyiv', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(endTime);
+      await ctx.answerCallbackQuery(en ? `Extended until ${until}` : `Продовжено до ${until}`);
+      await ctx.editMessageText(`${escapeHtml(ctx.callbackQuery.message?.text ?? '')}\n\n${en ? `Extended until ${until}.` : `Продовжено до ${until}.`}`, { parse_mode: 'HTML' });
+    } catch (err: any) {
+      await ctx.answerCallbackQuery({ text: err?.message ?? (en ? "Couldn't extend" : 'Не вийшло продовжити'), show_alert: true });
+    }
+  });
+
   bot.command('new', async (ctx) => {
     await AIService.clearHistory(ctx.dbUser.id);
     await ctx.reply('Почали нову розмову. Про що спитаєш?');

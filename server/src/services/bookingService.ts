@@ -15,6 +15,25 @@ export function freeFrom(taken: { startTime: Date; endTime: Date }[], from: Date
   return new Date(t).toISOString();
 }
 const HOT_BOOKING_MINUTES = 30;
+export const EXTEND_MINUTES = 30;
+const MAX_BOOKING_MINUTES = 180;
+
+/**
+ * Why a booking can't run another `minutes` (or null if it can):
+ * the room is taken right after, the booking would pass 3 h, or today's quota runs out.
+ */
+export function extendBlocker(
+  booking: { startTime: Date; endTime: Date },
+  nextStartInRoom: Date | null,
+  usedTodayHours: number,
+  minutes = EXTEND_MINUTES,
+): string | null {
+  const newEnd = booking.endTime.getTime() + minutes * 60_000;
+  if (nextStartInRoom && nextStartInRoom.getTime() < newEnd) return 'Далі кімнату вже забронювали';
+  if ((newEnd - booking.startTime.getTime()) / 60_000 > MAX_BOOKING_MINUTES) return 'Одна бронь — не довше 3 годин';
+  if (usedTodayHours + minutes / 60 > MAX_DAILY_HOURS + 1e-9) return 'Денну квоту 3 год вичерпано';
+  return null;
+}
 
 const formatHours = (h: number) => {
   const min = Math.max(0, Math.round(h * 60));
@@ -116,6 +135,39 @@ export class BookingService {
     const now = new Date();
     const endTime = new Date(now.getTime() + HOT_BOOKING_MINUTES * 60 * 1000);
     return this.createBooking(userId, roomId, now, endTime);
+  }
+
+  /** Add 30 minutes to my active booking, if the room is free and the limits allow. */
+  static async extend(bookingId: number, userId: number, minutes = EXTEND_MINUTES) {
+    return queryClient.begin(async (tx) => {
+      const [b] = await tx`
+        SELECT id, room_id, start_time, end_time FROM bookings
+        WHERE id = ${bookingId} AND user_id = ${userId} AND status = 'active' AND end_time > now()
+        FOR UPDATE
+      `;
+      if (!b) throw new AppError('Бронь уже закінчилась або її скасовано', 404);
+      // Same lock as createBooking, so nobody books the slot while we check it
+      await tx`SELECT id FROM rooms WHERE id = ${b.room_id} FOR UPDATE`;
+
+      const startTime = new Date(b.start_time);
+      const endTime = new Date(b.end_time);
+      const [next] = await tx`
+        SELECT min(start_time) AS start FROM bookings
+        WHERE room_id = ${b.room_id} AND status = 'active' AND id <> ${bookingId} AND start_time >= ${endTime.toISOString()}
+      `;
+      const { start: dayStart, end: dayEnd } = getDayBounds(startTime);
+      const [used] = await tx`
+        SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (end_time - start_time)) / 3600), 0)::float AS hours FROM bookings
+        WHERE user_id = ${userId} AND status = 'active'
+          AND start_time >= ${dayStart.toISOString()} AND start_time <= ${dayEnd.toISOString()}
+      `;
+      const blocker = extendBlocker({ startTime, endTime }, next?.start ? new Date(next.start) : null, used.hours as number, minutes);
+      if (blocker) throw new AppError(blocker, 409);
+
+      const newEnd = new Date(endTime.getTime() + minutes * 60_000);
+      await tx`UPDATE bookings SET end_time = ${newEnd.toISOString()} WHERE id = ${bookingId}`;
+      return { endTime: newEnd };
+    });
   }
 
   /**

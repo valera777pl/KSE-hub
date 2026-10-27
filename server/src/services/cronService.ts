@@ -1,13 +1,15 @@
 import { db } from '../db/connection.js';
-import { deadlineReminders, googleAccounts, moodleAssignments, moodleCourses, opportunities, savedOpportunities, users } from '../db/schema.js';
-import { and, asc, eq, gt, isNotNull, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
+import { bookings, classReminders, deadlineReminders, googleAccounts, moodleAssignments, moodleCourses, opportunities, rooms, savedOpportunities, users } from '../db/schema.js';
+import { InlineKeyboard } from 'grammy';
+import { BookingService, EXTEND_MINUTES, extendBlocker } from './bookingService.js';
+import { and, asc, eq, gt, gte, isNotNull, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 import { MoodleService } from './moodleService.js';
 import { DigestService } from './digestService.js';
 import { GmailService } from './gmailService.js';
 import { AnalyticsService } from './analyticsService.js';
 import { ScheduleService } from './scheduleService.js';
 import { escapeHtml, sendToUser } from '../bot/send.js';
-import { appButton, deadlineReminderText, isGeneralCourse, weeklyText, type Lang } from '../bot/messages.js';
+import { appButton, bookingEndingText, deadlineReminderText, isGeneralCourse, weeklyText, type Lang } from '../bot/messages.js';
 import { formatKyiv, kyivHour, kyivWeekday } from '../utils/kyivTime.js';
 
 const langOf = (u: { languagePref: string | null }): Lang => (u.languagePref === 'en' ? 'en' : 'uk');
@@ -36,7 +38,8 @@ export class CronService {
     const digests = await this.sendDigests();
     const weekly = await this.sendWeeklyDeadlines();
     const savedOpps = await this.sendSavedOpportunityReminders();
-    return { calendars, emails, schedules, courseCalendars, classReminders, reminders, digests, weekly, savedOpps };
+    const bookingEnds = await this.sendBookingEndReminders();
+    return { calendars, emails, schedules, courseCalendars, classReminders, reminders, digests, weekly, savedOpps, bookingEnds };
   }
 
   /** Sunday from 19:00 Kyiv: next week's Moodle deadlines in one message (classes are in the schedule tab). */
@@ -202,6 +205,45 @@ export class CronService {
       const en = languagePref === 'en';
       const text = `<b>${en ? 'Applications close' : 'Подача закінчується'} ${formatKyiv(opp.deadline!)}</b>\n${escapeHtml(opp.title)} · ${escapeHtml(opp.company)}`;
       if (await sendToUser(telegramId, text, appButton(en ? 'Open' : 'Відкрити', `opp_${opp.id}`))) sent++;
+    }
+    return sent;
+  }
+
+  /**
+   * Bookings ending in the next ~15 minutes (the cron runs every 10): one heads-up each,
+   * with "Продовжити на 30 хв" when the room and the limits allow it.
+   * The class_reminders lock is keyed by booking and end time, so an extended booking gets a new heads-up.
+   */
+  static async sendBookingEndReminders() {
+    const now = new Date();
+    const rows = await db
+      .select({ booking: bookings, room: rooms, telegramId: users.telegramId, languagePref: users.languagePref })
+      .from(bookings)
+      .innerJoin(rooms, eq(bookings.roomId, rooms.id))
+      .innerJoin(users, eq(bookings.userId, users.id))
+      .where(and(
+        eq(bookings.status, 'active'),
+        eq(users.botBlocked, false),
+        gt(bookings.endTime, new Date(now.getTime() + 3 * 60_000)),
+        lte(bookings.endTime, new Date(now.getTime() + 15 * 60_000)),
+      ));
+
+    let sent = 0;
+    for (const { booking: b, room, telegramId, languagePref } of rows) {
+      const claimed = await db.insert(classReminders)
+        .values({ userId: b.userId, eventId: `booking-end:${b.id}:${b.endTime.toISOString()}` })
+        .onConflictDoNothing().returning();
+      if (!claimed.length) continue;
+
+      const [next] = await db.select({ start: bookings.startTime }).from(bookings)
+        .where(and(eq(bookings.roomId, b.roomId), eq(bookings.status, 'active'), ne(bookings.id, b.id), gte(bookings.startTime, b.endTime)))
+        .orderBy(asc(bookings.startTime)).limit(1);
+      const quota = await BookingService.getRemainingQuota(b.userId, b.startTime);
+      const blocker = extendBlocker(b, next?.start ?? null, quota.used);
+
+      const en = languagePref === 'en';
+      const keyboard = blocker ? undefined : new InlineKeyboard().text(en ? `Extend by ${EXTEND_MINUTES} min` : `Продовжити на ${EXTEND_MINUTES} хв`, `book:e:${b.id}`);
+      if (await sendToUser(telegramId, bookingEndingText(en ? 'en' : 'uk', room.name, b.endTime, blocker), keyboard)) sent++;
     }
     return sent;
   }

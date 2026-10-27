@@ -167,6 +167,13 @@ export function bookingText(lang: Lang, room: string, floor: number | null, star
   return `<b>${t(lang, 'Заброньовано', 'Booked')}: ${escapeHtml(name)}</b>\n${day}, ${hm(start)}–${hm(end)}${floor ? ` · ${t(lang, `${floor} поверх`, `floor ${floor}`)}` : ''}`;
 }
 
+/** ~10 minutes before a booking ends. `blocker` says why it can't be extended, if it can't. */
+export function bookingEndingText(lang: Lang, room: string, end: Date, blocker: string | null) {
+  const name = room.replace(/\s*\(.*\)\s*$/, '');
+  const head = `<b>${t(lang, `Бронь закінчується о ${hm(end)}`, `Your booking ends at ${hm(end)}`)}</b>\n${escapeHtml(name)}`;
+  return blocker ? `${head}\n${escapeHtml(blocker)}` : head;
+}
+
 /** After sign-up in the mini app. */
 export function onboardedText(lang: Lang, digestHour: number, kyivHourNow: number) {
   if (digestHour < 0) {
