@@ -182,10 +182,10 @@ function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClos
   return (
     <Sheet onClose={onClose} label={a.title}>
       {a.isCompleted ? (
-        <div className="now__label">{tr('Зроблено', 'Done')}</div>
+        <div className="sheet__label">{tr('Зроблено', 'Done')}</div>
       ) : (
         <>
-          <div className="now__label" style={late ? { color: 'var(--danger)' } : undefined}>{late ? tr('Прострочено на', 'Overdue by') : tr('Залишилось', 'Time left')}</div>
+          <div className="sheet__label" style={late ? { color: 'var(--danger)' } : undefined}>{late ? tr('Прострочено на', 'Overdue by') : tr('Залишилось', 'Time left')}</div>
           <div className={`sheet__big${late ? ' sheet__big--late' : ''}`}>{big[0]}<small>{big.slice(1).join(' ')}</small></div>
         </>
       )}
@@ -193,7 +193,7 @@ function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClos
       <div className="sheet__sub">{[code, rest].filter(Boolean).join(' ')}</div>
 
       <div className="group" style={{ marginTop: 16 }}>
-        <div className="row"><div className="row__main"><div className="row__title num" style={{ fontWeight: 500 }}>{dayTitle(dayKey(due))}, {hm(due)}</div><div className="row__meta">{typeLabel()[a.type] ?? tr('Завдання', 'Assignment')}</div></div></div>
+        <div className="row"><div className="row__main"><div className="row__title num cap-first" style={{ fontWeight: 500 }}>{dayTitle(dayKey(due))}, {hm(due)}</div><div className="row__meta">{typeLabel()[a.type] ?? tr('Завдання', 'Assignment')}</div></div></div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
