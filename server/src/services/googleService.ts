@@ -64,7 +64,7 @@ export class GoogleService {
     }).then((r) => r.json() as Promise<{ email?: string; email_verified?: boolean; hd?: string }>);
 
     if (!info.email || !info.email_verified || info.hd !== ALLOWED_DOMAIN) {
-      throw new AppError(`Потрібна пошта @${ALLOWED_DOMAIN}`, 403);
+      throw new AppError(`Обери акаунт @${ALLOWED_DOMAIN} — повернись у KSE Hub і увійди ще раз.`, 403);
     }
 
     const values = {

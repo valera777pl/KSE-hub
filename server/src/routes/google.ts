@@ -37,7 +37,9 @@ googleCallback.get('/callback', async (c) => {
     return c.html(page('Готово', `Пошту ${email} підключено. Повертайся в Telegram — продовжимо там.`));
   } catch (err: any) {
     console.error('Google callback failed:', err);
-    return c.html(page('Не вийшло', err?.message ?? 'Спробуй ще раз пізніше.'), err?.status ?? 500);
+    // Only our own Ukrainian reasons reach the student; Google's English errors stay in the log
+    const ours = err?.status === 403 && typeof err?.message === 'string';
+    return c.html(page(ours ? 'Це не пошта KSE' : 'Не вийшло', ours ? err.message : 'Не вдалося підключити пошту. Повернись у KSE Hub і спробуй ще раз.'), err?.status ?? 500);
   }
 });
 

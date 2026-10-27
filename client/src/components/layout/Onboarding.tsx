@@ -2,18 +2,22 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Check, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
 import { api, errorText, track } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
-import type { ClassEvent, GoogleStatus } from '../../types';
+import type { ClassEvent, GoogleStatus, User } from '../../types';
 import { addDays, dayKey, dayTitle, hm, mondayOf, now, todayKey } from '../../lib/time';
 import { shortPlace } from '../../lib/place';
 import { cloud, haptic, openExternal, useBackButton, useMainButton } from '../../lib/telegram';
 import { MoodleConnectForm } from '../modules/deadlines/MoodleConnect';
 import { programName, programsFromSchedule } from '../../lib/programs';
 import { tr } from '../../lib/i18n';
+import { useUi } from '../../stores/uiStore';
 
-const STEPS = ['mail', 'synced', 'program', 'digest', 'moodle', 'visibility'] as const;
+const STEPS = ['mail', 'synced', 'program', 'digest', 'moodle', 'visibility', 'done'] as const;
 type Step = (typeof STEPS)[number];
 const STEP_KEY = 'onboarding_step';
 const AUTO_ADVANCE_MS = 200;
+/** Right after sign-in the server is still pulling the schedule: ask again this often, this many times */
+const SYNC_POLL_MS = 4000;
+const SYNC_POLLS = 10;
 
 const digestOptions = () => [
   { hour: 8, title: tr('Зранку, 08:00', 'Morning, 08:00') },
@@ -58,6 +62,14 @@ export function Onboarding() {
   }, []);
   useEffect(() => { if (mailOk) loadSchedule(); }, [mailOk, loadSchedule]);
 
+  // The first sync runs on the server after sign-in: keep asking for a while, so progress is real
+  const [polls, setPolls] = useState(0);
+  useEffect(() => {
+    if (step !== 'synced' || synced || events === null || polls >= SYNC_POLLS) return;
+    const timer = setTimeout(() => { setPolls((n) => n + 1); loadSchedule(); }, SYNC_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [step, synced, events, polls, loadSchedule]);
+
   const go = (next: Step) => {
     setStep(next);
     cloud.set(STEP_KEY, next);
@@ -73,6 +85,7 @@ export function Onboarding() {
       await api.post('/users/me/onboarding');
       cloud.set(STEP_KEY, '');
       haptic.success();
+      useUi.getState().setTab('today');
       await fetchUser();
     } catch {
       haptic.error();
@@ -87,7 +100,7 @@ export function Onboarding() {
     setTimeout(next, AUTO_ADVANCE_MS);
   };
 
-  useBackButton(index > 0 && step !== 'synced' ? () => go(STEPS[index - 1]) : null);
+  useBackButton(index > 0 && step !== 'synced' && step !== 'done' ? () => go(STEPS[index - 1]) : null);
 
   if (!step) return <div className="onb" />;
 
@@ -96,7 +109,7 @@ export function Onboarding() {
       <div className="onb__progress" aria-hidden="true"><i style={{ width: `${((index + 1) / STEPS.length) * 100}%` }} /></div>
       <div className="onb__body" key={step}>
         {step === 'mail' && <MailStep google={google} />}
-        {step === 'synced' && <SyncedStep email={google?.email ?? null} events={events} synced={synced} onRecheck={loadSchedule} onNext={next} />}
+        {step === 'synced' && <SyncedStep email={google?.email ?? null} events={events} synced={synced} waiting={!synced && polls < SYNC_POLLS} onRecheck={loadSchedule} onNext={next} />}
         {step === 'program' && (programs.length > 0 ? (
           <Question title={tr('Твоя програма', 'Your programme')}
             sub={programs.length === 1
@@ -129,9 +142,9 @@ export function Onboarding() {
               { key: 'hide', title: tr('Приховати', 'Hide'), sub: tr('Змінити можна в профілі', 'You can change it in your profile') },
             ]}
             value={user ? (user.scheduleVisible ? 'show' : 'hide') : null}
-            disabled={finishing}
             onPick={(v) => answer(() => updateUser({ scheduleVisible: v === 'show' }))} />
         )}
+        {step === 'done' && user && <DoneStep user={user} busy={finishing} onFinish={finish} />}
       </div>
     </div>
   );
@@ -164,12 +177,13 @@ function MailStep({ google }: { google: GoogleStatus | null }) {
         <span className="connect__mark connect__mark--g">G</span>
       </div>
       <h1 className="onb__title">{tr('Увійди через пошту KSE', 'Sign in with your KSE mail')}</h1>
-      <p className="onb__sub">{tr('Потрібна адреса @kse.org.ua. З неї підтягнемо розклад і листи.', 'You need an @kse.org.ua address. We\'ll bring in your schedule and mail from it.')}</p>
+      <p className="onb__sub">{tr('Підтягнемо розклад і листи. Лише читання — нічого не надсилаємо від твого імені.', "We'll bring in your schedule and mail. Read-only: we never send anything on your behalf.")}</p>
       <div className="group">
         <div className="row"><CalendarDays className="row-icon" strokeWidth={1.75} /><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Твій розклад і перенесення пар', 'Your schedule and class changes')}</div></div></div>
         <div className="row"><Mail className="row-icon" strokeWidth={1.75} /><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Важливі листи коротко, раз на день', 'Important mail in short, once a day')}</div></div></div>
         <div className="row"><ShieldCheck className="row-icon" strokeWidth={1.75} /><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Лише читання', 'Read-only')}</div><div className="row__meta">{tr('Нічого не надсилаємо від твого імені', 'We never send anything on your behalf')}</div></div></div>
       </div>
+      <p className="note">{tr('Потрібна пошта @kse.org.ua', 'An @kse.org.ua address is needed')}</p>
       {google?.needsReconnect && <p className="note" style={{ color: 'var(--danger)' }}>{tr('Google відкликав доступ. Увійди ще раз тією ж поштою.', 'Google revoked access. Sign in again with the same mail.')}</p>}
       {error && <p className="note" style={{ color: 'var(--danger)' }}>{error}</p>}
       {waiting && !error && <p className="note">{tr('Після входу повернись сюди — продовжимо самі.', 'After signing in, come back here and we\'ll continue.')}</p>}
@@ -177,16 +191,17 @@ function MailStep({ google }: { google: GoogleStatus | null }) {
   );
 }
 
-/** The payoff right after sign-in: your actual next class. */
-function SyncedStep({ email, events, synced, onRecheck, onNext }: {
-  email: string | null; events: ClassEvent[] | null; synced: boolean; onRecheck: () => Promise<void>; onNext: () => void;
+/** The payoff right after sign-in: what's connected, as it happens, then your actual next class. */
+function SyncedStep({ email, events, synced, waiting, onRecheck, onNext }: {
+  email: string | null; events: ClassEvent[] | null; synced: boolean; waiting: boolean; onRecheck: () => Promise<void>; onNext: () => void;
 }) {
   const [checking, setChecking] = useState(false);
   const t = now().getTime();
   const nextClass = useMemo(() => (events ?? []).filter((e) => new Date(e.startAt).getTime() > t).sort((a, b) => a.startAt.localeCompare(b.startAt))[0], [events]);
   const weekCount = (events ?? []).filter((e) => mondayOf(dayKey(new Date(e.startAt))) === mondayOf(todayKey())).length;
+  const loading = events === null || (!synced && waiting);
 
-  useMainButton({ text: synced ? tr('Далі', 'Next') : tr('Пізніше', 'Later'), onClick: onNext, visible: events !== null });
+  useMainButton({ text: synced ? tr('Далі', 'Next') : tr('Пізніше', 'Later'), onClick: onNext, visible: !loading });
 
   const recheck = async () => {
     setChecking(true);
@@ -200,24 +215,33 @@ function SyncedStep({ email, events, synced, onRecheck, onNext }: {
 
   return (
     <>
-      <h1 className="onb__title">{tr('Пошта підключена', 'Mail connected')}</h1>
-      <p className="onb__sub">{email}</p>
+      <h1 className="onb__title">{loading ? tr('Підключаємо', 'Connecting') : tr('Пошта підключена', 'Mail connected')}</h1>
+      <p className="onb__sub">{loading ? tr('Кілька секунд — і твій тиждень буде тут.', 'A few seconds, and your week is here.')
+        : synced ? tr('Твій тиждень уже тут.', 'Your week is already here.') : tr('Пошта на місці, розклад — за один крок.', 'Mail is in; the schedule is one step away.')}</p>
 
-      {events === null ? (
-        <div className="aha" aria-busy="true"><div className="skel" style={{ height: 13, width: 130 }} /><div className="skel" style={{ height: 40, width: 170, margin: '10px 0' }} /><div className="skel" style={{ height: 14, width: '60%' }} /></div>
-      ) : synced && nextClass ? (
-        <>
-          <div className="aha">
-            <div className="now__label">{when}</div>
-            <div className="aha__big">{hm(nextClass.startAt)}</div>
-            <div className="now__title">{nextClass.courseCode}{nextClass.section ? ` [${nextClass.section}]` : ''}</div>
-            <div className="now__place">{shortPlace(nextClass.location)}</div>
+      <div className="group sync" role="status">
+        <div className="row"><Check className="sync__ok" strokeWidth={2.4} /><div className="row__main"><div className="row__title">{tr('Пошта підключена', 'Mail connected')}</div>{email && <div className="row__meta">{email}</div>}</div></div>
+        <div className="row">
+          {loading ? <RefreshCw className="sync__spin" strokeWidth={2} /> : synced ? <Check className="sync__ok" strokeWidth={2.4} /> : <CalendarDays className="sync__wait" strokeWidth={1.7} />}
+          <div className="row__main">
+            <div className="row__title">{tr('Розклад', 'Schedule')}</div>
+            <div className="row__meta num">{loading ? tr('Підтягуємо з календаря KSE…', 'Fetching from the KSE calendar…') : synced ? tr(`${weekCount} пар цього тижня`, `${weekCount} classes this week`) : tr('Ще не синхронізовано', 'Not synced yet')}</div>
           </div>
-          <p className="note"><Check size={14} strokeWidth={2.25} style={{ verticalAlign: -2, color: 'var(--accent)' }} /> {tr(`Цього тижня ${weekCount} пар — уже у вкладці «Навчання»`, `${weekCount} classes this week, already in the Study tab`)}</p>
-        </>
-      ) : (
+        </div>
+      </div>
+
+      {!loading && synced && nextClass && (
+        <div className="aha">
+          <div className="aha__label">{when}</div>
+          <div className="aha__big num">{hm(nextClass.startAt)}</div>
+          <div className="aha__title">{nextClass.courseCode}{nextClass.section && <span> [{nextClass.section}]</span>}</div>
+          <div className="aha__place">{shortPlace(nextClass.location)}</div>
+        </div>
+      )}
+
+      {!loading && !synced && (
         <>
-          <div className="group">
+          <div className="group" style={{ marginTop: 16 }}>
             <div className="row"><div className="row__main">
               <div className="row__title">{tr('Ще один крок для розкладу', 'One more step for your schedule')}</div>
               <div className="row__meta" style={{ lineHeight: 1.45 }}>{tr('На schedule.kse.ua натисни своє імʼя вгорі справа → Sync with Google Calendar. KSE додає пари кілька хвилин.', 'On schedule.kse.ua tap your name at the top right → Sync with Google Calendar. KSE takes a few minutes to add classes.')}</div>
@@ -230,6 +254,35 @@ function SyncedStep({ email, events, synced, onRecheck, onNext }: {
           <p className="note">{tr('Можна й пізніше — пари підтягнуться самі, коли зʼявляться.', 'You can do it later: classes will appear on their own.')}</p>
         </>
       )}
+    </>
+  );
+}
+
+/** Last screen: it's done, what got set up (each changeable in the profile), one way on. */
+function DoneStep({ user, busy, onFinish }: { user: User; busy: boolean; onFinish: () => void }) {
+  useMainButton({ text: tr('До розкладу', 'To my day'), onClick: onFinish, loading: busy });
+  // Kyiv hour, like the server that sends the digest
+  const h = Number(hm(now()).slice(0, 2));
+  const hour = user.digestHour;
+  const first = hour < 0 ? null : `${hour > h ? tr('сьогодні', 'today') : tr('завтра', 'tomorrow')} ${tr('о', 'at')} ${String(hour).padStart(2, '0')}:00`;
+  const rows: [string, string][] = [
+    [tr('Програма', 'Programme'), user.faculty ? programName(user.faculty) : tr('візьмемо з розкладу', 'from your schedule')],
+    [tr('Дайджест', 'Digest'), hour < 0 ? tr('не надсилати', 'off') : `${String(hour).padStart(2, '0')}:00`],
+    ['Moodle', user.calendarUrl ? tr('підключено', 'connected') : tr('не підключено', 'not connected')],
+    [tr('Розклад', 'Schedule'), user.scheduleVisible ? tr('видно одногрупникам', 'visible to classmates') : tr('приховано', 'hidden')],
+  ];
+  return (
+    <>
+      <h1 className="onb__title">{tr('Готово', 'All set')}</h1>
+      <p className="onb__sub">{first
+        ? tr(`Твій день уже тут. Перший дайджест — ${first}.`, `Your day is already here. The first digest arrives ${first}.`)
+        : tr('Твій день уже тут. Дайджест вимкнено — увімкнути можна в профілі.', 'Your day is already here. The digest is off; turn it on in your profile.')}</p>
+      <div className="group">
+        {rows.map(([title, value]) => (
+          <div className="row" key={title}><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{title}</div></div><span className="row__side num">{value}</span></div>
+        ))}
+      </div>
+      <p className="note">{tr('Усе це можна змінити в профілі — аватар угорі праворуч.', 'You can change all of this in your profile: the avatar at the top right.')}</p>
     </>
   );
 }
