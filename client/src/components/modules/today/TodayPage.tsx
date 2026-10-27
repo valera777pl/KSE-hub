@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { api } from '../../../api/client';
 import type { ClassEvent, DeadlineWithCourse } from '../../../types';
-import { addDays, dayKey, dayTitle, duration, hm, mondayOf, now, relDay, spanText, todayKey } from '../../../lib/time';
+import { addDays, dayKey, dayTitle, duration, hm, mondayOf, now, spanText, todayKey } from '../../../lib/time';
 import { shortPlace } from '../../../lib/place';
 import { haptic, openExternal } from '../../../lib/telegram';
 import { useUi } from '../../../stores/uiStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { ScreenHead } from '../../ui/ScreenHead';
 import { ErrorState, StaleBanner } from '../../ui/States';
+import { DeadlineRow } from '../../ui/DeadlineRow';
 import { useCached } from '../../../lib/cache';
 import { tr } from '../../../lib/i18n';
 
@@ -19,8 +20,6 @@ const H48 = 48 * 3_600_000;
 
 /** "MATH111 [P6]" → "MATH111" + "P6" */
 const code = (e: ClassEvent) => (e.section ? `${e.courseCode} [${e.section}]` : e.courseCode);
-/** "ECON100 Principles of Economics" → "ECON100" */
-const courseShort = (name: string | null) => (name?.match(/^[A-Z]{2,5}\d{3}/)?.[0] ?? name ?? '');
 
 /** Сьогодні: what's on right now, what's due soon, what in the mail needs action. */
 export function TodayPage() {
@@ -81,43 +80,37 @@ export function TodayPage() {
         <NowCard current={current} next={current ? laterToday[0] : upcoming[0]} after={laterToday.slice(1, 3)} today={today} onOpen={(d) => { haptic.tap(); openDay(d); }} />
       )}
 
-      {deadlinesFailed ? null : <div className="caption">{tr('Дедлайни · 48 год', 'Deadlines · 48 h')}</div>}
+      {!deadlinesFailed && (
+        <div className="section-head">
+          <h2>{tr('Дедлайни', 'Deadlines')}</h2>
+          <button className="link-btn" onClick={() => { haptic.tap(); useUi.setState({ studyView: 'deadlines' }); useUi.getState().setTab('study'); }}>{tr('Усі', 'All')}</button>
+        </div>
+      )}
       {deadlinesFailed ? null : deadlines === null ? (
         <div className="group"><div className="row"><div className="row__main"><div className="skel" style={{ height: 14, width: '55%' }} /><div className="skel" style={{ height: 12, width: '30%', marginTop: 6 }} /></div></div></div>
       ) : !user?.calendarUrl && deadlines.length === 0 ? (
         <div className="group">
           <button className="row press" onClick={() => useUi.getState().openProfile()}>
-            <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Додати дедлайни з Moodle', 'Add deadlines from Moodle')}</div><div className="row__meta">{tr('Хвилина — і нагадаємо за 24 і за 3 години', 'One minute, and we\'ll remind you 24 and 3 hours before')}</div></div>
+            <div className="row__main"><div className="row__title">{tr('Додати дедлайни з Moodle', 'Add deadlines from Moodle')}</div><div className="row__meta">{tr('Хвилина — і нагадаємо за 24 і за 3 години', 'One minute, and we\'ll remind you 24 and 3 hours before')}</div></div>
             <ChevronRight className="chev" strokeWidth={1.75} />
           </button>
         </div>
       ) : soon.length === 0 ? (
-        <p className="note" style={{ paddingTop: 0 }}>{tr('Найближчі два дні нічого здавати не треба.', 'Nothing is due in the next two days.')}</p>
+        <p className="group-note" style={{ padding: 0 }}>{tr('Найближчі два дні нічого здавати не треба.', 'Nothing is due in the next two days.')}</p>
       ) : (
         <div className="group">
-          {soon.map(({ assignment: a, courseName }) => {
-            const left = new Date(a.dueDate!).getTime() - t;
-            return (
-              <button key={a.id} className="row press" onClick={() => { haptic.tap(); openDeadline(a.id); }}>
-                <div className="row__main">
-                  <div className="row__title clamp2" style={{ fontWeight: 500 }}>{a.title}</div>
-                  <div className="row__meta">{[courseShort(courseName), `${relDay(a.dueDate!)}, ${hm(a.dueDate!)}`].filter(Boolean).join(' · ')}</div>
-                </div>
-                <span className="row__side num" style={left < 6 * 3_600_000 ? { color: 'var(--danger)', fontWeight: 600 } : undefined}>{spanText(left)}</span>
-              </button>
-            );
-          })}
+          {soon.map((d) => <DeadlineRow key={d.assignment.id} d={d} onOpen={() => { haptic.tap(); openDeadline(d.assignment.id); }} />)}
         </div>
       )}
 
       {mail.length > 0 && (
         <>
-          <div className="caption">{tr('Пошта', 'Mail')}</div>
+          <div className="section-head"><h2>{tr('Пошта', 'Mail')}</h2></div>
           <div className="group">
             {mail.map((m) => (
               <button key={m.id} className="row press" style={{ alignItems: 'flex-start' }} disabled={!m.url} onClick={() => m.url && openExternal(m.url)}>
                 <div className="row__main">
-                  <div className="row__title" style={{ fontWeight: 500 }}>{m.subject}</div>
+                  <div className="row__title" style={{ fontSize: 15 }}>{m.subject}</div>
                   {m.summary && <div className="row__meta clamp2" style={{ color: 'var(--text)', opacity: 0.8 }}>{m.summary}</div>}
                   {m.from && <div className="row__meta">{m.from}</div>}
                 </div>

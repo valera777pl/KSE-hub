@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BookCheck, ChevronDown, Link2 } from 'lucide-react';
 import { api, track } from '../../../api/client';
 import type { DeadlineWithCourse } from '../../../types';
-import { addDays, dayKey, dayTitle, hm, now, plural, spanText, todayKey, weekdayShort } from '../../../lib/time';
+import { addDays, dayKey, dayTitle, hm, now, plural, spanText, todayKey } from '../../../lib/time';
 import { haptic, openExternal, useMainButton } from '../../../lib/telegram';
 import { useAuthStore } from '../../../stores/authStore';
 import { useUi } from '../../../stores/uiStore';
@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from '../../ui/Stat
 import { useCached } from '../../../lib/cache';
 import { MoodleConnectForm } from './MoodleConnect';
 import { AskPanel } from '../../ui/AskPanel';
+import { DeadlineRow } from '../../ui/DeadlineRow';
 import { tr } from '../../../lib/i18n';
 
 const DAY = 86_400_000;
@@ -107,7 +108,7 @@ export function DeadlinesPage() {
 
       {groups.map((g, gi) => (
         <section key={g.title}>
-          <div className="caption" style={gi === 0 && !nothingOpen ? { marginTop: 4 } : undefined}>{g.title}</div>
+          <h3 className="group-title" style={gi === 0 && !nothingOpen ? { marginTop: 4 } : undefined}>{g.title}</h3>
           <div className="group">
             {g.items.map((d) => <DeadlineRow key={d.assignment.id} d={d} onOpen={() => { haptic.tap(); setOpenId(d.assignment.id); }} />)}
           </div>
@@ -116,7 +117,7 @@ export function DeadlinesPage() {
 
       {general.length > 0 && (
         <>
-          <div className="caption">{tr('Загальноуніверситетські', 'University-wide')}</div>
+          <h3 className="group-title">{tr('Загальноуніверситетські', 'University-wide')}</h3>
           <div className="group">
             {showGeneral && general.map((d) => <DeadlineRow key={d.assignment.id} d={d} onOpen={() => { haptic.tap(); setOpenId(d.assignment.id); }} />)}
             <button className="row toggle-row" aria-expanded={showGeneral} onClick={() => { haptic.select(); setShowGeneral((v) => !v); }}>
@@ -130,7 +131,7 @@ export function DeadlinesPage() {
 
       {done.length > 0 && (
         <>
-          <div className="caption">{tr('Зроблено', 'Done')}</div>
+          <h3 className="group-title">{tr('Зроблено', 'Done')}</h3>
           <div className="group">
             {showDone && done.map((d) => <DeadlineRow key={d.assignment.id} d={d} onOpen={() => { haptic.tap(); setOpenId(d.assignment.id); }} />)}
             <button className="row toggle-row" aria-expanded={showDone} onClick={() => { haptic.select(); setShowDone((v) => !v); }}>
@@ -152,25 +153,6 @@ export function DeadlinesPage() {
   );
 }
 
-function DeadlineRow({ d, onOpen }: { d: DeadlineWithCourse; onOpen: () => void }) {
-  const { assignment: a } = d;
-  const due = new Date(a.dueDate!);
-  const left = due.getTime() - now().getTime();
-  const late = left < 0 && !a.isCompleted;
-  const k = dayKey(due);
-  const [code, rest] = splitCourse(d.courseName);
-  const whenDay = k === todayKey() ? tr('сьог.', 'today') : k === addDays(todayKey(), 1) ? tr('завтра', 'tomorrow') : weekdayShort(k).toLowerCase();
-  return (
-    <button className={`dl press${late ? ' dl--late' : ''}${a.isCompleted ? ' dl--done' : ''}`} onClick={onOpen}>
-      <span className="dl__when"><b>{hm(due)}</b>{whenDay}</span>
-      <span style={{ minWidth: 0 }}>
-        <span className="dl__title clamp2">{a.title}</span>
-        <span className="dl__meta" style={{ display: 'block' }}>{code || rest}{a.type !== 'assignment' && typeLabel()[a.type] ? ` · ${typeLabel()[a.type].toLowerCase()}` : ''}</span>
-      </span>
-      {!a.isCompleted && !late && left < 2 * DAY && <span className="dl__left">{spanText(left)}</span>}
-    </button>
-  );
-}
 
 function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClose: () => void; onToggle: () => void }) {
   const { assignment: a } = d;
