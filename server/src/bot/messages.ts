@@ -49,20 +49,16 @@ export function inTime(d: Date, now: Date, lang: Lang) {
   return lang === 'en' ? `in ${days} days` : `через ${days} ${days % 10 >= 2 && days % 10 <= 4 && (days % 100 < 12 || days % 100 > 14) ? 'дні' : 'днів'}`;
 }
 
-const BUILDINGS: [RegExp, string][] = [
-  [/^M\.?\s*Shpaka\s*(\d+)/i, 'М. Шпака $1'],
-  [/^Y\.?\s*Myroshnychenko\s*([\d/]+)/i, 'Мирошниченка $1'],
-];
-
-/** "M. Shpaka 3, 2.15.1 Roy Gartner Memorial Classroom" → "М. Шпака 3, 2.15.1" (no sponsor names) */
+/**
+ * "M. Shpaka 3, 2.15.1 Roy Gartner Memorial Classroom" → "M. Shpaka 3, 2.15.1": the building in Latin,
+ * as the schedule source writes it, and the room number; sponsor names of rooms are dropped.
+ */
 export function shortPlace(location: string | null | undefined, lang: Lang = 'uk'): string | null {
   if (!location?.trim()) return null;
   if (/^online$/i.test(location.trim())) return t(lang, 'Онлайн', 'Online');
   const [building, rest] = location.split(/,\s*/, 2);
-  let b = building.trim();
-  if (lang === 'uk') for (const [re, to] of BUILDINGS) if (re.test(b)) { b = b.replace(re, to); break; }
   const room = rest?.trim().split(/\s+/)[0];
-  return room ? `${b}, ${room}` : b;
+  return room ? `${building.trim()}, ${room}` : building.trim();
 }
 
 /** "ECON100 [P6]" */

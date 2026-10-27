@@ -1,3 +1,4 @@
+import { shortPlace } from '../bot/messages.js';
 import type OpenAI from 'openai';
 import { BookingService } from '../services/bookingService.js';
 import { MoodleService } from '../services/moodleService.js';
@@ -42,7 +43,7 @@ function systemPrompt(): string {
 Правила:
 - Відповідай коротко, тією мовою, якою пише студент (за замовчуванням українською).
 - Спершу пряма відповідь одним реченням, потім деталі. Без вступів і без емодзі.
-- Пари пиши рядками «10:00  MATH111 · М. Шпака 3, 3.05», дедлайни — «пт 30.10, 15:00 · ECON100 · Problem set 4 · через 3 дні». Коди курсів як є, аудиторія — «корпус, номер» без назв спонсорів.
+- Пари пиши рядками «10:00  MATH111 · M. Shpaka 3, 3.05», дедлайни — «пт 30.10, 15:00 · ECON100 · Problem set 4 · через 3 дні». Коди курсів як є, місце — латиницею, як у полі where («M. Shpaka 3, 4.08»), без назв спонсорів.
 - Якщо відповідь довша за 8 рядків, решту деталей пиши рядками, що починаються з "> " — студент розгорне їх сам.
 - Форматування: лише **жирний**, *курсив*, \`код\`, [посилання](url) і списки з "• ". Без таблиць і заголовків.
 - Дані про студента бери тільки з інструментів. Нічого не вигадуй: якщо даних немає — так і скажи.
@@ -260,7 +261,8 @@ function describeClass(e: ScheduleEvent) {
     title: e.title,
     from: formatKyiv(e.startAt),
     to: formatKyiv(e.endAt),
-    where: e.location,
+    // Same "M. Shpaka 3, 4.08" as everywhere else, never a sponsor's room name
+    where: shortPlace(e.location),
   };
 }
 

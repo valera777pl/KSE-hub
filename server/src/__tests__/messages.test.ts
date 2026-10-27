@@ -7,8 +7,8 @@ import { classSoonText, digestText, inTime, onboardedText, scheduleChangeText, s
 const kyiv = (s: string) => new Date(`${s}+02:00`);
 
 test('places read "корпус, аудиторія" without sponsor names', () => {
-  assert.equal(shortPlace('M. Shpaka 3, 2.15.1 Roy Gartner Memorial Classroom'), 'М. Шпака 3, 2.15.1');
-  assert.equal(shortPlace('Y. Myroshnychenko 6/11, F3 Classroom'), 'Мирошниченка 6/11, F3');
+  assert.equal(shortPlace('M. Shpaka 3, 2.15.1 Roy Gartner Memorial Classroom'), 'M. Shpaka 3, 2.15.1');
+  assert.equal(shortPlace('Y. Myroshnychenko 6/11, F3 Classroom'), 'Y. Myroshnychenko 6/11, F3');
   assert.equal(shortPlace('M. Shpaka 3, 4.08 TAS Group Classroom', 'en'), 'M. Shpaka 3, 4.08');
   assert.equal(shortPlace('Online'), 'Онлайн');
   assert.equal(shortPlace(null), null);
@@ -33,7 +33,7 @@ test('digest follows the template and skips empty sections', () => {
     mail: [], slack: [],
   })!;
   assert.match(text, /^<b>Вівторок, 27 жовтня<\/b>/);
-  assert.match(text, /<b>Пари<\/b>\n10:00  MATH111 \[P6\] · М\. Шпака 3, 3\.05/);
+  assert.match(text, /<b>Пари<\/b>\n10:00  MATH111 \[P6\] · M\. Shpaka 3, 3\.05/);
   assert.match(text, /пт 30\.10, 15:00 · ECON100 · Problem set 4 · через 3 дні/);
   assert.doesNotMatch(text, /Пошта/);
   assert.equal(digestText({ lang: 'uk', now: new Date(), day: new Date(), classes: [], deadlines: [], mail: [], slack: [] }), null);
@@ -45,11 +45,11 @@ test('a moved class says so in the first line', () => {
     before: { startAt: kyiv('2026-11-02T18:00:00') },
     after: { startAt: kyiv('2026-11-05T18:00:00'), location: 'Y. Myroshnychenko 6/11, F4 Classroom' },
   }]);
-  assert.equal(text, '<b>Пару перенесли</b>\nENG111 [P11]: пн 2.11 → <b>чт 5.11, 18:00</b>\nМирошниченка 6/11, F4');
+  assert.equal(text, '<b>Пару перенесли</b>\nENG111 [P11]: пн 2.11 → <b>чт 5.11, 18:00</b>\nY. Myroshnychenko 6/11, F4');
 });
 
 test('class in 15 minutes: code, time, place, nothing else', () => {
-  assert.equal(classSoonText('uk', 'MATH111', 'P6', 15, 'M. Shpaka 3, 3.05 Genesis'), '<b>MATH111 [P6] через 15 хв</b>\nМ. Шпака 3, 3.05');
+  assert.equal(classSoonText('uk', 'MATH111', 'P6', 15, 'M. Shpaka 3, 3.05 Genesis'), '<b>MATH111 [P6] через 15 хв</b>\nM. Shpaka 3, 3.05');
 });
 
 test('first digest is today when its hour is still ahead', () => {
