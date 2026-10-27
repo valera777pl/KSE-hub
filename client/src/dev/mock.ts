@@ -11,6 +11,9 @@
 const q = new URLSearchParams(location.search);
 const scheme: 'light' | 'dark' = (q.get('theme') as 'light' | 'dark') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 const state = q.get('state');
+// &step=program jumps straight to that onboarding screen
+if (q.get('step')) localStorage.setItem('tgm:onboarding_step', q.get('step')!);
+else if (q.get('onboarding')) localStorage.removeItem('tgm:onboarding_step');
 
 /* ─── Clock ─── */
 const [nh, nm] = (q.get('now') || '11:45').split(':').map(Number);
@@ -46,7 +49,8 @@ chrome.innerHTML = `
   <div id="tgm-bottom" style="position:fixed;left:0;right:0;bottom:0;padding:8px 16px 26px;display:none;z-index:9999">
     <button id="tgm-main" style="width:100%;height:50px;border:0;border-radius:12px;font:600 17px -apple-system,system-ui,sans-serif"></button>
   </div>`;
-document.body.appendChild(chrome);
+// On <html>, outside <body>: body becomes the web view below, the way Telegram shrinks it
+document.documentElement.appendChild(chrome);
 const head = chrome.querySelector<HTMLDivElement>('#tgm-head')!;
 const left = chrome.querySelector<HTMLSpanElement>('#tgm-left')!;
 const bottom = chrome.querySelector<HTMLDivElement>('#tgm-bottom')!;
@@ -64,7 +68,8 @@ function viewport() {
   const h = innerHeight - HEADER - (bottom.style.display === 'none' ? 0 : 84);
   app.viewportHeight = app.viewportStableHeight = h;
   document.documentElement.style.setProperty('--tg-viewport-stable-height', `${h}px`);
-  document.body.style.paddingTop = `${HEADER}px`;
+  // A transform makes body the box that fixed-position sheets anchor to, so they end above the native button
+  Object.assign(document.body.style, { marginTop: `${HEADER}px`, height: `${h}px`, minHeight: '0', overflow: 'hidden', transform: 'translateZ(0)' });
   emit('viewportChanged');
 }
 
@@ -215,7 +220,23 @@ const ROOMS = [
   ['Skype Room 1 (2nd floor)', 'skype_room', 4, 2], ['Skype Room 2 (2nd floor)', 'skype_room', 4, 2],
   ['Skype Room 3 (3rd floor)', 'skype_room', 6, 3], ['Skype Room 4 (3rd floor)', 'skype_room', 6, 3],
   ['Silent Box A (2nd floor)', 'silent_box', 1, 2], ['Silent Box B (2nd floor)', 'silent_box', 1, 2], ['Silent Box C (2nd floor)', 'silent_box', 1, 2],
-].map(([name, type, capacity, floor], i) => ({ id: i + 1, name, type, capacity, floor, hasDesk: true, hasPower: true, metadata: null, available: i !== 1 }));
+].map(([name, type, capacity, floor], i) => ({ id: i + 1, name, type, capacity, floor, hasDesk: true, hasPower: true, metadata: null }));
+
+// Someone else holds Skype Room 2 for the next 40 minutes, and Room 3 from in 90 minutes
+const BOOKINGS: { id: number; roomId: number; userId: number; startTime: string; endTime: string; status: string; createdAt: string }[] = [
+  { id: 900, roomId: 2, userId: 7, startTime: iso(new Date(NOW.getTime() - 20 * 60_000)), endTime: iso(new Date(NOW.getTime() + 40 * 60_000)), status: 'active', createdAt: iso(NOW) },
+  { id: 901, roomId: 3, userId: 7, startTime: iso(new Date(NOW.getTime() + 90 * 60_000)), endTime: iso(new Date(NOW.getTime() + 150 * 60_000)), status: 'active', createdAt: iso(NOW) },
+];
+const usedHours = () => BOOKINGS.filter((b) => b.userId === 1 && b.status === 'active').reduce((h, b) => h + (Date.parse(b.endTime) - Date.parse(b.startTime)) / 3_600_000, 0);
+function availability(start: number, end: number) {
+  return ROOMS.map((r) => {
+    const own = BOOKINGS.filter((b) => b.roomId === r.id && b.status === 'active').sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const busy = own.some((b) => Date.parse(b.startTime) < end && Date.parse(b.endTime) > start);
+    let t = start;
+    for (const b of own) if (Date.parse(b.startTime) < t + (end - start) && Date.parse(b.endTime) > t) t = Date.parse(b.endTime);
+    return { ...r, available: !busy, freeFrom: busy ? iso(new Date(t)) : null };
+  });
+}
 
 const MAIL = [
   { id: 1, subject: 'Польсько-український економічний семінар', from: 'Viktoriia Shadrina', summary: '29 жовтня, 10:00–15:00, ICU Hall. Потрібна реєстрація.', receivedAt: hours(-5), url: 'https://mail.google.com/' },
@@ -235,7 +256,7 @@ const routes: [string, RegExp, Handler][] = [
   ['GET', /^\/users\/me$/, () => ({ user })],
   ['PATCH', /^\/users\/me$/, (_m, _u, b) => ({ user: Object.assign(user, b) })],
   ['POST', /^\/users\/me\/(events|onboarding)$/, () => ({ ok: true })],
-  ['GET', /^\/google\/status$/, () => ({ connected: true, email: 'valerii.pletmintsev.26@kse.org.ua', needsReconnect: false, lastSyncAt: hours(-0.2) })],
+  ['GET', /^\/google\/status$/, () => ({ connected: !q.get('onboarding') || q.get('mail') === '1', email: 'valerii.pletmintsev.26@kse.org.ua', needsReconnect: false, lastSyncAt: hours(-0.2) })],
   ['GET', /^\/google\/connect$/, () => ({ url: 'https://accounts.google.com/' })],
   ['GET', /^\/notifications$/, () => ({ notifications: [], unreadCount: 0 })],
   ['GET', /^\/schedule\/week$/, (_m, u) => ({ connected: true, synced: true, events: empty ? [] : weekEvents(u.searchParams.get('start')) })],
@@ -262,9 +283,29 @@ const routes: [string, RegExp, Handler][] = [
   }],
   ['GET', /^\/mail\/important$/, () => ({ emails: empty ? [] : MAIL })],
   ['GET', /^\/rooms$/, () => ({ rooms: ROOMS })],
-  ['GET', /^\/rooms\/available$/, () => ({ rooms: ROOMS })],
-  ['GET', /^\/rooms\/quota$/, () => ({ used: 0, remaining: 3, max: 3 })],
-  ['GET', /^\/rooms\/my-bookings$/, () => ({ bookings: [] })],
+  ['GET', /^\/rooms\/available$/, (_m, u) => ({ rooms: availability(Date.parse(u.searchParams.get('start')!), Date.parse(u.searchParams.get('end')!)) })],
+  ['GET', /^\/rooms\/quota$/, () => ({ used: usedHours(), remaining: 3 - usedHours(), max: 3 })],
+  ['GET', /^\/rooms\/my-bookings$/, () => ({
+    bookings: BOOKINGS.filter((b) => b.userId === 1 && b.status === 'active' && Date.parse(b.endTime) > NOW.getTime())
+      .map((b) => ({ booking: b, room: ROOMS.find((r) => r.id === b.roomId) })),
+  })],
+  ['GET', /^\/rooms\/(\d+)\/schedule$/, (m) => ({ room: ROOMS.find((r) => r.id === Number(m[1])), bookings: BOOKINGS.filter((b) => b.roomId === Number(m[1]) && b.status === 'active') })],
+  ['POST', /^\/rooms\/book$/, (_m, _u, body) => {
+    const { roomId, startTime, endTime } = body as { roomId: number; startTime: string; endTime: string };
+    const hours = (Date.parse(endTime) - Date.parse(startTime)) / 3_600_000;
+    if (usedHours() + hours > 3) throw Object.assign(new Error(`Денна квота — 3 год. Сьогодні лишилось ${Math.round((3 - usedHours()) * 60)} хв`), { status: 409 });
+    if (BOOKINGS.some((b) => b.roomId === roomId && b.status === 'active' && Date.parse(b.startTime) < Date.parse(endTime) && Date.parse(b.endTime) > Date.parse(startTime))) {
+      throw Object.assign(new Error('Цей час уже хтось забронював. Обери інший або іншу кімнату'), { status: 409 });
+    }
+    const booking = { id: 1000 + BOOKINGS.length, roomId, userId: 1, startTime, endTime, status: 'active', createdAt: iso(NOW) };
+    BOOKINGS.push(booking);
+    return { booking, room: ROOMS.find((r) => r.id === roomId) };
+  }],
+  ['DELETE', /^\/rooms\/bookings\/(\d+)$/, (m) => {
+    const b = BOOKINGS.find((x) => x.id === Number(m[1]));
+    if (b) b.status = 'cancelled';
+    return { booking: b };
+  }],
   ['GET', /^\/careers$/, () => ({ opportunities: empty ? [] : OPPS })],
   ['GET', /^\/venture\/startups$/, () => ({ startups: [] })],
   ['GET', /^\/venture\/projects$/, () => ({ projects: [] })],
