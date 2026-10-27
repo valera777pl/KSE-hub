@@ -26,10 +26,11 @@ body { font-family: var(--font-family); font-size: 15px; line-height: 1.4; }
 
 .tabbar { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--tabbar-bg);
   border-top: 1px solid var(--separator); padding-bottom: var(--safe-area-bottom); }
-.tabbar__item { height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  color: var(--text-secondary); font-size: 11px; font-weight: 500; transition: color 150ms var(--ease); }
+.tabbar__item { height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  color: var(--tab-inactive); font-size: 11px; font-weight: 600; transition: color 150ms var(--ease); }
 .tabbar__item[aria-current='page'] { color: var(--accent); }
-.tabbar__item svg { width: 24px; height: 24px; }
+.tabbar__item svg { width: 26px; height: 26px; flex: none; }
+.tabbar__item svg text { font-family: var(--font-family); font-variant-numeric: tabular-nums; }
 
 /* ─── Press feedback: every tappable thing shrinks a little ─── */
 .press { transition: transform 120ms var(--ease), background-color 150ms var(--ease); }

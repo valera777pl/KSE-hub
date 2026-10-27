@@ -33,7 +33,8 @@
   --danger-fill: #D52828;
 
   --app-height: var(--tg-viewport-stable-height, 100dvh);
-  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  /* Telegram's own inset counts in fullscreen, the browser's elsewhere */
+  --safe-area-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px));
 
   --r-row: 10px;
   --r-card: 14px;
