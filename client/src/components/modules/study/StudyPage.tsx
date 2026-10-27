@@ -2,7 +2,7 @@ import { ScreenHead } from '../../ui/ScreenHead';
 import { useUi } from '../../../stores/uiStore';
 import { haptic } from '../../../lib/telegram';
 import { SchedulePage } from '../schedule/SchedulePage';
-import { MoodlePage } from '../moodle/MoodlePage';
+import { DeadlinesPage } from '../deadlines/DeadlinesPage';
 
 /** Навчання: the week of classes and everything due, one switch apart. */
 export function StudyPage() {
@@ -15,7 +15,7 @@ export function StudyPage() {
         <button aria-pressed={studyView === 'schedule'} onClick={() => pick('schedule')}>Розклад</button>
         <button aria-pressed={studyView === 'deadlines'} onClick={() => pick('deadlines')}>Дедлайни</button>
       </div>
-      {studyView === 'schedule' ? <SchedulePage /> : <MoodlePage />}
+      {studyView === 'schedule' ? <SchedulePage /> : <DeadlinesPage />}
     </div>
   );
 }
