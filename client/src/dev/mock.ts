@@ -249,7 +249,9 @@ function availability(start: number, end: number) {
     const busy = own.some((b) => Date.parse(b.startTime) < end && Date.parse(b.endTime) > start);
     let t = start;
     for (const b of own) if (Date.parse(b.startTime) < t + (end - start) && Date.parse(b.endTime) > t) t = Date.parse(b.endTime);
-    return { ...r, available: !busy, freeFrom: busy ? iso(new Date(t)) : null };
+    // Same as the server: a free room stays free until the next booking that day
+    const next = own.find((b) => Date.parse(b.startTime) >= start && new Date(b.startTime).toDateString() === new Date(start).toDateString());
+    return { ...r, available: !busy, freeFrom: busy ? iso(new Date(t)) : null, freeUntil: !busy && next ? next.startTime : null };
   });
 }
 

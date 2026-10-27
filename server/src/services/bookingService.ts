@@ -14,6 +14,11 @@ export function freeFrom(taken: { startTime: Date; endTime: Date }[], from: Date
   }
   return new Date(t).toISOString();
 }
+/** Until when a room that's free at `from` stays free that day: the next booking's start, or null for the rest of the day. */
+export function freeUntil(taken: { startTime: Date; endTime: Date }[], from: Date): string | null {
+  const next = taken.filter((b) => b.startTime.getTime() >= from.getTime()).sort((a, b) => a.startTime.getTime() - b.startTime.getTime())[0];
+  return next ? next.startTime.toISOString() : null;
+}
 const HOT_BOOKING_MINUTES = 30;
 export const EXTEND_MINUTES = 30;
 const MAX_BOOKING_MINUTES = 180;
@@ -213,7 +218,12 @@ export class BookingService {
     return allRooms.map((room) => {
       const own = dayBookings.filter((b) => b.roomId === room.id);
       const available = !own.some((b) => b.startTime < endTime && b.endTime > startTime);
-      return { ...room, available, freeFrom: available ? null : freeFrom(own, startTime, endTime.getTime() - startTime.getTime()) };
+      return {
+        ...room,
+        available,
+        freeFrom: available ? null : freeFrom(own, startTime, endTime.getTime() - startTime.getTime()),
+        freeUntil: available ? freeUntil(own, startTime) : null,
+      };
     });
   }
 

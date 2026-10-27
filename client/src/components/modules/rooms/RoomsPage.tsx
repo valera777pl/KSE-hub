@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, DoorClosed, Headphones, Video } from 'lucide-react';
+import { Check, ChevronRight, DoorClosed, Headphones, Video } from 'lucide-react';
 import { api, errorText, track } from '../../../api/client';
 import type { BookingWithRoom, QuotaInfo, Room } from '../../../types';
 import { addDays, dayKey, dayTitle, hm, now, todayKey, weekdayShort, dayNum } from '../../../lib/time';
@@ -12,8 +12,8 @@ import { Wheel } from '../../ui/Wheel';
 import { tr } from '../../../lib/i18n';
 
 type When = 'now' | 'soon' | 'pick';
-type Kind = 'all' | 'skype_room' | 'silent_box';
-type RoomFree = Room & { freeFrom?: string | null };
+/** From /rooms/available: free at the asked time, and until when it stays free that day (null = all day) */
+type RoomFree = Room & { freeFrom?: string | null; freeUntil?: string | null };
 
 const MIN = 60_000;
 const STEP = 15;
@@ -22,18 +22,21 @@ const DEFAULT_MIN = 60;
 
 /** "Skype Room 1 (2nd floor)" → "Skype Room 1" */
 const roomName = (r: Room) => r.name.replace(/\s*\(.*\)\s*$/, '');
-const roomMeta = (r: Room) => [r.floor && tr(`${r.floor} поверх`, `floor ${r.floor}`), r.capacity > 1 ? tr(`до ${r.capacity} людей`, `up to ${r.capacity} people`) : tr('на одного', 'for one')].filter(Boolean).join(', ');
-const RoomIcon = ({ r }: { r: Room }) => (r.type === 'silent_box' ? <Headphones className="room__icon" strokeWidth={1.75} /> : <Video className="room__icon" strokeWidth={1.75} />);
+const roomMeta = (r: Room) => [r.floor && tr(`${r.floor} поверх`, `floor ${r.floor}`), r.capacity > 1 ? tr(`до ${r.capacity} людей`, `up to ${r.capacity} people`) : tr('на одного', 'for one')].filter(Boolean).join(' · ');
+const RoomIcon = ({ r }: { r: Room }) => (r.type === 'silent_box' ? <Headphones className="room__icon" strokeWidth={1.7} /> : <Video className="room__icon" strokeWidth={1.7} />);
+const untilLabel = (r: RoomFree) => (r.freeUntil ? `${tr('до', 'until')} ${hm(r.freeUntil)}` : tr('весь день', 'all day'));
 
-function RoomRow({ r, from, disabled, onPick }: { r: RoomFree; from: Date | null; disabled: boolean; onPick: (r: RoomFree, from: Date) => void }) {
+/** A free room: what it is, how long it stays free, tap to book */
+function RoomRow({ r, disabled, onPick }: { r: RoomFree; disabled: boolean; onPick: (r: RoomFree) => void }) {
   return (
-    <button className={`row room press${r.available ? '' : ' room--busy'}`} disabled={disabled || !from} onClick={() => from && onPick(r, from)}>
+    <button className="row room press" disabled={disabled} onClick={() => onPick(r)}>
       <RoomIcon r={r} />
       <div className="row__main">
         <div className="row__title">{roomName(r)}</div>
         <div className="row__meta">{roomMeta(r)}</div>
       </div>
-      {!r.available && <span className="room__free">{from ? `${tr('вільна з', 'free from')} ${hm(from)}` : tr('до кінця дня', 'until end of day')}</span>}
+      <span className="row__side num">{untilLabel(r)}</span>
+      <ChevronRight className="chev" strokeWidth={2.4} />
     </button>
   );
 }
@@ -50,7 +53,6 @@ const roundUp = (d: Date, step: number) => new Date(Math.ceil(d.getTime() / (ste
 export function RoomsPage() {
   const [when, setWhen] = useState<When>('now');
   const [picked, setPicked] = useState<Date | null>(null);
-  const [kind, setKind] = useState<Kind>('all');
   const [reload, setReload] = useState(0);
   const [booking, setBooking] = useState<{ room: RoomFree; start: Date } | null>(null);
   const [picking, setPicking] = useState(false);
@@ -79,14 +81,16 @@ export function RoomsPage() {
 
   useEffect(() => { track('rooms.open'); }, []);
 
-  // A room I already hold isn't something to pick again; it lives in tr('Твоя бронь', 'Your booking')
+  // A room I already hold isn't something to pick again; it's under "Мої броні"
   const heldNow = new Set(mine.filter(({ booking: b }) => new Date(b.startTime) <= start && new Date(b.endTime) > start).map(({ room }) => room.id));
-  const shown = (rooms ?? []).filter((r) => (kind === 'all' || r.type === kind) && !heldNow.has(r.id));
-  const free = shown.filter((r) => r.available);
-  const busy = shown.filter((r) => !r.available).sort((a, b) => (a.freeFrom ?? '9').localeCompare(b.freeFrom ?? '9'));
-  const pick = (r: RoomFree, from: Date) => { haptic.tap(); track('room.select'); setBooking({ room: r, start: from }); };
+  // Free ones only, the longest-free first: busy rooms are nothing to choose from
+  const free = (rooms ?? []).filter((r) => r.available && !heldNow.has(r.id))
+    .sort((a, b) => (b.freeUntil ?? '9').localeCompare(a.freeUntil ?? '9')
+      // Equally free: rooms for a group before single boxes, then by name
+      || Number(a.type === 'silent_box') - Number(b.type === 'silent_box') || roomName(a).localeCompare(roomName(b)));
+  const pick = (r: RoomFree) => { haptic.tap(); track('room.select'); setBooking({ room: r, start }); };
   const leftMin = Math.round((quota?.remaining ?? 3) * 60);
-  const outOfQuota = quota !== null && leftMin < STEP;
+  const outOfQuota = quota !== null && leftMin < 30;
 
   const cancel = async (id: number) => {
     haptic.tap();
@@ -104,35 +108,18 @@ export function RoomsPage() {
 
   const whenLabel = picked && when === 'pick'
     ? `${dayKey(picked) === todayKey() ? '' : `${weekdayShort(dayKey(picked))} `}${hm(picked)}`
-    : tr('Обрати час', 'Pick a time');
+    : tr('Інший час', 'Other time');
+  const freeTitle = when === 'now' && q.staleAt ? `${tr('Вільні о', 'Free at')} ${hm(new Date(q.staleAt))}`
+    : when === 'now' ? tr('Вільні зараз', 'Free now')
+      : `${tr('Вільні', 'Free')} ${dayKey(start) === todayKey() ? tr('о', 'at') : `${dayTitle(dayKey(start))}, ${tr('о', 'at')}`} ${hm(start)}`;
+  const quotaNote = !quota ? undefined : outOfQuota
+    ? tr('Квоту на сьогодні використано', 'Today\'s quota is used up')
+    : tr(`Сьогодні можна ще ${durLabel(Math.floor(leftMin / 15) * 15)}`, `${durLabel(Math.floor(leftMin / 15) * 15)} left today`);
 
   return (
     <div className="screen">
-      <ScreenHead title={tr('Кімнати', 'Rooms')} />
+      <ScreenHead title={tr('Кімнати', 'Rooms')} note={quotaNote} />
       {q.staleAt && <StaleBanner at={q.staleAt} error={q.error} busy={q.loading} onRetry={q.refresh} />}
-
-      {mine.length > 0 && (
-        <>
-          <div className="caption" style={{ marginTop: 0 }}>{tr('Твоя бронь', 'Your booking')}</div>
-          <div className="group" style={{ marginBottom: 8 }}>
-            {mine.map(({ booking: b, room }) => {
-              const live = new Date(b.startTime).getTime() <= now().getTime();
-              return (
-                <div key={b.id} className={`row room${fresh === b.id ? ' fresh' : ''}`}>
-                  <RoomIcon r={room} />
-                  <div className="row__main">
-                    <div className="row__title">{roomName(room)}</div>
-                    <div className="row__meta num">
-                      {live ? `${tr('зараз, до', 'now, until')} ${hm(b.endTime)}` : `${dayKey(new Date(b.startTime)) === todayKey() ? tr('сьогодні', 'today') : dayTitle(dayKey(new Date(b.startTime)))}, ${hm(b.startTime)}–${hm(b.endTime)}`}
-                    </div>
-                  </div>
-                  <button className="link-btn" style={{ color: 'var(--danger)' }} onClick={() => cancel(b.id)}>{live ? tr('Звільнити', 'Release') : tr('Скасувати', 'Cancel')}</button>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
 
       <div className="seg" role="group" aria-label={tr('Коли', 'When')}>
         <button aria-pressed={when === 'now'} onClick={() => pickWhen('now')}>{tr('Зараз', 'Now')}</button>
@@ -140,38 +127,45 @@ export function RoomsPage() {
         <button aria-pressed={when === 'pick'} onClick={() => pickWhen('pick')} className="num">{whenLabel}</button>
       </div>
 
-      <div className="pills" role="group" aria-label={tr('Тип кімнати', 'Room type')}>
-        {([['all', tr('Усі', 'All')], ['skype_room', 'Skype'], ['silent_box', 'Silent Box']] as [Kind, string][]).map(([k, l]) => (
-          <button key={k} className="press" aria-pressed={kind === k} onClick={() => { if (k !== kind) { haptic.select(); setKind(k); } }}>{l}</button>
-        ))}
-      </div>
-
       {!rooms && q.error ? (
-        <div style={{ marginTop: 16 }}><ErrorState error={q.error} onRetry={q.refresh} /></div>
+        <ErrorState error={q.error} onRetry={q.refresh} />
       ) : !rooms ? (
-        <div style={{ marginTop: 16 }}><SkeletonRows rows={4} /></div>
+        <SkeletonRows rows={4} />
       ) : (
         <>
-          <div className="caption num">{when === 'now' && q.staleAt ? `${tr('Вільні о', 'Free at')} ${hm(new Date(q.staleAt))}` : when === 'now' ? tr('Вільні зараз', 'Free now') : `${tr('Вільні', 'Free')} ${dayKey(start) === todayKey() ? tr('о', 'at') : `${dayTitle(dayKey(start))}, ${tr('о', 'at')}`} ${hm(start)}`}</div>
+          <div className="section-head"><h2 className="num">{freeTitle}</h2>{free.length > 0 && <span className="num">{free.length}</span>}</div>
           {free.length === 0 ? (
-            <div className="group"><EmptyState icon={DoorClosed} title={tr('Вільних кімнат немає', 'No free rooms')} text={busy.length ? tr('Нижче — коли звільняться.', 'Below: when they free up.') : undefined} /></div>
+            <div className="group">
+              <EmptyState icon={DoorClosed} title={tr(`Усі кімнати зайняті${when === 'now' ? '' : ` о ${hm(start)}`}`, `All rooms are taken${when === 'now' ? '' : ` at ${hm(start)}`}`)}
+                action={when === 'now' ? { label: tr('Подивитись через 30 хв', 'Check in 30 min'), onClick: () => pickWhen('soon') } : undefined} />
+            </div>
           ) : (
-            <div className="group">{free.map((r) => <RoomRow key={r.id} r={r} from={start} disabled={outOfQuota} onPick={pick} />)}</div>
+            <div className="group">{free.map((r) => <RoomRow key={r.id} r={r} disabled={outOfQuota} onPick={pick} />)}</div>
           )}
-          {busy.length > 0 && (
-            <>
-              <div className="caption">{tr('Зайняті', 'Taken')}</div>
-              <div className="group">{busy.map((r) => <RoomRow key={r.id} r={r} from={r.freeFrom && dayKey(new Date(r.freeFrom)) === dayKey(start) ? new Date(r.freeFrom) : null} disabled={outOfQuota} onPick={pick} />)}</div>
-            </>
-          )}
+          {outOfQuota && <p className="note">{tr('Завтра знову 3 год.', 'Tomorrow you get 3 h again.')}</p>}
         </>
       )}
 
-      {quota && (
-        <p className="note num">
-          {outOfQuota ? tr('Квоту на сьогодні використано. Завтра знову 3 год.', 'Today\'s quota is used up. Tomorrow you get 3 h again.') : tr(`Сьогодні можна ще ${durLabel(Math.floor(leftMin / STEP) * STEP)} із ${quota.max} год.`, `You can book ${durLabel(Math.floor(leftMin / STEP) * STEP)} more today, of ${quota.max} h.`)}
-        </p>
-      )}
+      <div className="section-head"><h2>{tr('Мої броні', 'My bookings')}</h2></div>
+      <div className="group">
+        {mine.length === 0 ? (
+          <p className="group-note">{tr('Поки немає. Обери вільну кімнату вище.', 'None yet. Pick a free room above.')}</p>
+        ) : mine.map(({ booking: b, room }) => {
+          const live = new Date(b.startTime).getTime() <= now().getTime();
+          return (
+            <div key={b.id} className={`row room${fresh === b.id ? ' fresh' : ''}`}>
+              <RoomIcon r={room} />
+              <div className="row__main">
+                <div className="row__title">{roomName(room)}</div>
+                <div className="row__meta num">
+                  {live ? `${tr('зараз, до', 'now, until')} ${hm(b.endTime)}` : `${dayKey(new Date(b.startTime)) === todayKey() ? tr('сьогодні', 'today') : dayTitle(dayKey(new Date(b.startTime)))}, ${hm(b.startTime)}–${hm(b.endTime)}`}
+                </div>
+              </div>
+              <button className="link-btn" style={{ color: 'var(--danger)' }} onClick={() => cancel(b.id)}>{live ? tr('Звільнити', 'Release') : tr('Скасувати', 'Cancel')}</button>
+            </div>
+          );
+        })}
+      </div>
 
       {booking && (
         <BookSheet room={booking.room} start={booking.start} leftMin={leftMin}

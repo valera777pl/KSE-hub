@@ -17,3 +17,10 @@ test('skips back-to-back bookings and gaps too short for the slot', () => {
 test('a gap long enough is taken', () => {
   assert.equal(freeFrom([b('10:00', '11:00'), b('12:30', '13:00')], at('10:15'), HOUR), at('11:00').toISOString());
 });
+
+test('free until the next booking that day, or all day', async () => {
+  const { freeUntil } = await import('../services/bookingService.js');
+  assert.equal(freeUntil([b('09:00', '10:00'), b('15:30', '16:00'), b('13:00', '14:00')], at('11:00')), at('13:00').toISOString());
+  assert.equal(freeUntil([b('09:00', '10:00')], at('11:00')), null);
+  assert.equal(freeUntil([], at('11:00')), null);
+});
