@@ -130,6 +130,14 @@ export function TodayPage() {
   );
 }
 
+/** "45 хв", "1 год 45 хв", "20 год", "3 дні": how long until a class, for the brand-card pill */
+function waitText(ms: number) {
+  const min = Math.max(0, Math.round(ms / 60_000));
+  if (min < 60 || min >= 180) return spanText(ms);
+  const [h, m] = [Math.floor(min / 60), min % 60];
+  return m ? `${h} ${tr('год', 'h')} ${m} ${tr('хв', 'min')}` : `${h} ${tr('год', 'h')}`;
+}
+
 /** One big number: minutes left in this class, or until the next one. */
 function NowCard({ current, next, after, today, onOpen }: {
   current?: ClassEvent; next?: ClassEvent; after: ClassEvent[]; today: string; onOpen: (day: string) => void;
@@ -163,17 +171,22 @@ function NowCard({ current, next, after, today, onOpen }: {
   }
 
   const followUps = current ? [next, ...after].filter(Boolean).slice(0, 2) as ClassEvent[] : after.slice(0, 1);
+  // A clock time as the big number needs the wait next to it; a countdown already is one
+  const pill = big.unit ? null : `${tr('через', 'in')} ${waitText(startsIn)}`;
 
   return (
-    <button className="now press" style={{ width: '100%', textAlign: 'left', display: 'block' }} onClick={() => onOpen(focusDay)}>
-      <div className="now__label">{label}</div>
+    <button className="now press" onClick={() => onOpen(focusDay)}>
+      <div className="now__top">
+        <span className="now__label">{label}</span>
+        {pill && <span className="now__pill num">{pill}</span>}
+      </div>
       <div className="now__big">{big.value}{big.unit && <small>{big.unit}</small>}</div>
-      <div className="now__title">{code(focus)}</div>
-      <div className="now__place">{[shortPlace(focus.location), current || !big.unit ? `${tr('до', 'until')} ${hm(focus.endAt)}` : hm(focus.startAt)].filter(Boolean).join(' · ')}</div>
-      {current && <div className="progress"><i style={{ width: `${((t - new Date(current.startAt).getTime()) / (new Date(current.endAt).getTime() - new Date(current.startAt).getTime())) * 100}%` }} /></div>}
+      <div className="now__title">{focus.courseCode}{focus.section && <span> [{focus.section}]</span>}</div>
+      <div className="now__place num">{[shortPlace(focus.location), `${tr('до', 'until')} ${hm(focus.endAt)}`].filter(Boolean).join(' · ')}</div>
+      {current && <div className="now__progress"><i style={{ width: `${((t - new Date(current.startAt).getTime()) / (new Date(current.endAt).getTime() - new Date(current.startAt).getTime())) * 100}%` }} /></div>}
       {followUps.length > 0 && (
         <div className="now__next">
-          <div style={{ marginBottom: 2 }}>{tr('Далі', 'Next')}</div>
+          <div className="now__label">{tr('Далі', 'Next')}</div>
           {followUps.map((e) => (
             <div key={e.id} className="now__line">
               <b className="num">{hm(e.startAt)}</b><b>{code(e)}</b><span>{shortPlace(e.location)}</span>

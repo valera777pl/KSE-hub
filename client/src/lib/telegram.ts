@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /* Thin typed layer over window.Telegram.WebApp. Outside Telegram every call is a no-op. */
 
@@ -51,56 +51,90 @@ export const tg = (): WebApp | null => {
 
 const can = (v: string) => !!tg()?.isVersionAtLeast?.(v);
 
-/* ─── Theme: Telegram backgrounds and text, our own blue accent (DESIGN.md) ─── */
+/* ─── Theme: our own tokens for both schemes (DESIGN.md → Цвет); Telegram only says light or dark ─── */
 
-const FALLBACK = {
-  light: { bg: '#efeff4', surface: '#ffffff', text: '#000000', hint: '#8e8e93', separator: '#c8c7cc', danger: '#e53935' },
-  dark: { bg: '#000000', surface: '#1c1c1d', text: '#ffffff', hint: '#98989e', separator: '#38383a', danger: '#ff6b6b' },
-};
-const ACCENT = { light: { accent: '#2341ee', onAccent: '#ffffff', warn: '#a35400' }, dark: { accent: '#6f86ff', onAccent: '#0b0c18', warn: '#f0a95a' } };
+const TOKENS = {
+  dark: {
+    '--bg': '#0B0D12', '--surface': '#161920', '--inset': '#1F232C', '--fill': '#161920', '--surface-2': '#2C313C',
+    '--separator': '#2A2E38', '--text': '#F3F5F9', '--text-secondary': '#A0A7B4', '--text-tertiary': '#7B8291',
+    '--title-inactive': '#6B7280', '--accent': '#6B76F5', '--accent-fill': '#3645F2', '--on-accent': '#FFFFFF',
+    '--brand-card': '#070F6B', '--brand-text-2': '#C9D2FF', '--tabbar-bg': '#11141A', '--tab-inactive': '#8A91A0',
+    '--avatar-bg': '#3A3F4B', '--success': '#2E9E68', '--success-fill': '#278658', '--warning': '#F0A95A',
+    '--danger': '#FF6B6B', '--danger-fill': '#FF5C5C',
+  },
+  light: {
+    '--bg': '#F2F3F7', '--surface': '#FFFFFF', '--inset': '#F2F3F7', '--fill': '#E6E8EE', '--surface-2': '#FFFFFF',
+    '--separator': '#E3E5EB', '--text': '#0B0D12', '--text-secondary': '#5F6675', '--text-tertiary': '#676F7F',
+    '--title-inactive': '#868D9D', '--accent': '#2B3BD6', '--accent-fill': '#2B3BD6', '--on-accent': '#FFFFFF',
+    '--brand-card': '#070F6B', '--brand-text-2': '#C9D2FF', '--tabbar-bg': '#FFFFFF', '--tab-inactive': '#6B7280',
+    '--avatar-bg': '#D9DCE3', '--success': '#1E7C4F', '--success-fill': '#1E7C4F', '--warning': '#AB5800',
+    '--danger': '#D52828', '--danger-fill': '#D52828',
+  },
+} as const;
+
+/** "auto" follows Telegram; the student can pin light or dark in the profile (CloudStorage "theme"). */
+export type ThemePref = 'auto' | 'light' | 'dark';
+const THEME_KEY = 'theme';
+// This device's copy paints the first frame right; CloudStorage (other devices) answers a moment later
+const LOCAL_THEME_KEY = 'kh:theme';
+const isPref = (v: unknown): v is ThemePref => v === 'auto' || v === 'light' || v === 'dark';
+let themePref: ThemePref = (() => {
+  try { const v = localStorage.getItem(LOCAL_THEME_KEY); return isPref(v) ? v : 'auto'; } catch { return 'auto'; }
+})();
 
 export function currentScheme(): 'light' | 'dark' {
+  if (themePref !== 'auto') return themePref;
   return tg()?.colorScheme ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 }
 
 export function applyTheme() {
   const app = tg();
   const scheme = currentScheme();
-  const p = app?.themeParams ?? {};
-  const f = FALLBACK[scheme];
-  const a = ACCENT[scheme];
-  const tokens = {
-    '--bg': p.secondary_bg_color || f.bg,
-    '--surface': p.section_bg_color || p.bg_color || f.surface,
-    '--text': p.text_color || f.text,
-    '--hint': p.subtitle_text_color || p.hint_color || f.hint,
-    '--separator': p.section_separator_color || f.separator,
-    '--danger': p.destructive_text_color || f.danger,
-    '--accent': a.accent,
-    '--on-accent': a.onAccent,
-    '--warn': a.warn,
-  };
+  const tokens = TOKENS[scheme];
   const root = document.documentElement;
   for (const [k, v] of Object.entries(tokens)) root.style.setProperty(k, v);
   root.dataset.theme = scheme;
+  root.style.colorScheme = scheme;
   if (app) {
     try {
       app.setHeaderColor(tokens['--bg']);
       app.setBackgroundColor(tokens['--bg']);
-      app.setBottomBarColor?.(tokens['--surface']);
+      app.setBottomBarColor?.(tokens['--tabbar-bg']);
     } catch { /* older clients */ }
   }
+  themeListeners.forEach((cb) => cb());
   return tokens;
+}
+
+const themeListeners = new Set<() => void>();
+/** Re-render when the scheme changes (MainButton colours are set from JS). */
+export function onThemeApplied(cb: () => void) {
+  themeListeners.add(cb);
+  return () => { themeListeners.delete(cb); };
+}
+
+export const getThemePref = () => themePref;
+
+export function setThemePref(pref: ThemePref) {
+  themePref = pref;
+  try { localStorage.setItem(LOCAL_THEME_KEY, pref); } catch { /* storage blocked */ }
+  cloud.set(THEME_KEY, pref);
+  applyTheme();
 }
 
 export function initTelegram() {
   const app = tg();
   applyTheme();
+  // A pinned light/dark from the profile; until it arrives the Telegram scheme shows
+  cloud.get(THEME_KEY).then((v) => {
+    if (isPref(v) && v !== themePref) setThemePref(v);
+  });
   if (!app) return;
   app.ready();
   app.expand();
   if (can('7.7')) app.disableVerticalSwipes?.();
-  app.onEvent('themeChanged', applyTheme);
+  // Telegram switched its theme: follow it only while the student hasn't pinned one
+  app.onEvent('themeChanged', () => { if (themePref === 'auto') applyTheme(); });
 }
 
 /* ─── Haptics ─── */
@@ -148,19 +182,23 @@ export function useMainButton({ text, onClick, visible = true, disabled = false,
     return () => { btn.offClick(cb); btn.hide(); };
   }, []);
 
+  // Telegram draws the button itself, so a theme switch has to repaint it from here
+  const [scheme, setScheme] = useState(currentScheme);
+  useEffect(() => onThemeApplied(() => setScheme(currentScheme())), []);
+
   useEffect(() => {
     const btn = tg()?.MainButton;
     if (!btn) return;
     const css = getComputedStyle(document.documentElement);
     btn.setParams({
       text,
-      color: disabled ? css.getPropertyValue('--separator').trim() : css.getPropertyValue('--accent').trim(),
-      text_color: disabled ? css.getPropertyValue('--hint').trim() : css.getPropertyValue('--on-accent').trim(),
+      color: disabled ? css.getPropertyValue('--fill').trim() : css.getPropertyValue('--accent-fill').trim(),
+      text_color: disabled ? css.getPropertyValue('--text-secondary').trim() : css.getPropertyValue('--on-accent').trim(),
       is_active: !disabled,
       is_visible: visible,
     });
     if (loading) btn.showProgress(false); else btn.hideProgress();
-  }, [text, visible, disabled, loading]);
+  }, [text, visible, disabled, loading, scheme]);
 }
 
 /* Back is a stack: a sheet opened over the profile takes Back first, and when it closes

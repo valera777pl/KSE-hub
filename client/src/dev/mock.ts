@@ -5,6 +5,7 @@
  *   &state=empty|error  every list empty / every request fails with a server error
  *   &state=stale        offline: every request fails, screens show what the last normal visit cached
  *   &state=auth         sign-in expired: the session can't be renewed
+ * In the console, tgScheme('dark') fires Telegram's themeChanged.
  *   &onboarding=1       a student who hasn't finished sign-up
  *   &startapp=day_2026-10-27   deep link, as from a bot button
  * Loaded from main.tsx behind import.meta.env.DEV, so none of this reaches the production bundle.
@@ -107,8 +108,8 @@ const app = {
   },
   version: '8.0',
   platform: 'ios',
-  colorScheme: scheme,
-  themeParams: theme,
+  colorScheme: scheme as 'light' | 'dark',
+  themeParams: theme as (typeof THEMES)['light' | 'dark'],
   viewportHeight: 0,
   viewportStableHeight: 0,
   isVersionAtLeast: () => true,
@@ -116,7 +117,12 @@ const app = {
   enableClosingConfirmation() {}, disableVerticalSwipes() {},
   onEvent(e: string, cb: () => void) { (listeners[e] ||= new Set()).add(cb); },
   offEvent(e: string, cb: () => void) { listeners[e]?.delete(cb); },
-  setHeaderColor(c: string) { head.style.background = c; },
+  setHeaderColor(c: string) {
+    head.style.background = c;
+    // Telegram picks its header text colour to suit; a dark background gets light text
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+    head.style.color = r * 0.3 + g * 0.59 + b * 0.11 < 128 ? '#ffffff' : '#000000';
+  },
   setBackgroundColor(c: string) { document.body.style.background = c; },
   setBottomBarColor(c: string) { bottom.style.background = c; },
   openLink(url: string) { log('openLink', url); window.open(url, '_blank'); },
@@ -140,6 +146,13 @@ const app = {
 };
 
 (window as unknown as { Telegram: { WebApp: typeof app } }).Telegram = { WebApp: app };
+
+/** From the console: tgScheme('dark') — Telegram switched its theme, as the real client would report it. */
+(window as unknown as { tgScheme: (s: 'light' | 'dark') => void }).tgScheme = (s) => {
+  app.colorScheme = s;
+  app.themeParams = THEMES[s];
+  emit('themeChanged');
+};
 addEventListener('resize', viewport);
 viewport();
 

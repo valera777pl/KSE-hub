@@ -8,7 +8,7 @@ import { tr, useLang, type Lang } from '../../lib/i18n';
 import { cohortFromEmail, courseYear, programName, programsFromSchedule } from '../../lib/programs';
 import { initials } from '../../lib/place';
 import { addDays, mondayOf, todayKey } from '../../lib/time';
-import { haptic, openExternal, tg, useBackButton } from '../../lib/telegram';
+import { getThemePref, haptic, openExternal, setThemePref, tg, useBackButton, type ThemePref } from '../../lib/telegram';
 import { Sheet } from '../ui/Sheet';
 import { MoodleConnectForm } from '../modules/deadlines/MoodleConnect';
 
@@ -46,6 +46,7 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
   const [google, setGoogle] = useState<GoogleStatus | null>(null);
   const [programs, setPrograms] = useState<string[]>([]);
   const [pick, setPick] = useState<Pick | null>(null);
+  const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const [moodle, setMoodle] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -177,6 +178,13 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
             <span className="row__value">{user.calendarUrl ? tr('Змінити', 'Change') : tr('Підключити', 'Connect')}</span>
             <ChevronRight className="chev" strokeWidth={1.75} />
           </Row>
+        </div>
+
+        <div className="caption">{tr('Тема', 'Theme')}</div>
+        <div className="seg" role="group" aria-label={tr('Тема', 'Theme')} style={{ marginBottom: 0 }}>
+          {([['auto', tr('Як у Telegram', 'Like Telegram')], ['light', tr('Світла', 'Light')], ['dark', tr('Темна', 'Dark')]] as [ThemePref, string][]).map(([k, label]) => (
+            <button key={k} aria-pressed={theme === k} onClick={() => { if (k === theme) return; haptic.select(); setThemePref(k); setTheme(k); }}>{label}</button>
+          ))}
         </div>
 
         <div className="caption">{tr('Мова', 'Language')}</div>
