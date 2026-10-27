@@ -424,7 +424,8 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
 .person__label { font-size: 13px; color: var(--text-secondary); margin-top: 14px; }
 .deck-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
 
-.sheet .btn-plain:not(.btn-accent) { background: var(--inset); }
+/* Second actions in a sheet are outlined, so the one filled button stays the main one (DESIGN.md → OpportunityRow) */
+.sheet .btn-plain:not(.btn-accent) { background: transparent; border: 1px solid var(--separator); }
 
 /* ─── Stale data banner (design: Немає звʼязку) ─── */
 .stale { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 14px; border-radius: 12px; background: var(--surface); }
