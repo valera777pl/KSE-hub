@@ -1,12 +1,13 @@
 import { db } from '../db/connection.js';
-import { deadlineReminders, googleAccounts, moodleAssignments, moodleCourses, users } from '../db/schema.js';
+import { deadlineReminders, googleAccounts, moodleAssignments, moodleCourses, opportunities, savedOpportunities, users } from '../db/schema.js';
 import { and, asc, eq, gt, isNotNull, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 import { MoodleService } from './moodleService.js';
 import { DigestService } from './digestService.js';
 import { GmailService } from './gmailService.js';
 import { AnalyticsService } from './analyticsService.js';
 import { ScheduleService } from './scheduleService.js';
-import { escapeHtml, openAppKeyboard, sendToUser } from '../bot/send.js';
+import { appUrl, escapeHtml, openAppKeyboard, sendToUser } from '../bot/send.js';
+import { InlineKeyboard } from 'grammy';
 import { formatKyiv, kyivHour, kyivWeekday } from '../utils/kyivTime.js';
 
 const HOUR = 3_600_000;
@@ -32,7 +33,8 @@ export class CronService {
     const reminders = await this.sendDeadlineReminders();
     const digests = await this.sendDigests();
     const weekly = await this.sendWeeklyDeadlines();
-    return { calendars, emails, schedules, courseCalendars, classReminders, reminders, digests, weekly };
+    const savedOpps = await this.sendSavedOpportunityReminders();
+    return { calendars, emails, schedules, courseCalendars, classReminders, reminders, digests, weekly, savedOpps };
   }
 
   /** Sunday from 19:00 Kyiv: next week's Moodle deadlines in one message (classes are in the schedule tab). */
@@ -169,6 +171,35 @@ export class CronService {
         sent++;
         AnalyticsService.track(assignment.userId, 'reminder.sent', { kind });
       }
+    }
+    return sent;
+  }
+
+  /** Saved opportunities whose application closes within 3 days: one reminder each, with a button straight to it. */
+  static async sendSavedOpportunityReminders() {
+    const now = new Date();
+    const rows = await db
+      .select({ userId: savedOpportunities.userId, opp: opportunities, telegramId: users.telegramId })
+      .from(savedOpportunities)
+      .innerJoin(opportunities, eq(savedOpportunities.opportunityId, opportunities.id))
+      .innerJoin(users, eq(savedOpportunities.userId, users.id))
+      .where(and(
+        isNull(savedOpportunities.remindedAt),
+        eq(users.botBlocked, false),
+        gt(opportunities.deadline, now),
+        lte(opportunities.deadline, new Date(now.getTime() + 72 * HOUR)),
+      ));
+
+    let sent = 0;
+    for (const { userId, opp, telegramId } of rows) {
+      // Claim first so two overlapping ticks can't both send it
+      const claimed = await db.update(savedOpportunities).set({ remindedAt: now })
+        .where(and(eq(savedOpportunities.userId, userId), eq(savedOpportunities.opportunityId, opp.id), isNull(savedOpportunities.remindedAt)))
+        .returning();
+      if (claimed.length === 0) continue;
+      const text = `<b>Подача закінчується ${formatKyiv(opp.deadline!)}</b>\n${escapeHtml(opp.title)} · ${escapeHtml(opp.company)}`;
+      const keyboard = new InlineKeyboard().webApp('Відкрити можливість', `${appUrl()}/?startapp=opp_${opp.id}`);
+      if (await sendToUser(telegramId, text, keyboard)) sent++;
     }
     return sent;
   }

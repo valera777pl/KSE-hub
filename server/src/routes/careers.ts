@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
 import { db } from '../db/connection.js';
-import { emails, googleAccounts, opportunities } from '../db/schema.js';
+import { emails, googleAccounts, opportunities, savedOpportunities } from '../db/schema.js';
 import { eq, ilike, and, gte, desc, isNull, or, inArray } from 'drizzle-orm';
 import { opportunityFilterSchema } from '../utils/validators.js';
+import { AnalyticsService } from '../services/analyticsService.js';
 
 const careerRoutes = new Hono();
 
@@ -34,6 +35,14 @@ careerRoutes.get('/', async (c) => {
     conditions.push(or(ilike(opportunities.title, like), ilike(opportunities.company, like), ilike(opportunities.description, like)));
   }
 
+  const user = c.get('dbUser');
+  const mySaved = await db.select({ id: savedOpportunities.opportunityId }).from(savedOpportunities).where(eq(savedOpportunities.userId, user.id));
+  const savedIds = new Set(mySaved.map((s) => s.id));
+  if (c.req.query('saved') === 'true') {
+    if (savedIds.size === 0) return c.json({ opportunities: [] });
+    conditions.push(inArray(opportunities.id, [...savedIds]));
+  }
+
   if (c.req.query('source') === 'email') {
     conditions.push(ilike(opportunities.slackMessageId, 'summary:%'));
   }
@@ -49,7 +58,6 @@ careerRoutes.get('/', async (c) => {
     .limit(50);
 
   // For opportunities found in mail: a link to the viewer's own copy of that email
-  const user = c.get('dbUser');
   const summaryIds = results
     .map((o) => o.slackMessageId?.match(/^summary:(\d+)$/)?.[1])
     .filter(Boolean)
@@ -64,9 +72,25 @@ careerRoutes.get('/', async (c) => {
   return c.json({
     opportunities: results.map(({ slackMessageId, ...o }) => {
       const summaryId = Number(slackMessageId?.match(/^summary:(\d+)$/)?.[1]) || null;
-      return { ...o, source: summaryId ? 'email' : 'manual', emailUrl: summaryId ? gmailLink.get(summaryId) ?? null : null };
+      return { ...o, saved: savedIds.has(o.id), source: summaryId ? 'email' : 'manual', emailUrl: summaryId ? gmailLink.get(summaryId) ?? null : null };
     }),
   });
+});
+
+// POST /careers/:id/save — save or unsave (body { saved: boolean }); saved ones get a reminder 3 days before the deadline
+careerRoutes.post('/:id/save', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  const { saved } = await c.req.json().catch(() => ({ saved: true }));
+  const userId = c.get('dbUser').id;
+  if (saved === false) {
+    await db.delete(savedOpportunities).where(and(eq(savedOpportunities.userId, userId), eq(savedOpportunities.opportunityId, id)));
+  } else {
+    const [opp] = await db.select({ id: opportunities.id }).from(opportunities).where(eq(opportunities.id, id)).limit(1);
+    if (!opp) return c.json({ error: 'Такої можливості вже немає' }, 404);
+    await db.insert(savedOpportunities).values({ userId, opportunityId: id }).onConflictDoNothing();
+    AnalyticsService.track(userId, 'opp.saved');
+  }
+  return c.json({ saved: saved !== false });
 });
 
 // GET /careers/:id — Single opportunity

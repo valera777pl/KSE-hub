@@ -17,7 +17,7 @@ const BASE_QUERY = '-in:spam -in:trash -category:promotions -category:social';
 const DOMAINS = ['Tech', 'Economics & Finance', 'Consulting', 'Public sector', 'Marketing', 'Research', 'Other'];
 
 /** Extra fields the model pulls out of internship/job emails for the Careers tab. */
-type OpportunityDetails = { company?: string; deadline?: Date; link?: string; domain?: string };
+type OpportunityDetails = { company?: string; deadline?: Date; link?: string; domain?: string; programs?: string[] };
 
 const CATEGORIES: EmailCategory[] = ['deadline', 'event', 'internship', 'job', 'startup', 'admin', 'newsletter', 'other'];
 
@@ -207,7 +207,8 @@ async function summarizeWithModel(subject: string, from: string, body: string) {
           '"important": true лише якщо студенту треба діяти найближчими днями (дедлайн, зміна розкладу, обовʼязкова дія)}. ' +
           'internship/job — стажування та вакансії; startup — пошук команди чи стартап-активності; newsletter — розсилки без дії. ' +
           'Лише для internship/job додай поля: "company" (організація), "deadline" (YYYY-MM-DD або null), ' +
-          `"link" (посилання на подачу заявки з листа або null), "domain" (одне з ${DOMAINS.map((d) => `"${d}"`).join(', ')}).`,
+          `"link" (посилання на подачу заявки з листа або null), "domain" (одне з ${DOMAINS.map((d) => `"${d}"`).join(', ')}), ` +
+          '"programs" (масив кодів програм KSE, для яких можливість, як у листі: "BE", "EBD" тощо; [] якщо для всіх або не сказано).',
       },
       { role: 'user', content: `Від: ${from}\nТема: ${subject}\n\n${body.slice(0, 6000)}` },
     ],
@@ -226,6 +227,7 @@ async function summarizeWithModel(subject: string, from: string, body: string) {
           deadline: deadline && !Number.isNaN(deadline.getTime()) ? deadline : undefined,
           link: typeof raw.link === 'string' && /^https?:\/\//.test(raw.link) ? raw.link : undefined,
           domain: DOMAINS.includes(raw.domain) ? raw.domain : undefined,
+          programs: Array.isArray(raw.programs) ? raw.programs.filter((p: unknown) => typeof p === 'string' && /^[A-Z]{2,5}$/.test(p)).slice(0, 6) : [],
         }
       : undefined,
   };
@@ -245,6 +247,7 @@ async function saveOpportunity(summary: Summary, subject: string, sender: string
     deadline: details.deadline ?? null,
     url: details.link ?? null,
     domain: details.domain ?? null,
+    programs: details.programs ?? [],
     slackMessageId: sourceKey,
   });
 }

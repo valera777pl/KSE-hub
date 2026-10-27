@@ -12,8 +12,9 @@ import {
   uniqueIndex,
   index,
   vector,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
 /* ───────────── ENUMS ───────────── */
 
@@ -362,12 +363,22 @@ export const opportunities = pgTable('opportunities', {
   url: text('url'),
   description: text('description'),
   salaryInfo: varchar('salary_info', { length: 255 }),
+  // Programme codes from the letter ("BE", "EBD"); empty means open to everyone
+  programs: varchar('programs', { length: 10 }).array().default(sql`'{}'`).notNull(),
   slackMessageId: varchar('slack_message_id', { length: 100 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('opportunities_deadline_idx').on(table.deadline),
   index('opportunities_eligibility_idx').on(table.eligibility),
 ]);
+
+/** Opportunities a student saved; a reminder goes out 3 days before the application deadline. */
+export const savedOpportunities = pgTable('saved_opportunities', {
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  opportunityId: integer('opportunity_id').notNull().references(() => opportunities.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  remindedAt: timestamp('reminded_at'),
+}, (table) => [primaryKey({ columns: [table.userId, table.opportunityId] })]);
 
 /* ───────────── NOTIFICATIONS ───────────── */
 
