@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronRight, DoorClosed, Headphones, Video } from 'lucide-react';
+import { Check, ChevronRight, DoorClosed, Headphones, Video, X } from 'lucide-react';
 import { api, errorText, track } from '../../../api/client';
 import type { BookingWithRoom, QuotaInfo, Room } from '../../../types';
 import { addDays, dayKey, dayTitle, hm, now, todayKey, weekdayShort, dayNum } from '../../../lib/time';
-import { haptic, useMainButton } from '../../../lib/telegram';
+import { haptic } from '../../../lib/telegram';
 import { ScreenHead } from '../../ui/ScreenHead';
 import { Sheet } from '../../ui/Sheet';
 import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from '../../ui/States';
 import { useCached } from '../../../lib/cache';
-import { Wheel } from '../../ui/Wheel';
 import { tr } from '../../../lib/i18n';
 
 type When = 'now' | 'soon' | 'pick';
@@ -62,7 +61,8 @@ export function RoomsPage() {
   const start = useMemo(() => {
     if (when === 'pick' && picked) return picked;
     const n = now();
-    return when === 'soon' ? roundUp(new Date(n.getTime() + 30 * MIN), 5) : new Date(Math.floor(n.getTime() / MIN) * MIN);
+    // Bookings start on a 5-minute mark: "now" rounds down (14:12 → 14:10), later rounds up
+    return when === 'soon' ? roundUp(new Date(n.getTime() + 30 * MIN), 5) : new Date(Math.floor(n.getTime() / (5 * MIN)) * 5 * MIN);
   }, [when, picked, reload]);
 
   // "Зараз" and "Через 30 хв" keep one cached copy each; a picked time is cached by its slot
@@ -169,6 +169,7 @@ export function RoomsPage() {
 
       {booking && (
         <BookSheet room={booking.room} start={booking.start} leftMin={leftMin}
+          startLabel={when === 'now' ? `${tr('Зараз', 'Now')}, ${hm(booking.start)}` : `${dayKey(booking.start) === todayKey() ? '' : `${weekdayShort(dayKey(booking.start))} `}${hm(booking.start)}`}
           onClose={() => setBooking(null)}
           onBooked={(id) => { setBooking(null); setFresh(id); setReload((n) => n + 1); }} />
       )}
@@ -180,49 +181,38 @@ export function RoomsPage() {
   );
 }
 
-/** Pick a room's length on the wheel; the range above it is what will be booked. */
-function BookSheet({ room, start, leftMin, onClose, onBooked }: {
-  room: Room; start: Date; leftMin: number; onClose: () => void; onBooked: (bookingId: number) => void;
+const DURATIONS = [30, 60, 90, 120];
+/** "30 хв", "1 год", "1,5 год", "2 год" */
+const durShort = (m: number) => (m < 60 ? `${m} ${tr('хв', 'min')}` : `${String(m / 60).replace('.', tr(',', '.'))} ${tr('год', 'h')}`);
+
+/** Book a room: when it starts, how long (four lengths), one button that turns green when it's done. */
+function BookSheet({ room, start, startLabel, leftMin, onClose, onBooked }: {
+  room: RoomFree; start: Date; startLabel: string; leftMin: number; onClose: () => void; onBooked: (bookingId: number) => void;
 }) {
-  const [nextTaken, setNextTaken] = useState<Date | null>(null);
-  const [minutes, setMinutes] = useState(DEFAULT_MIN);
+  // Longest it can be: the daily quota, and the next booking of this room
+  const cap = Math.min(MAX_MIN, leftMin, room.freeUntil ? Math.floor((Date.parse(room.freeUntil) - start.getTime()) / MIN) : MAX_MIN);
+  const allowed = DURATIONS.filter((m) => m <= cap);
+  const [minutes, setMinutes] = useState(allowed.includes(DEFAULT_MIN) ? DEFAULT_MIN : allowed[allowed.length - 1] ?? 30);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [shakeKey, setShakeKey] = useState(0);
 
-  // The room's next booking caps how long we can take it
-  useEffect(() => {
-    api.get<{ bookings: { startTime: string; endTime: string }[] }>(`/rooms/${room.id}/schedule?date=${start.toISOString()}`)
-      .then((r) => {
-        const next = r.bookings.map((b) => new Date(b.startTime)).filter((d) => d.getTime() >= start.getTime() + MIN).sort((a, b) => a.getTime() - b.getTime())[0];
-        setNextTaken(next ?? null);
-      }).catch(() => setNextTaken(null));
-  }, [room.id, start.getTime()]);
-
-  const values = useMemo(() => {
-    const cap = Math.min(MAX_MIN, leftMin, nextTaken ? Math.floor((nextTaken.getTime() - start.getTime()) / MIN) : MAX_MIN);
-    const list: number[] = [];
-    for (let m = STEP; m <= cap; m += STEP) list.push(m);
-    return list.length ? list : [STEP];
-  }, [leftMin, nextTaken, start.getTime()]);
-
-  // Keep the chosen length inside what's allowed once the limits arrive
-  useEffect(() => {
-    if (!values.includes(minutes)) setMinutes(values.includes(DEFAULT_MIN) ? DEFAULT_MIN : values[values.length - 1]);
-  }, [values]);
-
   const end = new Date(start.getTime() + minutes * MIN);
+  const isToday = dayKey(start) === todayKey();
+  const after = leftMin - minutes;
 
   const book = async () => {
-    if (saving || done) return;
+    if (saving || done || !allowed.length) return;
+    haptic.tap();
     setSaving(true);
     setError(null);
     try {
       const r = await api.post<{ booking: { id: number } }>('/rooms/book', { roomId: room.id, startTime: start.toISOString(), endTime: end.toISOString() });
       haptic.success();
+      track('booking.confirm');
       setDone(true);
-      setTimeout(() => onBooked(r.booking.id), 900);
+      setTimeout(() => onBooked(r.booking.id), 1200);
     } catch (e) {
       haptic.error();
       setError(errorText(e));
@@ -232,36 +222,48 @@ function BookSheet({ room, start, leftMin, onClose, onBooked }: {
     }
   };
 
-  useMainButton({ text: `${tr('Забронювати до', 'Book until')} ${hm(end)}`, onClick: book, loading: saving, visible: !done });
-
-  if (done) {
-    return (
-      <Sheet onClose={onClose} label={tr('Заброньовано', 'Booked')}>
-        <div className="done-mark">
-          <Check strokeWidth={2.25} />
-          <b>{tr('Заброньовано', 'Booked')}</b>
-          <span className="num">{roomName(room)}, {hm(start)}–{hm(end)}</span>
-          <span>{tr('Підтвердження з кнопкою «Звільнити» — в чаті з ботом.', 'A confirmation with a Release button is in the bot chat.')}</span>
-        </div>
-      </Sheet>
-    );
-  }
-
-  const isToday = dayKey(start) === todayKey();
-
   return (
-    <Sheet onClose={onClose} label={roomName(room)}>
-      <div className="sheet__title">{roomName(room)}</div>
-      <div className="sheet__sub">{roomMeta(room)}</div>
+    <Sheet onClose={onClose} label={`${tr('Бронювання', 'Booking')} ${roomName(room)}`}>
+      <div className="book">
+        <div className="book__head">
+          <div>
+            <div className="sheet__title">{roomName(room)}</div>
+            <div className="book__meta">{roomMeta(room)} · {room.freeUntil ? `${tr('вільна до', 'free until')} ${hm(room.freeUntil)}` : tr('вільна до кінця дня', 'free for the rest of the day')}</div>
+          </div>
+          <button className="close-btn press" aria-label={tr('Закрити', 'Close')} onClick={onClose}><X strokeWidth={2.6} /></button>
+        </div>
 
-      <div key={shakeKey} className={shakeKey ? 'shake' : undefined}>
-        <div className="range">{hm(start)}–{hm(end)}</div>
-        <div className="range-sub">{isToday ? tr('сьогодні', 'today') : dayTitle(dayKey(start))}{nextTaken && values[values.length - 1] < Math.min(MAX_MIN, leftMin) ? tr(` · о ${hm(nextTaken)} кімнату вже забронювали`, ` · someone has it from ${hm(nextTaken)}`) : ''}</div>
+        <div key={shakeKey} className={shakeKey ? 'shake' : undefined}>
+          <div className="book__range num">{hm(start)} – {hm(end)}</div>
+          <div className="book__when">{isToday ? tr('сьогодні', 'today') : dayTitle(dayKey(start))} · {durShort(minutes)}</div>
+        </div>
+
+        <div className="book__card">
+          <div className="book__row"><span>{tr('Початок', 'Starts')}</span><span className="num">{startLabel}</span></div>
+          <div className="book__dur">
+            <span>{tr('Тривалість', 'Length')}</span>
+            <div className="seg seg--value" role="group" aria-label={tr('Тривалість броні', 'Booking length')}>
+              {DURATIONS.map((m) => (
+                <button key={m} aria-pressed={m === minutes} disabled={done || !allowed.includes(m)}
+                  onClick={() => { if (m !== minutes) { haptic.select(); setMinutes(m); } }}>{durShort(m)}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <p className="book__note num" role="status">
+          {error ? <span style={{ color: 'var(--danger)' }}>{error}</span>
+            : done ? tr('Нагадаємо за 10 хв до кінця. Підтвердження — у чаті з ботом.', "We'll remind you 10 min before the end. The confirmation is in the bot chat.")
+              : !allowed.length ? tr('Зараз забронювати не вийде: квота на сьогодні або наступна бронь не лишають і 30 хв.', 'Not bookable now: today\'s quota or the next booking leaves less than 30 min.')
+                : isToday ? (after >= 15 ? tr(`Після броні сьогодні залишиться ${durLabel(after)}`, `${durLabel(after)} left today after this`) : tr('Це вся квота на сьогодні', "That's all of today's quota"))
+                  : tr('До 3 год на день', 'Up to 3 h a day')}
+        </p>
+
+        <button className={`book__btn press${done ? ' book__btn--done' : ''}${allowed.length ? '' : ' book__btn--off'}`} disabled={saving || !allowed.length} onClick={book}>
+          {done && <Check strokeWidth={2.6} />}
+          <span className="num">{done ? `${tr('Заброньовано до', 'Booked until')} ${hm(end)}` : saving ? tr('Бронюю…', 'Booking…') : `${tr('Забронювати до', 'Book until')} ${hm(end)}`}</span>
+        </button>
       </div>
-
-      <Wheel values={values} value={minutes} onChange={setMinutes} label={durLabel} ariaLabel={tr('Тривалість броні', 'Booking length')} />
-
-      {error && <p className="note" style={{ color: 'var(--danger)', textAlign: 'center' }}>{error}</p>}
     </Sheet>
   );
 }

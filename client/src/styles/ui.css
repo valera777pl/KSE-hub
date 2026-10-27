@@ -153,10 +153,13 @@ body { font-family: var(--font-family); font-size: 15px; line-height: 1.4; }
 .now__line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ─── Bottom sheet ─── */
-.sheet-backdrop { position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, 0.4); animation: fade 200ms var(--ease); }
-.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 201; max-height: 88%; overflow-y: auto; background: var(--surface);
-  border-radius: 14px 14px 0 0; padding: 8px 16px calc(24px + var(--safe-area-bottom)); animation: rise 240ms var(--spring); }
-.sheet__grip { width: 36px; height: 5px; border-radius: 3px; background: var(--separator); margin: 0 auto 12px; }
+.sheet-backdrop { position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, 0.6); animation: fade 200ms var(--ease); }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 201; max-height: 88%; overflow-y: auto; overscroll-behavior: contain; background: var(--surface);
+  border-radius: 22px 22px 0 0; padding: 0 20px calc(28px + var(--safe-area-bottom)); animation: rise 240ms var(--spring); }
+/* A sheet that fits follows the finger from anywhere; otherwise only from the handle */
+.sheet--fits, .sheet__handle { touch-action: none; }
+.sheet__handle { display: flex; justify-content: center; padding: 8px 0 12px; margin: 0 -20px; cursor: grab; }
+.sheet__grip { width: 40px; height: 5px; border-radius: 3px; background: var(--text-tertiary); opacity: 0.6; }
 .sheet__title { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
 .sheet__sub { font-size: 15px; color: var(--text-secondary); margin-top: 4px; }
 @keyframes rise { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -238,16 +241,33 @@ body { font-family: var(--font-family); font-size: 15px; line-height: 1.4; }
 .sheet__big--late small { color: var(--danger); opacity: 0.8; }
 
 /* ─── Wheel picker ─── */
-.wheel { position: relative; }
-.wheel__band { position: absolute; left: 0; right: 0; top: 50%; height: 44px; margin-top: -22px; border-radius: 10px; background: var(--fill); pointer-events: none; }
-.wheel__list { position: relative; height: 100%; overflow-y: scroll; scroll-snap-type: y mandatory; padding: 88px 0; scrollbar-width: none; outline: none;
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 32%, #000 68%, transparent);
-          mask-image: linear-gradient(to bottom, transparent, #000 32%, #000 68%, transparent); }
-.wheel__list::-webkit-scrollbar { display: none; }
-.wheel__list:focus-visible + .wheel__band, .wheel__list:focus-visible { box-shadow: none; }
-.wheel__item { height: 44px; scroll-snap-align: center; display: flex; align-items: center; justify-content: center; font-size: 21px; color: var(--text-secondary);
-  font-variant-numeric: tabular-nums; transition: color 120ms var(--ease); cursor: pointer; }
-.wheel__item--on { color: var(--text); font-weight: 600; }
+.book { display: flex; flex-direction: column; gap: 18px; }
+.book__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.book__meta { font-size: 14px; color: var(--text-secondary); margin-top: 2px; }
+.close-btn { width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--surface-2); color: var(--text-secondary); position: relative; }
+.close-btn svg { width: 14px; height: 14px; }
+.close-btn::after { content: ''; position: absolute; inset: -7px; }
+[data-theme='light'] .close-btn { background: var(--fill); }
+.book__range { font-size: 44px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+.book__when { font-size: 15px; color: var(--text-secondary); margin-top: 2px; }
+.book__card { background: var(--inset); border-radius: 12px; }
+.book__row { display: flex; justify-content: space-between; align-items: center; padding: 13px 16px; font-size: 16px; border-bottom: 1px solid var(--separator); }
+.book__row span:last-child { color: var(--text-secondary); }
+.book__dur { padding: 12px 12px 14px; display: flex; flex-direction: column; gap: 10px; font-size: 16px; }
+.book__dur > span { padding-left: 4px; }
+.book__dur .seg { margin: 0; background: var(--surface); }
+.book__note { font-size: 14px; color: var(--text-secondary); text-align: center; min-height: 20px; }
+.book__btn { height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 17px; font-weight: 600;
+  background: var(--accent-fill); color: var(--on-accent); transition: background-color 200ms var(--ease); }
+.book__btn svg { width: 20px; height: 20px; animation: pop 300ms var(--spring); }
+.book__btn--done, .book__btn--done:disabled { background: var(--success-fill); opacity: 1; }
+.book__btn:disabled { opacity: 1; }
+.book__btn--off { background: var(--fill); color: var(--text-secondary); }
+
+/* A segment that picks a value: the chosen one is filled with the accent (DESIGN.md → Segment) */
+.seg--value button { font-size: 14px; height: 34px; }
+.seg--value button[aria-pressed='true'] { background: var(--accent-fill); color: var(--on-accent); }
+.seg button:disabled { opacity: 0.35; }
 
 /* ─── Rooms ─── */
 .pills { display: flex; gap: 8px; margin: -4px 0 4px; overflow-x: auto; scrollbar-width: none; }
