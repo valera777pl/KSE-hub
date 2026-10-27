@@ -289,7 +289,7 @@ export class ScheduleService {
     if (q.length < 2) return [];
     const latin = toLatin(q).replace(/\s+/g, '%');
     const rows = await db
-      .select({ userId: users.id, fullName: users.fullName, username: users.username, email: googleAccounts.email })
+      .select({ userId: users.id, fullName: users.fullName, username: users.username, avatarUrl: users.avatarUrl, email: googleAccounts.email })
       .from(users)
       .innerJoin(googleAccounts, eq(googleAccounts.userId, users.id))
       .where(and(
@@ -301,13 +301,13 @@ export class ScheduleService {
         )
       ))
       .limit(limit);
-    return rows.map(({ email, ...r }) => ({ ...r, ...nameFromEmail(email) }));
+    return rows.map(studentCard);
   }
 
   /** Another student's week, each class marked `shared` when it's in a calendar both attend. */
   static async compare(selfId: number, otherId: number, week: string | Date = new Date()) {
     const [other] = await db
-      .select({ userId: users.id, fullName: users.fullName, username: users.username, visible: users.scheduleVisible, email: googleAccounts.email })
+      .select({ userId: users.id, fullName: users.fullName, username: users.username, avatarUrl: users.avatarUrl, visible: users.scheduleVisible, email: googleAccounts.email })
       .from(users)
       .innerJoin(googleAccounts, eq(googleAccounts.userId, users.id))
       .where(eq(users.id, otherId))
@@ -316,9 +316,9 @@ export class ScheduleService {
 
     const mine = await this.calendarIds(selfId);
     const events = await this.weekEvents(otherId, week);
-    const { email, visible, ...student } = other;
+    const { visible, ...student } = other;
     return {
-      student: { ...student, ...nameFromEmail(email) },
+      student: studentCard(student),
       weekStart: kyivWeekStart(week),
       events: events.map((e) => ({ ...e, shared: mine.has(e.calendarId) })),
       sharedCourses: [...new Set(events.filter((e) => mine.has(e.calendarId)).map((e) => `${e.courseCode} [${e.section}]`))],
@@ -365,6 +365,11 @@ async function calendarApi<T>(token: string, path: string): Promise<T> {
   const res = await fetch(`https://www.googleapis.com/calendar/v3/${path}`, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Calendar API ${res.status}: ${(await res.text()).slice(0, 200)}`);
   return res.json() as Promise<T>;
+}
+
+/** A classmate as the mini app shows them: name and cohort from the KSE email, Telegram photo if any. */
+export function studentCard<T extends { email: string; avatarUrl?: string | null }>({ email, avatarUrl, ...rest }: T) {
+  return { ...rest, ...nameFromEmail(email), avatarUrl: avatarUrl ?? null };
 }
 
 /** "ivan.petrenko.26@kse.org.ua" → { name: "Ivan Petrenko", cohort: 2026 } */

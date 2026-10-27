@@ -219,6 +219,8 @@ export interface StudentMatch {
   cohort: number | null;
   fullName: string;
   username: string | null;
+  /** Telegram photo, when the student has one */
+  avatarUrl?: string | null;
 }
 
 export interface ScheduleCompare {

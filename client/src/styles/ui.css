@@ -81,34 +81,58 @@ body { font-family: var(--font-family); font-size: 15px; line-height: 1.4; }
 .icon-btn:disabled { opacity: 0.3; }
 
 /* ─── ClassRow ─── */
-.class { display: grid; grid-template-columns: 48px 1fr; gap: 12px; padding: 12px 16px; width: 100%; text-align: left; position: relative; }
-.class + .class::before { content: ''; position: absolute; top: 0; left: 76px; right: 0; border-top: 0.5px solid var(--separator); }
+.class { display: grid; grid-template-columns: 48px 1fr auto; gap: 12px; align-items: center; padding: 10px 14px 10px 16px; width: 100%; text-align: left; position: relative; }
+.class + .class::before { content: ''; position: absolute; top: 0; left: 76px; right: 0; border-top: 1px solid var(--separator); }
 .class__time { font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600; line-height: 1.3; }
 .class__time span { display: block; font-size: 13px; font-weight: 400; color: var(--text-secondary); }
-.class__code { font-size: 16px; font-weight: 600; line-height: 1.3; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.class__code { font-size: 16px; font-weight: 600; line-height: 1.3; display: flex; align-items: center; gap: 7px; }
 .class__code small { font-weight: 500; color: var(--text-secondary); font-size: 14px; }
-.class__place { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
-.class--past { opacity: 0.45; }
-.class--now + .class::before, .class--now::before { display: none; }
+.class__place { font-size: 13px; color: var(--text-secondary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Past and friends-only classes step back by colour, not by fading (DESIGN.md → ClassRow) */
+.class--past .class__time, .class--past .class__code, .class--theirs .class__time, .class--theirs .class__code { color: var(--text-secondary); }
+.class--theirs .class__place { color: var(--text-tertiary); }
 .class--now .class__code { color: var(--accent); }
-.class--now .class__code small { color: var(--accent); opacity: 0.75; }
+.class--now .class__code small { color: var(--accent); }
+.class__friends { display: flex; flex: none; }
+.class__friends .avatar { border: 2px solid var(--surface); margin-left: -6px; box-sizing: content-box; }
+.class__friends .avatar:first-child { margin-left: 0; }
+
 .progress { height: 4px; border-radius: 2px; background: var(--fill); margin-top: 8px; overflow: hidden; }
 .progress i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
 
-.avatars { display: inline-flex; vertical-align: middle; }
-.avatars .mini { width: 18px; height: 18px; font-size: 9px; margin-left: -4px; border: 1.5px solid var(--surface); }
-.avatars .mini:first-child { margin-left: 0; }
-.mini { border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: var(--text); background: var(--fill); flex: none; }
+/* ─── People: Telegram photo or initials on grey ─── */
+.avatar { border-radius: 50%; display: grid; place-items: center; overflow: hidden; flex: none; font-weight: 600; line-height: 1;
+  color: var(--text); background: var(--avatar-bg); }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-/* ─── Friends (compare) ─── */
-.friends { display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 12px 0 4px; scrollbar-width: none; }
-.friends::-webkit-scrollbar { display: none; }
-.friend { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px 0 4px; border-radius: 999px; flex: none;
-  background: var(--surface); font-size: 14px; font-weight: 500; border: 1.5px solid transparent; transition: border-color 150ms var(--ease), background-color 150ms var(--ease); }
-.friend .mini { width: 24px; height: 24px; font-size: 11px; }
-.friend[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
-.friend--add { padding: 0 12px; color: var(--accent); }
-.friend--add svg { width: 16px; height: 16px; }
+/* ─── Friends to compare with (DESIGN.md → FriendAvatars) ─── */
+.compare-head { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; min-height: 28px; }
+.compare-head span { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.compare-head .link-btn { padding: 4px 0; }
+/* Side padding keeps the selection ring from being clipped by the scroller */
+.pals { display: flex; gap: 18px; overflow-x: auto; padding: 10px 6px 2px; margin: 0 -6px; scrollbar-width: none; }
+.pals::-webkit-scrollbar { display: none; }
+.pal { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 52px; flex: none; }
+.pal__btn { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; transition: box-shadow 150ms var(--ease), opacity 150ms var(--ease); }
+.pal__btn[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+.pal__btn[aria-pressed='false'] { opacity: 0.45; }
+.pal__btn:disabled { cursor: default; }
+.pal__name { font-size: 12px; font-weight: 500; color: var(--tab-inactive); max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pal__btn[aria-pressed='true'] + .pal__name { color: var(--text); }
+.pal__add { border: 1.5px dashed var(--text-tertiary); color: var(--text-secondary); }
+.pal__add svg { width: 18px; height: 18px; }
+.pal__remove { position: absolute; top: -4px; right: -2px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--danger-fill); color: #FFFFFF; border: 2px solid var(--bg); box-sizing: content-box; }
+.pal__remove svg { width: 12px; height: 12px; }
+/* The badge is small; its tap area isn't */
+.pal__remove::after { content: ''; position: absolute; inset: -10px; }
+
+.pals__hint { flex: 1; min-width: 0; align-self: flex-start; height: 44px; text-align: left; font-size: 14px; color: var(--text-secondary); line-height: 1.3; }
+.seg-hint { margin-top: 14px; height: 34px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-secondary); }
+.day-head { display: flex; align-items: baseline; justify-content: space-between; margin: 18px 0 8px; }
+.day-head span { font-size: 15px; font-weight: 600; }
+.day-head span::first-letter { text-transform: uppercase; }
+.day-head .link-btn { padding: 0; }
 
 /* ─── Big number (NowCard) ─── */
 .now { display: block; width: 100%; text-align: left; background: var(--brand-card); color: #FFFFFF; border-radius: 18px; padding: 18px 20px 20px; }

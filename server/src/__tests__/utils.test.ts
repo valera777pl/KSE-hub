@@ -84,3 +84,11 @@ test('midnight in Kyiv on the DST-switch days', () => {
   assert.equal(kyivDayStart('2026-10-25').toISOString(), '2026-10-24T21:00:00.000Z'); // still +03 at 00:00
   assert.equal(kyivDayStart('2026-03-29').toISOString(), '2026-03-28T22:00:00.000Z'); // still +02 at 00:00
 });
+
+test('a classmate card carries the Telegram photo, never the email', async () => {
+  const { studentCard } = await import('../services/scheduleService.js');
+  const card = studentCard({ userId: 5, fullName: 'Олена', username: 'olena', avatarUrl: 'https://t.me/i/userpic/320/o.jpg', email: 'olena.koval.25@kse.org.ua' });
+  assert.deepEqual(card, { userId: 5, fullName: 'Олена', username: 'olena', name: 'Olena Koval', cohort: 2025, avatarUrl: 'https://t.me/i/userpic/320/o.jpg' });
+  assert.equal(studentCard({ userId: 6, fullName: 'Ivan', username: null, avatarUrl: null, email: 'ivan.p@kse.org.ua' }).avatarUrl, null);
+  assert.ok(!('email' in card));
+});

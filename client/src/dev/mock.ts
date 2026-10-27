@@ -288,14 +288,15 @@ const routes: [string, RegExp, Handler][] = [
   ['POST', /^\/schedule\/refresh$/, () => ({ calendars: 5 })],
   ['GET', /^\/schedule\/search$/, (_m, u) => {
     const s = (u.searchParams.get('q') || '').toLowerCase();
-    return { students: s.length < 2 ? [] : STUDENTS.filter((x) => `${x.name} ${x.fullName}`.toLowerCase().includes(s)).map(({ calendars: _c, hidden: _h, ...x }) => x) };
+    return { students: s.length < 2 ? [] : STUDENTS.filter((x) => `${x.name} ${x.fullName}`.toLowerCase().includes(s)).map(({ calendars: _c, hidden: _h, ...x }) => ({ ...x, avatarUrl: null })) };
   }],
   ['GET', /^\/schedule\/compare\/(\d+)$/, (m, u) => {
     const st = STUDENTS.find((x) => x.userId === Number(m[1]));
     if (!st || st.hidden) throw Object.assign(new Error('Цей студент приховав свій розклад'), { status: 404 });
     const theirs = [...WEEK.filter((e) => st.calendars.includes(e.calendarId)), { calendarId: 6, courseCode: 'POL101', section: 'L2', title: 'Political Science', location: LOC.s2151, day: 2, from: '13:30', to: '14:50' }];
     const events = weekEvents(u.searchParams.get('start'), theirs).map((e) => ({ ...e, shared: [1, 2, 3, 4, 5].includes(e.calendarId) }));
-    const { calendars: _c, hidden: _h, ...student } = st;
+    const { calendars: _c, hidden: _h, ...rest } = st;
+    const student = { ...rest, avatarUrl: null };
     return { student, weekStart: u.searchParams.get('start'), events, sharedCourses: [...new Set(events.filter((e) => e.shared).map((e) => `${e.courseCode} [${e.section}]`))] };
   }],
   ['GET', /^\/moodle\/deadlines$/, () => ({ deadlines: empty ? [] : DEADLINES })],
