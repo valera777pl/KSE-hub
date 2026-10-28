@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Glow } from '../../ui/Glow';
+import { DoneToast, useAutoDone, useDoneFlow } from '../../ui/doneFlow';
 import { ChevronRight } from 'lucide-react';
 import { api } from '../../../api/client';
 import type { ClassEvent, DeadlineWithCourse } from '../../../types';
@@ -37,7 +38,10 @@ export function TodayPage() {
   const mailQ = useCached('mail.important', () => api.get<{ emails: Mail[] }>('/mail/important').then((r) => r.emails),
     { keep: (list) => list.map((m) => ({ id: m.id, subject: m.subject, from: m.from, receivedAt: m.receivedAt, summary: '', url: '' })) });
   const weeks = weeksQ.data;
-  const deadlines = deadlinesQ.data;
+  // Ticking a deadline off right here plays the same «Зроблено» as in Дедлайни
+  const flow = useDoneFlow(deadlinesQ.refresh);
+  const deadlines = flow.apply(deadlinesQ.data);
+  useAutoDone(deadlinesQ.data, flow);
   const deadlinesFailed = !deadlines && !!deadlinesQ.error;
   const mail = mailQ.data ?? [];
   const stale = [weeksQ, deadlinesQ, mailQ].find((q) => q.staleAt);
@@ -101,10 +105,12 @@ export function TodayPage() {
         <p className="group-note" style={{ padding: 0 }}>{tr('Найближчі два дні нічого здавати не треба.', 'Nothing is due in the next two days.')}</p>
       ) : (
         <div className="group">
-          {soon.map((d) => <DeadlineRow key={d.assignment.id} d={d} onOpen={() => { haptic.tap(); openDeadline(d.assignment.id); }} />)}
+          {soon.map((d) => <DeadlineRow key={d.assignment.id} d={d} onOpen={() => { haptic.tap(); openDeadline(d.assignment.id); }}
+            onCheck={(via) => flow.complete(d.assignment.id, via)} phase={flow.phaseOf(d.assignment.id)} />)}
         </div>
       )}
 
+      <DoneToast flow={flow} />
       {mail.length > 0 && (
         <>
           <div className="section-head"><h2>{tr('Пошта', 'Mail')}</h2></div>

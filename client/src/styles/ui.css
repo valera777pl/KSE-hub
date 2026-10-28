@@ -575,3 +575,51 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
 .glow--center { top: 50%; width: 440px; height: 340px; transform: translate(-50%, -50%); }
 .empty-day { padding: 12px 0 8px; }
 @media (prefers-reduced-motion: reduce) { .glow--drift { animation: none; } }
+
+/* ─── Deadline row with «Зроблено» (DESIGN.md → Done): circle, swipe, fold ─── */
+.dl--row { padding: 0 0 0 16px; gap: 12px; background: var(--surface); touch-action: pan-y; transition: transform 220ms var(--ease); }
+.dl__body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; padding: 11px 16px 11px 0; text-align: left; }
+.dl-wrap { display: grid; grid-template-rows: 1fr; }
+.dl-wrap__in { min-height: 0; overflow: hidden; position: relative; }
+.dl-wrap + .dl-wrap .dl::before, .row + .dl-wrap .dl::before { content: ''; position: absolute; top: 0; left: 64px; right: 0; border-top: 1px solid var(--separator); z-index: 1; }
+.dl-wrap--check + .dl-wrap--check .dl::before { left: 98px; }
+.dl-wrap + .row::before { content: ''; position: absolute; top: 0; left: 16px; right: 0; border-top: 1px solid var(--separator); }
+
+.done-check { width: 44px; height: 44px; margin: 0 -11px; flex: none; display: grid; place-items: center; }
+.done-check svg { width: 22px; height: 22px; overflow: visible; }
+.done-check circle { fill: transparent; stroke: var(--text-tertiary); stroke-width: 1.6; transition: fill 150ms var(--ease), stroke 150ms var(--ease); }
+.done-check path { fill: none; stroke: var(--on-accent); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 14; stroke-dashoffset: 14; }
+.done-check:active svg { transform: scale(0.9); transition: transform 100ms var(--ease); }
+.dl--done .done-check circle { fill: var(--success-fill); stroke: var(--success-fill); }
+.dl--done .done-check path { stroke-dashoffset: 0; }
+
+.dl-wrap--completing .done-check circle { fill: var(--success-fill); stroke: var(--success-fill); }
+.dl-wrap--completing .done-check path { stroke-dashoffset: 14; animation: done-draw 180ms ease-out 120ms forwards; }
+.dl-wrap--completing .dl__title { text-decoration: line-through; text-decoration-color: transparent; animation: done-strike 200ms var(--ease) 250ms forwards; }
+.dl-wrap--completing .dl__date b { animation: done-grey 200ms var(--ease) 250ms forwards; }
+.dl-wrap--completing { animation: done-fold 280ms cubic-bezier(0.32, 0.72, 0, 1) 420ms forwards; }
+.dl-wrap--entering { animation: done-unfold 300ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes done-draw { to { stroke-dashoffset: 0; } }
+@keyframes done-strike { to { color: var(--text-tertiary); text-decoration-color: var(--text-tertiary); } }
+@keyframes done-grey { to { color: var(--text-tertiary); } }
+@keyframes done-fold { to { grid-template-rows: 0fr; opacity: 0; } }
+@keyframes done-unfold { from { grid-template-rows: 0fr; opacity: 0; } }
+
+.dl-swipe { position: absolute; inset: 0; background: var(--success-fill); color: var(--on-accent); display: flex; align-items: center; padding-left: 22px; }
+.dl-swipe svg { width: 22px; height: 22px; }
+
+.toast { position: fixed; left: 16px; right: 16px; bottom: calc(var(--safe-area-bottom) + 72px); z-index: 120; max-width: 420px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 8px 12px 16px; border-radius: 12px;
+  background: var(--text); color: var(--bg); font-size: 15px; font-weight: 500; animation: toast-in 220ms var(--ease); }
+.toast__undo { color: var(--bg); font-weight: 600; padding: 6px 10px; border-radius: 8px; }
+@keyframes toast-in { from { transform: translateY(12px); opacity: 0; } }
+
+.week-count { display: flex; align-items: baseline; justify-content: space-between; margin: 2px 0 14px; font-size: 13px; color: var(--text-secondary); }
+.week-count b { font-weight: 600; color: var(--text); }
+.tick { display: inline-block; animation: tick-up 260ms var(--ease); }
+@keyframes tick-up { from { transform: translateY(60%); opacity: 0; } }
+.week-clean { padding: 8px 0 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dl-wrap--completing, .dl-wrap--entering, .dl-wrap--completing .done-check path, .dl-wrap--completing .dl__title, .tick, .toast { animation: none; }
+}

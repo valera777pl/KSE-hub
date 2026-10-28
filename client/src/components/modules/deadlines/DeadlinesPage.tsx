@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, BookCheck, BookOpen, ChevronDown, ChevronRight, Link2 } from 'lucide-react';
+import { Bell, BookCheck, BookOpen, CheckCheck, ChevronDown, ChevronRight, Link2 } from 'lucide-react';
+import { DoneToast, Tick, useAutoDone, useDoneFlow, type DoneVia } from '../../ui/doneFlow';
+import { Glow } from '../../ui/Glow';
 import { RemindSheet, shortWhen } from '../../ui/RemindSheet';
 import { api, track } from '../../../api/client';
 import type { DeadlineWithCourse } from '../../../types';
-import { addDays, dayKey, dayTitle, hm, now, plural, spanText, todayKey } from '../../../lib/time';
-import { haptic, openExternal, useMainButton } from '../../../lib/telegram';
+import { addDays, dayKey, dayTitle, hm, mondayOf, now, plural, spanText, todayKey } from '../../../lib/time';
+import { cloud, haptic, openExternal, useMainButton } from '../../../lib/telegram';
 import { useAuthStore } from '../../../stores/authStore';
 import { useUi } from '../../../stores/uiStore';
 import { Sheet } from '../../ui/Sheet';
@@ -18,6 +20,7 @@ import { tr } from '../../../lib/i18n';
 const DAY = 86_400_000;
 const LATE_KEEP = 7 * DAY;
 const GENERAL = /general\s*\/\s*university/i;
+const CLEAN_KEY = 'week_clean';
 
 const typeLabel = (): Record<string, string> => ({ assignment: tr('Завдання', 'Assignment'), quiz: tr('Тест', 'Quiz'), event: tr('Подія', 'Event') });
 
@@ -34,9 +37,10 @@ export function DeadlinesPage() {
   const user = useAuthStore((s) => s.user);
   const { deadlineId } = useUi();
   const q = useCached('deadlines', () => api.get<{ deadlines: DeadlineWithCourse[] }>('/moodle/deadlines?completed=true').then((r) => r.deadlines));
-  // Local copy so "Позначити зробленим" shows at once, before the server answers
-  const [all, setAll] = useState<DeadlineWithCourse[] | null>(q.data);
-  useEffect(() => setAll(q.data), [q.data]);
+  // «Зроблено» shows at once (and animates), before the server answers
+  const flow = useDoneFlow(q.refresh);
+  const all = flow.apply(q.data);
+  useAutoDone(q.data, flow);
   const [openId, setOpenId] = useState<number | null>(deadlineId);
   const [showGeneral, setShowGeneral] = useState(false);
   const [showDone, setShowDone] = useState(false);
@@ -46,7 +50,7 @@ export function DeadlinesPage() {
   useEffect(() => { if (deadlineId) useUi.setState({ deadlineId: null }); }, []);
 
   const t = now().getTime();
-  const { groups, general, done } = useMemo(() => {
+  const { groups, general, done, week, overdue } = useMemo(() => {
     const live = (all ?? []).filter(({ assignment: a }) => a.dueDate && new Date(a.dueDate).getTime() > t - LATE_KEEP);
     const open = live.filter((d) => !d.assignment.isCompleted);
     const today = todayKey();
@@ -63,21 +67,31 @@ export function DeadlinesPage() {
       const i = due.getTime() < t ? 0 : k === today ? 1 : k === addDays(today, 1) ? 2 : k < weekEnd ? 3 : 4;
       buckets[i].items.push(d);
     }
-    return { groups: buckets.filter((b) => b.items.length), general, done: live.filter((d) => d.assignment.isCompleted) };
+    // This week, Mon–Sun: how much of it is done ("4 з 6 цього тижня")
+    const monday = mondayOf(today);
+    const week = live.filter((d) => !GENERAL.test(d.courseName ?? '') && dayKey(new Date(d.assignment.dueDate!)) >= monday
+      && dayKey(new Date(d.assignment.dueDate!)) < addDays(monday, 7));
+    return {
+      groups: buckets.filter((b) => b.items.length), general, done: live.filter((d) => d.assignment.isCompleted),
+      week: { total: week.length, done: week.filter((d) => d.assignment.isCompleted).length, monday },
+      overdue: buckets[0].items.length,
+    };
   }, [all, t]);
 
-  const toggle = async (id: number) => {
-    const was = all?.find((d) => d.assignment.id === id)?.assignment.isCompleted;
-    setAll((list) => list?.map((d) => (d.assignment.id === id ? { ...d, assignment: { ...d.assignment, isCompleted: !d.assignment.isCompleted } } : d)) ?? null);
-    try {
-      await api.patch(`/moodle/assignments/${id}/toggle`);
-      haptic.success();
-      if (!was) track('deadline.done', { via: 'button' });
-    } catch {
-      haptic.error();
-      q.refresh();
-    }
+  const weekClean = week.total > 0 && week.done === week.total && overdue === 0;
+  // A clean week earns one quiet success tick, once per week
+  useEffect(() => {
+    if (!weekClean) return;
+    cloud.get(CLEAN_KEY).then((v) => { if (v !== week.monday) { haptic.success(); cloud.set(CLEAN_KEY, week.monday); } });
+  }, [weekClean, week.monday]);
+
+  /** From the sheet: done with the full animation once the sheet is down; «Повернути» is a plain switch. */
+  const toggle = (id: number) => {
+    const d = all?.find((x) => x.assignment.id === id);
+    if (d?.assignment.isCompleted) flow.set(id, false);
+    else setTimeout(() => flow.complete(id, 'button'), 260);
   };
+  const check = (d: DeadlineWithCourse) => (via: DoneVia) => (d.assignment.isCompleted ? flow.set(d.assignment.id, false) : flow.complete(d.assignment.id, via));
 
   const opened = all?.find((d) => d.assignment.id === openId) ?? null;
 
@@ -99,19 +113,34 @@ export function DeadlinesPage() {
   }
 
   const nothingOpen = groups.length === 0;
+  const nextLater = groups.find((g) => g.items.length)?.items[0];
 
   return (
     <>
       {stale}
-      {nothingOpen && (
+      {week.total > 0 && !weekClean && (
+        <div className="week-count" aria-live="polite">
+          <span><b><Tick value={week.done} /> {tr('з', 'of')} {week.total}</b> {tr('цього тижня', 'this week')}</span>
+        </div>
+      )}
+      {weekClean ? (
+        <div className="has-glow week-clean">
+          <Glow center />
+          <EmptyState icon={CheckCheck} title={tr('Тиждень чистий', 'Week cleared')}
+            text={nextLater
+              ? tr(`Усе на цей тиждень зроблено. Далі — ${shortWhen(new Date(nextLater.assignment.dueDate!))}.`, `Everything for this week is done. Next up: ${shortWhen(new Date(nextLater.assignment.dueDate!))}.`)
+              : tr('Усе на цей тиждень зроблено.', 'Everything for this week is done.')} />
+        </div>
+      ) : nothingOpen && (
         <div className="group"><EmptyState icon={BookCheck} title={tr('Усе здано', 'All done')} text={tr('Нові дедлайни зʼявляться тут, щойно викладач додасть їх у Moodle.', 'New deadlines appear here as soon as they\'re added in Moodle.')} /></div>
       )}
 
       {groups.map((g, gi) => (
         <section key={g.title}>
-          <h3 className="group-title" style={gi === 0 && !nothingOpen ? { marginTop: 4 } : undefined}>{g.title}</h3>
+          <h3 className="group-title" style={gi === 0 && !nothingOpen && !weekClean ? { marginTop: 4 } : undefined}>{g.title}</h3>
           <div className="group">
-            {g.items.map((d) => <DeadlineRow key={d.assignment.id} d={d} onOpen={() => { haptic.tap(); setOpenId(d.assignment.id); }} />)}
+            {g.items.map((d) => <DeadlineRow key={d.assignment.id} d={d} onOpen={() => { haptic.tap(); setOpenId(d.assignment.id); }}
+              onCheck={check(d)} phase={flow.phaseOf(d.assignment.id)} />)}
           </div>
         </section>
       ))}
@@ -134,7 +163,8 @@ export function DeadlinesPage() {
         <>
           <h3 className="group-title">{tr('Зроблено', 'Done')}</h3>
           <div className="group">
-            {showDone && done.map((d) => <DeadlineRow key={d.assignment.id} d={d} onOpen={() => { haptic.tap(); setOpenId(d.assignment.id); }} />)}
+            {showDone && done.map((d) => <DeadlineRow key={d.assignment.id} d={d} onOpen={() => { haptic.tap(); setOpenId(d.assignment.id); }}
+              onCheck={check(d)} phase={flow.phaseOf(d.assignment.id)} />)}
             <button className="row toggle-row" aria-expanded={showDone} onClick={() => { haptic.select(); setShowDone((v) => !v); }}>
               <span className="row__main">{showDone ? tr('Згорнути', 'Collapse') : tr(`Показати ${done.length}`, `Show ${done.length}`)}</span>
               <ChevronDown size={18} strokeWidth={1.75} />
@@ -149,6 +179,7 @@ export function DeadlinesPage() {
       </p>
 
       {opened && <DeadlineSheet d={opened} onClose={() => setOpenId(null)} onToggle={() => { toggle(opened.assignment.id); setOpenId(null); }} />}
+      <DoneToast flow={flow} />
       {connecting && <ConnectSheet onClose={() => setConnecting(false)} onSaved={() => { setConnecting(false); q.refresh(); }} />}
     </>
   );
