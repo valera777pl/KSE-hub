@@ -250,7 +250,7 @@ export class ScheduleService {
         await this.syncAccount(account);
         synced++;
       } catch (err) {
-        console.error(`Schedule sync failed for ${account.email}:`, err);
+        console.error(`Schedule sync failed for user ${account.userId}:`, err);
       }
     }
     return synced;

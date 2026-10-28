@@ -76,7 +76,7 @@ export class GmailService {
         if (email) stored.push(email);
       } catch (err) {
         failed++;
-        console.error(`Gmail ingest failed (${account.email}, ${id}):`, err);
+        console.error(`Gmail ingest failed (user ${account.userId}, ${id}):`, err);
       }
     });
 
@@ -171,6 +171,8 @@ export class GmailService {
     const groups = urgent.some((e) => e.source === 'moodle') ? await MoodleService.groups(userId) : new Map();
 
     for (const email of urgent) {
+      // Over today's budget: it stays undigested and goes out in the next digest
+      if (!(await PushService.allowed(userId, 'urgent'))) break;
       // A reminder about another practice group's quiz is not this student's business
       if (email.source === 'moodle' && isOtherGroup(email.subject ?? '', null, groups)) continue;
       const text = `🚨 <b>${escapeHtml(email.subject ?? '')}</b>\n<i>${escapeHtml(email.fromName ?? '')}</i>\n\n${escapeHtml(email.summary.summary)}`;
@@ -276,7 +278,8 @@ async function gmail<T>(token: string, path: string): Promise<T> {
   const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Gmail API ${res.status}: ${await res.text()}`);
+  // The error body says what went wrong (quota, auth), never the mail; still cut short for the logs
+  if (!res.ok) throw new Error(`Gmail API ${res.status}: ${(await res.text()).slice(0, 200)}`);
   return res.json() as Promise<T>;
 }
 

@@ -26,7 +26,8 @@ import { authRoutes } from './routes/auth.js';
 const app = new Hono();
 
 // ─── Global Middleware ───
-app.use('*', logger());
+// Paths only: query strings can carry what a student typed (?q=surname)
+app.use('*', logger((line, ...rest) => console.log(line.replace(/\?\S*/, ''), ...rest)));
 app.use('*', cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,

@@ -1,5 +1,5 @@
 import { db } from '../db/connection.js';
-import { bookings, classReminders, deadlineReminders, googleAccounts, moodleAssignments, moodleCourses, opportunities, rooms, savedOpportunities, users } from '../db/schema.js';
+import { bookings, chatMessages, classReminders, deadlineReminders, googleAccounts, moodleAssignments, moodleCourses, opportunities, rooms, savedOpportunities, users } from '../db/schema.js';
 import { InlineKeyboard } from 'grammy';
 import { BookingService, EXTEND_MINUTES, extendBlocker } from './bookingService.js';
 import { and, asc, eq, gt, gte, isNotNull, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
@@ -14,6 +14,10 @@ import { appButton, bookingEndingText, deadlineReminderText, isGeneralCourse, we
 import { formatKyiv, kyivHour, kyivWeekday } from '../utils/kyivTime.js';
 
 const langOf = (u: { languagePref: string | null }): Lang => (u.languagePref === 'en' ? 'en' : 'uk');
+
+/** Copilot history is kept for a week. */
+export const CHAT_KEEP_DAYS = 7;
+export const chatCutoff = (now: Date) => new Date(now.getTime() - CHAT_KEEP_DAYS * 24 * 3_600_000);
 
 const HOUR = 3_600_000;
 const CALENDAR_SYNC_EVERY = 3 * HOUR;
@@ -40,7 +44,18 @@ export class CronService {
     const weekly = await this.sendWeeklyDeadlines();
     const savedOpps = await this.sendSavedOpportunityReminders();
     const bookingEnds = await this.sendBookingEndReminders();
-    return { calendars, emails, schedules, courseCalendars, classReminders, reminders, digests, weekly, savedOpps, bookingEnds };
+    const cleaned = await this.cleanup();
+    return { calendars, emails, schedules, courseCalendars, classReminders, reminders, digests, weekly, savedOpps, bookingEnds, cleaned };
+  }
+
+  /**
+   * Keep less: Copilot conversations older than a week are deleted (the assistant reads only the last 20 lines anyway).
+   * Runs in the 4 a.m. Kyiv hour; the delete is idempotent, so several ticks in that hour are harmless.
+   */
+  static async cleanup(now = new Date()) {
+    if (kyivHour(now) !== 4) return 0;
+    const deleted = await db.delete(chatMessages).where(lt(chatMessages.createdAt, chatCutoff(now))).returning({ id: chatMessages.id });
+    return deleted.length;
   }
 
   /** Sunday from 19:00 Kyiv: next week's Moodle deadlines in one message (classes are in the schedule tab). */
@@ -94,7 +109,7 @@ export class CronService {
         try {
           stored += await GmailService.sync(account);
         } catch (err) {
-          console.error(`Gmail sync failed for ${account.email}:`, err);
+          console.error(`Gmail sync failed for user ${account.userId}:`, err);
         }
       }));
     }
@@ -163,6 +178,9 @@ export class CronService {
 
       const due = assignment.dueDate!;
       const kind = due.getTime() - now.getTime() <= 3 * HOUR ? '3h' : '24h';
+      const push = kind === '3h' ? 'd3' : 'd24';
+      // Over today's budget: not claimed, so it can still go out as the 3-hour reminder; the digest lists it anyway
+      if (!(await PushService.allowed(assignment.userId, push))) continue;
 
       // The unique index makes this the "send once" lock
       const claimed = await db
@@ -174,7 +192,6 @@ export class CronService {
 
       const lang = langOf({ languagePref });
       const text = deadlineReminderText(lang, kind, { title: assignment.title, courseName, dueDate: due });
-      const push = kind === '3h' ? 'd3' : 'd24';
       if (await PushService.send({ id: assignment.userId, telegramId }, push, text, appButton(lang === 'en' ? 'Open deadline' : 'Відкрити дедлайн', `deadline_${assignment.id}`, push))) {
         sent++;
         AnalyticsService.track(assignment.userId, 'reminder.sent', { kind });
@@ -200,6 +217,8 @@ export class CronService {
 
     let sent = 0;
     for (const { userId, opp, telegramId, languagePref } of rows) {
+      // Over today's budget: try again on a later tick (tomorrow, the deadline is up to 3 days away)
+      if (!(await PushService.allowed(userId, 'opp'))) continue;
       // Claim first so two overlapping ticks can't both send it
       const claimed = await db.update(savedOpportunities).set({ remindedAt: now })
         .where(and(eq(savedOpportunities.userId, userId), eq(savedOpportunities.opportunityId, opp.id), isNull(savedOpportunities.remindedAt)))

@@ -200,6 +200,9 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
         <div className="group" style={{ marginTop: 32 }}>
           <button className="row press row--danger" onClick={deleteData}>{tr('Видалити мої дані з KSE Hub', 'Delete my data from KSE Hub')}</button>
         </div>
+        <p className="note">{tr(
+          'Тексти листів не зберігаємо — лише тему й короткий зміст для дайджесту. Розмови з Copilot видаляємо через тиждень.',
+          'We never store email bodies — only the subject and a short summary for the digest. Copilot chats are deleted after a week.')}</p>
       </div>
 
       {pick && (
