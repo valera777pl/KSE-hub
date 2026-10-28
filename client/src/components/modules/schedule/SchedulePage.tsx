@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDrag } from '@use-gesture/react';
-import { CalendarCheck, ChevronLeft, ChevronRight, Coffee, Minus, Plus, RefreshCw, Search, Users } from 'lucide-react';
+import { CalendarCheck, ChevronLeft, ChevronRight, Coffee, Minus, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react';
+import { inviteFriend } from '../../../lib/invite';
 import { api } from '../../../api/client';
 import type { ClassEvent, ScheduleCompare, StudentMatch } from '../../../types';
 import { addDays, dayKey, dayMonth, dayNum, dayTitle, hm, mondayOf, now, spanText, todayKey, weekdayShort, weekOf } from '../../../lib/time';
@@ -31,6 +32,20 @@ type Week = { connected: boolean; synced: boolean; events: ClassEvent[] };
 /** One week of my classes per Monday; the last good copy shows at once and when offline. */
 const useWeek = (monday: string) => useCached(`week:${monday}`, () => api.get<Week>(`/schedule/week?start=${monday}`));
 
+const IMPORTED_KEY = 'friends_imported';
+
+/**
+ * Friends picked for comparison used to live only in Telegram cloud storage. Once per account they become
+ * proper friend requests on the server (each person gets a message in the bot), so reminders and courses can use them.
+ */
+async function importOnce(saved: Friend[]) {
+  if (!saved.length || (await cloud.get(IMPORTED_KEY)) === '1') return;
+  try {
+    await api.post('/friends/import', { userIds: saved.map((f) => f.userId) });
+    cloud.set(IMPORTED_KEY, '1');
+  } catch { /* try again next time */ }
+}
+
 /** Friends I compare with, who of them is switched on and how: all remembered in Telegram cloud storage. */
 function useFriends(monday: string) {
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -44,6 +59,7 @@ function useFriends(monday: string) {
       try {
         const saved = JSON.parse(rawFriends || '[]') as Friend[];
         setFriends(saved);
+        importOnce(saved);
         // Before this was remembered, everyone added was on
         const on = rawActive ? (JSON.parse(rawActive) as number[]) : saved.map((f) => f.userId);
         setActive(new Set(on.filter((id) => saved.some((f) => f.userId === id))));
@@ -89,6 +105,8 @@ function useFriends(monday: string) {
     save([...friends, { userId: s.userId, name: s.name, avatarUrl: s.avatarUrl ?? null }]);
     saveActive(new Set(active).add(s.userId));
     track('schedule.friend_added');
+    // Comparing is also a friend request: they see it in the bot and answer there
+    api.post('/friends/request', { userId: s.userId }).catch(() => {});
   };
   const remove = (id: number) => {
     save(friends.filter((f) => f.userId !== id));
@@ -388,7 +406,7 @@ function AddFriendSheet({ taken, onPick, onRemove, onClose }: {
   return (
     <Sheet onClose={onClose} label={tr('Порівняти з друзями', 'Compare with friends')}>
       <div className="sheet__title">{tr('Порівняти з друзями', 'Compare with friends')}</div>
-      <div className="sheet__sub">{tr(`Покажемо спільні пари. До ${MAX_FRIENDS} людей.`, `We'll show the classes you share. Up to ${MAX_FRIENDS} people.`)}</div>
+      <div className="sheet__sub">{tr(`Покажемо спільні пари й надішлемо запит у друзі. До ${MAX_FRIENDS} людей.`, `We'll show the classes you share and send a friend request. Up to ${MAX_FRIENDS} people.`)}</div>
       <div className="field-wrap" style={{ marginTop: 16 }}>
         <Search strokeWidth={1.75} />
         <input className="field" autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tr('Прізвище', 'Surname')} enterKeyHint="search" />
@@ -409,7 +427,18 @@ function AddFriendSheet({ taken, onPick, onRemove, onClose }: {
         </div>
       )}
       {found && found.length === 0 && (
-        <EmptyState icon={Users} title={tr('Нікого не знайдено', 'No one found')} text={tr('Видно лише тих, хто підключив пошту в KSE Hub і не приховав розклад.', 'Only students who connected their mail to KSE Hub and keep their schedule visible show up.')} />
+        <EmptyState icon={Users} title={tr('Нікого не знайдено', 'No one found')}
+          text={tr('Можливо, друга ще немає в KSE Hub. Запроси — і ви одразу станете друзями.', 'Maybe your friend isn\'t on KSE Hub yet. Invite them and you\'ll be friends right away.')}
+          action={{ label: tr('Запросити в KSE Hub', 'Invite to KSE Hub'), onClick: () => { inviteFriend().catch(() => haptic.error()); } }} />
+      )}
+
+      {!found && (
+        <div className="group" style={{ marginTop: 12 }}>
+          <button className="row press" onClick={() => { inviteFriend().catch(() => haptic.error()); }}>
+            <UserPlus className="row-icon" strokeWidth={1.7} />
+            <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Запросити друга в KSE Hub', 'Invite a friend to KSE Hub')}</div></div>
+          </button>
+        </div>
       )}
 
       {!found && taken.length > 0 && (

@@ -45,3 +45,22 @@ export function verifyState(state: string, purpose = 'oauth'): number | null {
   if (parseInt(exp, 10) < Date.now() / 1000) return null;
   return parseInt(userId, 10);
 }
+
+/**
+ * Short code for an invite link, t.me/<bot>?start=inv_<code> (Telegram allows 64 chars of [A-Za-z0-9_-]).
+ * Signed, so nobody can claim to have been invited by someone else; doesn't expire.
+ */
+export function signInvite(userId: number): string {
+  const mac = createHmac('sha256', key()).update(`invite:${userId}`).digest('base64url').slice(0, 12);
+  return `${userId.toString(36)}_${mac}`;
+}
+
+export function verifyInvite(code: string): number | null {
+  const sep = code.indexOf('_');
+  if (sep < 1) return null;
+  const userId = parseInt(code.slice(0, sep), 36);
+  if (!Number.isSafeInteger(userId) || userId <= 0) return null;
+  const a = Buffer.from(code);
+  const b = Buffer.from(signInvite(userId));
+  return a.length === b.length && timingSafeEqual(a, b) ? userId : null;
+}

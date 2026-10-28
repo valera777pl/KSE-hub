@@ -6,7 +6,8 @@ import { upsertUser } from '../middleware/telegramAuth.js';
 import { AIService, AILimitError } from '../ai/aiService.js';
 import { AnalyticsService } from '../services/analyticsService.js';
 import { StartupService, contactLink, displayName } from '../services/startupService.js';
-import { signState } from '../utils/crypto.js';
+import { signState, verifyInvite } from '../utils/crypto.js';
+import { FriendService } from '../services/friendService.js';
 import { appUrl, chunkHtml, escapeHtml } from './send.js';
 import { appButton } from './messages.js';
 import { BookingService } from '../services/bookingService.js';
@@ -46,6 +47,11 @@ export function getBot(): Bot<BotContext> {
   bot.command('start', async (ctx) => {
     const name = escapeHtml(ctx.from!.first_name);
     AnalyticsService.track(ctx.dbUser.id, 'bot.start');
+    // t.me/<bot>?start=inv_<code>: remember who invited a newcomer; they become friends after onboarding
+    const inviterId = typeof ctx.match === 'string' && ctx.match.startsWith('inv_') ? verifyInvite(ctx.match.slice(4)) : null;
+    if (inviterId && inviterId !== ctx.dbUser.id && !ctx.dbUser.onboardedAt && !ctx.dbUser.invitedBy) {
+      await db.update(users).set({ invitedBy: inviterId }).where(eq(users.id, ctx.dbUser.id)).catch(() => {});
+    }
     const en = ctx.dbUser.languagePref === 'en';
     if (!ctx.dbUser.onboardedAt) {
       await ctx.reply(en ? `Hi, ${name}. Setup takes a minute.` : `Привіт, ${name}. Налаштування займе хвилину.`, {
@@ -90,6 +96,20 @@ export function getBot(): Bot<BotContext> {
       await ctx.editMessageText(`${escapeHtml(ctx.callbackQuery.message?.text ?? '')}${outcome}`, { parse_mode: 'HTML' });
     } catch (err: any) {
       await ctx.answerCallbackQuery(err?.message ?? 'Не вийшло');
+    }
+  });
+
+  // A friend request answered from the message
+  bot.callbackQuery(/^fr:(a|d):(\d+)$/, async (ctx) => {
+    const accept = ctx.match[1] === 'a';
+    const en = ctx.dbUser.languagePref === 'en';
+    try {
+      const { status, alreadyDecided } = await FriendService.respond(ctx.dbUser.id, parseInt(ctx.match[2], 10), accept);
+      await ctx.answerCallbackQuery(alreadyDecided ? (en ? 'Already answered' : 'Вже вирішено') : accept ? (en ? 'Friends now' : 'Тепер ви друзі') : (en ? 'Declined' : 'Відхилено'));
+      const outcome = status === 'accepted' ? (en ? 'You are friends now.' : 'Тепер ви друзі.') : (en ? 'Declined.' : 'Відхилено.');
+      await ctx.editMessageText(`${escapeHtml(ctx.callbackQuery.message?.text ?? '')}\n\n${outcome}`, { parse_mode: 'HTML' });
+    } catch (err: any) {
+      await ctx.answerCallbackQuery(err?.message ?? (en ? 'Something went wrong' : 'Не вийшло'));
     }
   });
 

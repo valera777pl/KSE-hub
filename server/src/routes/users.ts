@@ -9,6 +9,7 @@ import { updateProfileSchema } from '../utils/validators.js';
 import { GoogleService } from '../services/googleService.js';
 import { AnalyticsService, CLIENT_EVENTS, cleanProps } from '../services/analyticsService.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { FriendService } from '../services/friendService.js';
 
 const userRoutes = new Hono();
 
@@ -48,6 +49,7 @@ userRoutes.post('/me/onboarding', async (c) => {
     .returning();
   if (!user.onboardedAt) {
     AnalyticsService.track(user.id, 'onboarding.completed');
+    await FriendService.joinedByInvite(user.id).catch((err) => console.error('Invite friendship failed:', err));
     const hour = kyivHour();
     await PushService.send(user, 'onboarding', onboardedText(user.languagePref === 'en' ? 'en' : 'uk', user.digestHour, hour), appButton(user.languagePref === 'en' ? 'Open KSE Hub' : 'Відкрити KSE Hub', 'today', 'onboarding'));
   }

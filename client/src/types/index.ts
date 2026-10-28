@@ -252,3 +252,18 @@ export interface Application {
   applicant?: { name: string; headline: string | null; skills: string[]; contact: string | null };
   author?: { name: string; contact: string | null };
 }
+
+/** A mutual friend or a pending request (GET /friends). */
+export interface FriendCard {
+  friendshipId: number;
+  userId: number;
+  name: string;
+  avatarUrl: string | null;
+  username: string | null;
+}
+
+export interface FriendsList {
+  friends: FriendCard[];
+  incoming: FriendCard[];
+  outgoing: FriendCard[];
+}

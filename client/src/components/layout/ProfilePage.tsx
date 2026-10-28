@@ -11,6 +11,7 @@ import { addDays, mondayOf, todayKey } from '../../lib/time';
 import { getThemePref, haptic, openExternal, setThemePref, tg, useBackButton, type ThemePref } from '../../lib/telegram';
 import { Sheet } from '../ui/Sheet';
 import { MoodleConnectForm } from '../modules/deadlines/MoodleConnect';
+import { FriendsGroup } from './FriendsGroup';
 
 const digestLabel = (h: number) => (h < 0 ? tr('Не надсилати', "Don't send") : `${String(h).padStart(2, '0')}:00`);
 
@@ -136,6 +137,8 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
             <ChevronRight className="chev" strokeWidth={1.75} />
           </Row>
         </div>
+
+        <FriendsGroup confirm={confirm} />
 
         <div className="caption">{tr('Дайджест у боті', 'Digest in the bot')}</div>
         <div className="group">

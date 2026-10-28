@@ -22,6 +22,7 @@ import { scheduleRoutes } from './routes/schedule.js';
 import { adminRoutes } from './routes/admin.js';
 import { mailRoutes } from './routes/mail.js';
 import { authRoutes } from './routes/auth.js';
+import { friendRoutes } from './routes/friends.js';
 
 const app = new Hono();
 
@@ -61,6 +62,7 @@ api.route('/google', googleRoutes);
 api.route('/schedule', scheduleRoutes);
 api.route('/mail', mailRoutes);
 api.route('/auth', authRoutes);
+api.route('/friends', friendRoutes);
 
 app.route('/api', api);
 

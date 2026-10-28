@@ -355,6 +355,17 @@ const routes: [string, RegExp, Handler][] = [
     outgoing: [{ id: 41, projectId: 22, role: 'Backend', message: null, status: 'pending', createdAt: iso(NOW), project: { id: 22, title: 'CampusEats' }, author: { name: 'Данило Гнатенко', contact: null } }],
   })],
   ['GET', /^\/venture\/profile$/, () => ({ profile: null })],
+  ['GET', /^\/friends$/, () => (empty ? { friends: [], incoming: [], outgoing: [] } : FRIENDS)],
+  ['GET', /^\/friends\/invite$/, () => ({ link: 'https://t.me/ksehub_bot?start=inv_1_mockcode' })],
+  ['POST', /^\/friends\/request$/, () => ({ status: 'pending' })],
+  ['POST', /^\/friends\/import$/, () => ({ results: [] })],
+  ['POST', /^\/friends\/(\d+)\/(accept|decline)$/, (m) => {
+    const i = FRIENDS.incoming.findIndex((f) => f.friendshipId === Number(m[1]));
+    const [f] = FRIENDS.incoming.splice(i, 1);
+    if (m[2] === 'accept' && f) FRIENDS.friends.push(f);
+    return { status: m[2] === 'accept' ? 'accepted' : 'declined', alreadyDecided: false };
+  }],
+  ['DELETE', /^\/friends\/(\d+)$/, (m) => { FRIENDS.friends = FRIENDS.friends.filter((f) => f.userId !== Number(m[1])); return { ok: true }; }],
   ['GET', /^\/admin\/analytics$/, (_m, url) => adminAnalytics(Number(url.searchParams.get('days')) || 7)],
   ['GET', /^\/venture\/deck$/, () => ({ cards: empty ? [] : DECK })],
   // Олена has already said "Цікаво" to us, so only our own "Цікаво" makes it mutual
@@ -365,6 +376,13 @@ const routes: [string, RegExp, Handler][] = [
       : { matched: false };
   }],
 ];
+
+// Данило is a friend, Олена asked us, we asked Марко
+const FRIENDS = {
+  friends: [{ friendshipId: 1, userId: 2, name: 'Danylo Bondar', avatarUrl: null, username: 'dbondar' }],
+  incoming: [{ friendshipId: 2, userId: 3, name: 'Olena Kovalenko', avatarUrl: null, username: 'okoval' }],
+  outgoing: [{ friendshipId: 3, userId: 4, name: 'Marko Shevchuk', avatarUrl: null, username: 'mshev' }],
+};
 
 /** /admin dashboard for the first test week: ~12 students, MATH101 [P8] and friends. */
 function adminAnalytics(days: number) {

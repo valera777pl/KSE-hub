@@ -63,6 +63,8 @@ export const users = pgTable('users', {
   classReminders: boolean('class_reminders').default(false).notNull(),
   lastWeeklyAt: timestamp('last_weekly_at'),
   isAdmin: boolean('is_admin').default(false).notNull(),
+  // 011: who sent the invite link this student came from
+  invitedBy: integer('invited_by'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
@@ -453,3 +455,17 @@ export const matchesRelations = relations(matches, ({ one }) => ({
 export const notificationsRelations = relations(notifications, ({ one }) => ({
   user: one(users, { fields: [notifications.userId], references: [users.id] }),
 }));
+
+/* ───────────── FRIENDS (011) ───────────── */
+
+export type FriendshipStatus = 'pending' | 'accepted' | 'declined';
+
+/** One row per pair (unique on least/greatest of the two ids, see sql/011_friends.sql). */
+export const friendships = pgTable('friendships', {
+  id: serial('id').primaryKey(),
+  requesterId: integer('requester_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  addresseeId: integer('addressee_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  status: varchar('status', { length: 10 }).$type<FriendshipStatus>().default('pending').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  decidedAt: timestamp('decided_at'),
+});

@@ -12,6 +12,14 @@ export function botApi(): Api {
   return api;
 }
 
+let username: string | null = null;
+
+/** The bot's @username, for t.me links (asked from Telegram once per instance). */
+export async function botUsername(): Promise<string> {
+  username ??= process.env.BOT_USERNAME || (await botApi().getMe()).username;
+  return username;
+}
+
 /** Public URL of the mini app (Vercel production domain, or CLIENT_URL locally). */
 export function appUrl(): string {
   if (process.env.WEBAPP_URL) return process.env.WEBAPP_URL.replace(/\/$/, '');
