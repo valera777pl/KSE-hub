@@ -1,6 +1,6 @@
 import { db } from '../db/connection.js';
 import {
-  emails, googleAccounts, opportunities, summaries, users,
+  emails, events, googleAccounts, opportunities, summaries, users,
   type EmailCategory, type EmailSource,
 } from '../db/schema.js';
 import { and, eq, gt, inArray, ne, or } from 'drizzle-orm';
@@ -12,6 +12,7 @@ import { chatCompletion, hasAI } from '../ai/client.js';
 import { AnalyticsService } from './analyticsService.js';
 import { MoodleService } from './moodleService.js';
 import { isOtherGroup, parseMoodleMail } from '../utils/moodleGroups.js';
+import { isMassMailing, parseKyivLocal } from '../utils/events.js';
 
 // Gemini's free tier allows only a few requests per minute, shared with the assistant
 const MAX_MESSAGES_PER_SYNC = 10;
@@ -21,6 +22,8 @@ const DOMAINS = ['Tech', 'Economics & Finance', 'Consulting', 'Public sector', '
 
 /** Extra fields the model pulls out of internship/job emails for the Careers tab. */
 type OpportunityDetails = { company?: string; deadline?: Date; link?: string; domain?: string; programs?: string[] };
+/** …and out of event emails for «Події»: when, where, how to register. */
+type EventDetails = { startsAt: Date; title?: string; location?: string; registration?: string; programs: string[] };
 
 const CATEGORIES: EmailCategory[] = ['deadline', 'event', 'internship', 'job', 'startup', 'admin', 'newsletter', 'other'];
 
@@ -105,8 +108,8 @@ export class GmailService {
     const source = detectSource(from);
     // Moodle receipts and feedback need no model: the subject says it all, and they update the assignment
     const moodleMail = source === 'moodle' ? parseMoodleMail(subject, body) : null;
-    const { summary, opportunity } = moodleMail
-      ? { summary: await plainSummary(messageIdHeader, subject, body), opportunity: undefined }
+    const { summary, opportunity, event } = moodleMail
+      ? { summary: await plainSummary(messageIdHeader, subject, body), opportunity: undefined, event: undefined }
       : await this.summaryFor(messageIdHeader, subject, from, body);
 
     const [row] = await db.insert(emails).values({
@@ -141,6 +144,10 @@ export class GmailService {
     if (summary.category === 'internship' || summary.category === 'job') {
       await saveOpportunity(summary, subject, senderName(from), opportunity);
     }
+    if (summary.category === 'event' && event) {
+      const mass = isMassMailing({ to: header('To'), cc: header('Cc'), listId: header('List-Id'), precedence: header('Precedence') }, account.email);
+      await saveEvent(summary, subject, event, mass ? null : account.userId);
+    }
     return { ...row, summary };
   }
 
@@ -150,15 +157,15 @@ export class GmailService {
    */
   private static async summaryFor(
     messageIdHeader: string | null, subject: string, from: string, body: string
-  ): Promise<{ summary: Summary; opportunity?: OpportunityDetails }> {
+  ): Promise<{ summary: Summary; opportunity?: OpportunityDetails; event?: EventDetails }> {
     const bodyHash = sha256(normalize(`${subject}\n${body}`));
     const existing = await findSummary(messageIdHeader, bodyHash);
     if (existing) return { summary: existing };
 
-    const { opportunity, ...generated } = await summarize(subject, from, body);
+    const { opportunity, event, ...generated } = await summarize(subject, from, body);
     await db.insert(summaries).values({ messageIdHeader, bodyHash, ...generated }).onConflictDoNothing();
     // Re-read: a parallel sync of the same mailing may have won the insert
-    return { summary: (await findSummary(messageIdHeader, bodyHash))!, opportunity };
+    return { summary: (await findSummary(messageIdHeader, bodyHash))!, opportunity, event };
   }
 
   /** Deadlines and admin notices that the model flagged important go out right away, not in the digest. */
@@ -210,7 +217,7 @@ async function summarize(subject: string, from: string, body: string) {
   // model throws instead, so the email is retried rather than cached as a snippet.
   if (!hasAI()) {
     const snippet = body.replace(/\s+/g, ' ').trim().slice(0, 220);
-    return { summary: snippet ? `${snippet}…` : subject, category: 'other' as EmailCategory, important: false, opportunity: undefined };
+    return { summary: snippet ? `${snippet}…` : subject, category: 'other' as EmailCategory, important: false, opportunity: undefined, event: undefined };
   }
   return summarizeWithModel(subject, from, body);
 }
@@ -230,7 +237,10 @@ async function summarizeWithModel(subject: string, from: string, body: string) {
           'internship/job — стажування та вакансії; startup — пошук команди чи стартап-активності; newsletter — розсилки без дії. ' +
           'Лише для internship/job додай поля: "company" (організація), "deadline" (YYYY-MM-DD або null), ' +
           `"link" (посилання на подачу заявки з листа або null), "domain" (одне з ${DOMAINS.map((d) => `"${d}"`).join(', ')}), ` +
-          '"programs" (масив кодів програм KSE, для яких можливість, як у листі: "BE", "EBD" тощо; [] якщо для всіх або не сказано).',
+          '"programs" (масив кодів програм KSE, для яких можливість, як у листі: "BE", "EBD" тощо; [] якщо для всіх або не сказано). ' +
+          'Лише для event (семінар, лекція, зустріч, івент з датою) додай поля: "title" (коротка назва події без «Запрошуємо»), ' +
+          '"event_start" ("YYYY-MM-DDTHH:MM" за Києвом або null), "location" (місце коротко або null), ' +
+          '"registration" (посилання на реєстрацію з листа або null), "programs" (як вище).',
       },
       { role: 'user', content: `Від: ${from}\nТема: ${subject}\n\n${body.slice(0, 6000)}` },
     ],
@@ -238,6 +248,8 @@ async function summarizeWithModel(subject: string, from: string, body: string) {
 
   const raw = JSON.parse(completion.choices[0]?.message?.content || '{}');
   const category: EmailCategory = CATEGORIES.includes(raw.category) ? raw.category : 'other';
+  const programs = Array.isArray(raw.programs) ? raw.programs.filter((p: unknown) => typeof p === 'string' && /^[A-Z]{2,5}$/.test(p)).slice(0, 6) : [];
+  const eventStart = category === 'event' ? parseKyivLocal(raw.event_start) : null;
   const deadline = /^\d{4}-\d{2}-\d{2}$/.test(raw.deadline ?? '') ? new Date(`${raw.deadline}T23:59:00+03:00`) : undefined;
   return {
     summary: String(raw.summary || subject).slice(0, 1000),
@@ -249,7 +261,16 @@ async function summarizeWithModel(subject: string, from: string, body: string) {
           deadline: deadline && !Number.isNaN(deadline.getTime()) ? deadline : undefined,
           link: typeof raw.link === 'string' && /^https?:\/\//.test(raw.link) ? raw.link : undefined,
           domain: DOMAINS.includes(raw.domain) ? raw.domain : undefined,
-          programs: Array.isArray(raw.programs) ? raw.programs.filter((p: unknown) => typeof p === 'string' && /^[A-Z]{2,5}$/.test(p)).slice(0, 6) : [],
+          programs,
+        }
+      : undefined,
+    event: eventStart
+      ? {
+          startsAt: eventStart,
+          title: typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim().slice(0, 300) : undefined,
+          location: typeof raw.location === 'string' && raw.location.trim() ? raw.location.trim().slice(0, 200) : undefined,
+          registration: typeof raw.registration === 'string' && /^https?:\/\//.test(raw.registration) ? raw.registration : undefined,
+          programs,
         }
       : undefined,
   };
@@ -272,6 +293,22 @@ async function saveOpportunity(summary: Summary, subject: string, sender: string
     programs: details.programs ?? [],
     slackMessageId: sourceKey,
   });
+}
+
+/** One event per summary; a personal invite (userId) is seen only by its recipient. Past events are skipped. */
+async function saveEvent(summary: Summary, subject: string, e: EventDetails, userId: number | null) {
+  if (e.startsAt.getTime() < Date.now()) return;
+  await db.insert(events).values({
+    title: (e.title || subject).slice(0, 300),
+    startsAt: e.startsAt,
+    location: e.location ?? null,
+    description: summary.summary,
+    programs: e.programs,
+    registrationUrl: e.registration ?? null,
+    audience: userId ? 'user' : 'all',
+    userId,
+    sourceKey: `summary:${summary.id}`,
+  }).onConflictDoNothing();
 }
 
 async function gmail<T>(token: string, path: string): Promise<T> {

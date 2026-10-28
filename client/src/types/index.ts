@@ -277,3 +277,19 @@ export interface Reminder {
   startapp: string | null;
   eventId: number | null;
 }
+
+/** An event from KSE mailings (GET /events). */
+export interface EventItem {
+  id: number;
+  title: string;
+  startsAt: string;
+  location: string | null;
+  description: string | null;
+  programs: string[];
+  registrationUrl: string | null;
+  /** A personal invitation, not a mailing */
+  personal: boolean;
+  /** «Нагадати за день» is on */
+  reminded: boolean;
+  createdAt: string;
+}

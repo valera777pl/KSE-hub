@@ -47,7 +47,7 @@ const FEATURE_LABELS: Record<string, string> = {
   'deadline.done': 'Позначили зробленим', 'deadline.moodle_open': 'Перейшли в Moodle',
   'schedule.friend_added': 'Додали друга в розклад', 'opp.apply_click': 'Подали на можливість', 'opp.saved': 'Зберегли можливість',
   'friend.request': 'Запит у друзі', 'invite.sent': 'Запросили друга', 'reminder.created': 'Поставили нагадування',
-  'deadline.feedback_open': 'Відкрили відгук',
+  'deadline.feedback_open': 'Відкрили відгук', 'tab.events': 'Події', 'event.open': 'Відкрили подію', 'event.remind': 'Нагадати за день',
 };
 const PUSH_LABELS: Record<string, string> = {
   digest: 'Дайджест', weekly: 'Дедлайни на тиждень', d24: 'Дедлайн за 24 год', d3: 'Дедлайн за 3 год',

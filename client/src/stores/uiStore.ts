@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { TabId } from '../types';
 
+export type OppsView = 'forYou' | 'events' | 'startups' | 'people';
+
 /** App-level navigation: which tab is open and what a deep link asked for. */
 interface UiState {
   tab: TabId;
@@ -8,9 +10,10 @@ interface UiState {
   scheduleDay: string | null;
   deadlineId: number | null;
   profileOpen: boolean;
-  oppsView: 'forYou' | 'startups' | 'people';
+  oppsView: OppsView;
   oppId: number | null;
-  setOppsView: (v: 'forYou' | 'startups' | 'people') => void;
+  eventId: number | null;
+  setOppsView: (v: OppsView) => void;
   setTab: (tab: TabId) => void;
   setStudyView: (v: 'schedule' | 'deadlines') => void;
   openDay: (day: string) => void;
@@ -27,6 +30,7 @@ export const useUi = create<UiState>((set) => ({
   profileOpen: false,
   oppsView: 'forYou',
   oppId: null,
+  eventId: null,
   setOppsView: (oppsView) => set({ oppsView }),
   setTab: (tab) => set({ tab }),
   setStudyView: (studyView) => set({ studyView }),
@@ -46,7 +50,7 @@ export function splitStartParam(raw: string | null): { param: string | null; kin
   return { param: param || null, kind: param ? param.split('_')[0] : null, push: push || null };
 }
 
-/** startapp=today | day_2026-10-27 | deadlines | deadline_12 | booking_5 | opps | opp_3 */
+/** startapp=today | day_2026-10-27 | deadlines | deadline_12 | booking_5 | opps | opp_3 | event_7 */
 export function applyStartParam(param: string | null) {
   if (!param) return;
   const s = useUi.getState();
@@ -56,6 +60,7 @@ export function applyStartParam(param: string | null) {
   else if (kind === 'deadlines') useUi.setState({ tab: 'study', studyView: 'deadlines' });
   else if (kind === 'booking') s.setTab('rooms');
   else if (kind === 'opp' && Number(value)) useUi.setState({ tab: 'opps', oppsView: 'forYou', oppId: Number(value) });
+  else if (kind === 'event' && Number(value)) useUi.setState({ tab: 'opps', oppsView: 'events', eventId: Number(value) });
   else if (kind === 'opps') s.setTab('opps');
   else s.setTab('today');
 }

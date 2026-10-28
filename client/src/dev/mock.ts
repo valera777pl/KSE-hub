@@ -355,6 +355,10 @@ const routes: [string, RegExp, Handler][] = [
     outgoing: [{ id: 41, projectId: 22, role: 'Backend', message: null, status: 'pending', createdAt: iso(NOW), project: { id: 22, title: 'CampusEats' }, author: { name: 'Данило Гнатенко', contact: null } }],
   })],
   ['GET', /^\/venture\/profile$/, () => ({ profile: null })],
+  ['GET', /^\/events$/, () => ({ events: empty ? [] : EVENTS })],
+  ['GET', /^\/events\/(\d+)$/, (m) => ({ event: EVENTS.find((e) => e.id === Number(m[1])) })],
+  ['POST', /^\/events\/(\d+)\/remind$/, (m) => { EVENTS.find((e) => e.id === Number(m[1]))!.reminded = true; return { reminded: true, remindAt: hours(20) }; }],
+  ['DELETE', /^\/events\/(\d+)\/remind$/, (m) => { EVENTS.find((e) => e.id === Number(m[1]))!.reminded = false; return { reminded: false }; }],
   ['GET', /^\/reminders$/, () => ({ reminders: empty ? [] : REMINDERS })],
   ['POST', /^\/reminders$/, (_m, _u, b) => {
     const { text, remindAt } = b as { text: string; remindAt: string };
@@ -384,6 +388,16 @@ const routes: [string, RegExp, Handler][] = [
       ? { matched: true, matchedUser: { id: 3, telegramId: 3, username: 'okoval', fullName: 'Олена Коваленко', avatarUrl: null } }
       : { matched: false };
   }],
+];
+
+const EVENTS = [
+  { id: 1, title: 'Семінар з відбудови економіки', startsAt: hours(54), location: 'ICU Hall', programs: [] as string[],
+    description: 'Відкрита лекція про відбудову економіки України після війни: що вже працює і де бракує людей. Українською.',
+    registrationUrl: 'https://forms.gle/mock', personal: false, reminded: false, createdAt: iso(NOW) },
+  { id: 2, title: 'Debate Club: перша зустріч семестру', startsAt: hours(80), location: 'M. Shpaka 3, 2.15', programs: ['BE'],
+    description: 'Знайомство, формат British Parliamentary і перша тренувальна гра.', registrationUrl: null, personal: false, reminded: true, createdAt: iso(NOW) },
+  { id: 3, title: 'Career Day: зустріч з Kyivstar', startsAt: hours(200), location: 'Online', programs: [] as string[],
+    description: 'Як потрапити на літнє стажування: відбір, задачі, зарплата.', registrationUrl: 'https://forms.gle/mock2', personal: false, reminded: false, createdAt: iso(NOW) },
 ];
 
 const REMINDERS = [

@@ -6,6 +6,7 @@ import { kyivDayStart, kyivHour } from '../utils/kyivTime.js';
 import { ScheduleService } from './scheduleService.js';
 import { MoodleService } from './moodleService.js';
 import { isOtherGroup } from '../utils/moodleGroups.js';
+import { EventService } from './eventService.js';
 
 type User = typeof users.$inferSelect;
 
@@ -55,7 +56,11 @@ export class DigestService {
     const mail = await mailFor('gmail');
     const slack = await mailFor('slack');
 
-    const text = digestText({ lang, now, day, classes, deadlines, moodle, mail, slack });
+    // Events the student asked to be reminded about, on this day
+    const dayEvents = (await EventService.remindedOn(user.id, dayStart, new Date(dayStart.getTime() + 24 * HOUR)))
+      .filter((e) => e.startsAt > now);
+
+    const text = digestText({ lang, now, day, classes, deadlines, events: dayEvents, moodle, mail, slack });
     if (markDigested && includedEmailIds.length) {
       await db.update(emails).set({ digestedAt: new Date() }).where(inArray(emails.id, includedEmailIds));
     }

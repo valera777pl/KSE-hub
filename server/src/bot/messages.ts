@@ -80,7 +80,8 @@ export type DigestMail = { subject: string | null; summary: string };
 
 /** The daily digest. Returns null when there's nothing to say. */
 export function digestText(p: {
-  lang: Lang; now: Date; day: Date; classes: DigestClass[]; deadlines: DigestDeadline[]; moodle?: DigestMail[]; mail: DigestMail[]; slack: DigestMail[];
+  lang: Lang; now: Date; day: Date; classes: DigestClass[]; deadlines: DigestDeadline[];
+  events?: { title: string; startsAt: Date; location: string | null }[]; moodle?: DigestMail[]; mail: DigestMail[]; slack: DigestMail[];
 }): string | null {
   const { lang, now } = p;
   const sections: string[] = [];
@@ -91,6 +92,10 @@ export function digestText(p: {
   if (p.deadlines.length) {
     sections.push(`<b>${t(lang, 'Дедлайни', 'Deadlines')}</b>\n` + p.deadlines.map((d) =>
       `${shortDateTime(d.dueDate, lang)} · ${[courseCode(d.courseName), d.title].filter(Boolean).map(escapeHtml).join(' · ')} · ${inTime(d.dueDate, now, lang)}`).join('\n'));
+  }
+  if (p.events?.length) {
+    sections.push(`<b>${t(lang, 'Події', 'Events')}</b>\n` + p.events.map((e) =>
+      `${hm(e.startsAt)}  ${escapeHtml(e.title)}${e.location ? ` · ${escapeHtml(e.location)}` : ''}`).join('\n'));
   }
   const mailSection = (title: string, items: DigestMail[]) =>
     `<b>${title}</b>\n` + items.map((m) => {

@@ -493,3 +493,20 @@ export const reminderMutes = pgTable('reminder_mutes', {
   mutedUserId: integer('muted_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [primaryKey({ columns: [table.userId, table.mutedUserId] })]);
+
+/* ───────────── EVENTS (013) ───────────── */
+
+/** Seminars, talks, club meetups from KSE mailings. `audience: 'user'` = a personal invite, seen only by `userId`. */
+export const events = pgTable('events', {
+  id: serial('id').primaryKey(),
+  title: varchar('title', { length: 300 }).notNull(),
+  startsAt: timestamp('starts_at').notNull(),
+  location: varchar('location', { length: 200 }),
+  description: text('description'),
+  programs: varchar('programs', { length: 10 }).array().default(sql`'{}'`).notNull(),
+  registrationUrl: text('registration_url'),
+  audience: varchar('audience', { length: 10 }).$type<'all' | 'user'>().default('all').notNull(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  sourceKey: varchar('source_key', { length: 100 }).notNull().unique(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
