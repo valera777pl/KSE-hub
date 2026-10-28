@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-import Markdown from 'react-markdown';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ArrowUp } from 'lucide-react';
 import { api, errorText } from '../../api/client';
 import { tr } from '../../lib/i18n';
 import { haptic, tg } from '../../lib/telegram';
 
 const BOT_CHAT = 'https://t.me/ksehub_bot';
+
+// The Markdown renderer is a third of the app's code: loaded only when Copilot is opened
+const loadMarkdown = () => import('react-markdown');
+const Markdown = lazy(loadMarkdown);
 
 type Turn = { q: string; a: string | null; error?: boolean };
 
@@ -21,6 +24,8 @@ export function AskPanel({ about, context, starters, onBack }: { about: string; 
   const end = useRef<HTMLDivElement>(null);
 
   useEffect(() => { end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [turns]);
+  // Fetch the renderer while the student types, so the answer doesn't wait for it
+  useEffect(() => { loadMarkdown(); }, []);
 
   const ask = async (q: string) => {
     const question = q.trim();
@@ -57,7 +62,7 @@ export function AskPanel({ about, context, starters, onBack }: { about: string; 
             <div className="ask__q">{t.q}</div>
             {t.a === null
               ? <div className="ask__a ask__a--wait" aria-live="polite"><span className="skel" style={{ height: 12, width: '70%' }} /><span className="skel" style={{ height: 12, width: '45%' }} /></div>
-              : <div className={`ask__a${t.error ? ' ask__a--error' : ''}`} aria-live="polite">{t.error ? t.a : <Markdown>{t.a}</Markdown>}</div>}
+              : <div className={`ask__a${t.error ? ' ask__a--error' : ''}`} aria-live="polite">{t.error ? t.a : <Suspense fallback={<p>{t.a}</p>}><Markdown>{t.a}</Markdown></Suspense>}</div>}
           </div>
         ))}
         <div ref={end} />

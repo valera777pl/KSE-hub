@@ -52,7 +52,8 @@ const roundUp = (d: Date, step: number) => new Date(Math.ceil(d.getTime() / (ste
 /** Кімнати: when → which room → how long → booked. */
 export function RoomsPage() {
   // From a window in the schedule grid: open at that time, once
-  const [asked] = useState(() => { const at = useUi.getState().roomsAt; useUi.setState({ roomsAt: null }); return at ? new Date(at) : null; });
+  const [asked] = useState(() => { const at = useUi.getState().roomsAt; return at ? new Date(at) : null; });
+  useEffect(() => { if (asked) useUi.setState({ roomsAt: null }); }, [asked]);
   const [when, setWhen] = useState<When>(asked && asked.getTime() > now().getTime() + 60_000 ? 'pick' : 'now');
   const [picked, setPicked] = useState<Date | null>(asked && asked.getTime() > now().getTime() + 60_000 ? roundUp(asked, 5) : null);
   const [reload, setReload] = useState(0);

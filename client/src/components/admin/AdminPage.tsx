@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { AlertCircle, ArrowDown, ArrowUp, BarChart3 } from 'lucide-react';
 import { applyTheme } from '../../lib/telegram';
+import { hideSplash } from '../../lib/splash';
 import { EmptyState } from '../ui/States';
 
 /**
@@ -103,7 +104,7 @@ export function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [auth] = useState(authHeader);
 
-  useEffect(() => { applyTheme(); }, []);
+  useEffect(() => { applyTheme(); hideSplash(); }, []);
 
   useEffect(() => {
     if (!auth) { setError('Відкрий посилання, яке надсилає бот на /admin.'); return; }

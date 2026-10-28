@@ -11,14 +11,14 @@ const keyOf = (name: string) => `${PREFIX}${who()}:${name}`;
 
 type Entry<T> = { data: T; savedAt: number };
 
-function read<T>(name: string): Entry<T> | null {
+export function read<T>(name: string): Entry<T> | null {
   try {
     const raw = localStorage.getItem(keyOf(name));
     return raw ? (JSON.parse(raw) as Entry<T>) : null;
   } catch { return null; }
 }
 
-function write<T>(name: string, data: T) {
+export function write<T>(name: string, data: T) {
   try { localStorage.setItem(keyOf(name), JSON.stringify({ data, savedAt: Date.now() })); } catch { /* full or blocked */ }
 }
 
