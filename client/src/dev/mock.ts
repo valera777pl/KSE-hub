@@ -352,6 +352,7 @@ const routes: [string, RegExp, Handler][] = [
     outgoing: [{ id: 41, projectId: 22, role: 'Backend', message: null, status: 'pending', createdAt: iso(NOW), project: { id: 22, title: 'CampusEats' }, author: { name: 'Данило Гнатенко', contact: null } }],
   })],
   ['GET', /^\/venture\/profile$/, () => ({ profile: null })],
+  ['GET', /^\/admin\/analytics$/, (_m, url) => adminAnalytics(Number(url.searchParams.get('days')) || 7)],
   ['GET', /^\/venture\/deck$/, () => ({ cards: empty ? [] : DECK })],
   // Олена has already said "Цікаво" to us, so only our own "Цікаво" makes it mutual
   ['POST', /^\/venture\/swipe$/, (_m, _u, b) => {
@@ -361,6 +362,84 @@ const routes: [string, RegExp, Handler][] = [
       : { matched: false };
   }],
 ];
+
+/** /admin dashboard for the first test week: ~12 students, MATH101 [P8] and friends. */
+function adminAnalytics(days: number) {
+  const today = '2026-10-28';
+  const series = (values: number[]) => values.slice(-days).map((v, i, a) => ({
+    day: new Date(Date.parse(today) - (a.length - 1 - i) * 86_400_000).toISOString().slice(0, 10), v,
+  }));
+  const active = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 1, 2, 3, 2, 4, 5, 7, 6, 8, 9, 8];
+  const ai = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 6, 1, 4, 9, 5, 11, 14, 22, 17, 25, 31, 19];
+  const fresh = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 2, 1, 3, 1, 2, 2, 1];
+  if (empty) {
+    return { days, today, pulse: { dau: 0, wau: 0, active: 0, newToday: 0, users: 0, onboarded: 0, activation: { eligible: 0, activated: 0, rate: 0 }, daily: [] },
+      funnel: [], retention: [], features: [], pushes: [], ai: { daily: [], messages: 0, perActive: 0, limitHits: 0, errors: 0, tools: [], topics: [] },
+      friends: { requests: 0, accepted: 0, invitesSent: 0, inviters: 0, joined: 0, inviteRate: 0, avgFriends: null }, health: [] };
+  }
+  const dailyActive = series(active);
+  const dailyNew = series(fresh);
+  return {
+    days, today,
+    pulse: {
+      dau: 8, wau: 11, active: 12, newToday: 1, users: 15, onboarded: 12,
+      activation: { eligible: 9, activated: 4, rate: 44 },
+      daily: dailyActive.map((p, i) => ({ day: p.day, active: p.v, newUsers: dailyNew[i].v })),
+    },
+    funnel: [
+      { key: 'start', users: 14, pct: 100, dropped: 0 }, { key: 'auth', users: 13, pct: 93, dropped: 1 },
+      { key: 'schedule', users: 13, pct: 93, dropped: 0 }, { key: 'program', users: 12, pct: 86, dropped: 1 },
+      { key: 'digest', users: 12, pct: 86, dropped: 0 }, { key: 'moodle', users: 9, pct: 64, dropped: 3 },
+      { key: 'done', users: 9, pct: 64, dropped: 0 },
+    ],
+    retention: [
+      { week: '2026-10-26', size: 4, d1: 50, d7: null, d14: null, d30: null },
+      { week: '2026-10-19', size: 6, d1: 67, d7: 50, d14: null, d30: null },
+      { week: '2026-10-12', size: 2, d1: 100, d7: 50, d14: 50, d30: null },
+    ],
+    features: [
+      { key: 'tab.today', users: 11, prev: 6, share: 92, trend: 5, dead: false },
+      { key: 'tab.schedule', users: 10, prev: 5, share: 83, trend: 5, dead: false },
+      { key: 'ai.message', users: 8, prev: 4, share: 67, trend: 4, dead: false },
+      { key: 'tab.deadlines', users: 7, prev: 4, share: 58, trend: 3, dead: false },
+      { key: 'tab.rooms', users: 5, prev: 3, share: 42, trend: 2, dead: false },
+      { key: 'deadline.sheet_open', users: 5, prev: 1, share: 42, trend: 4, dead: false },
+      { key: 'booking.created', users: 3, prev: 2, share: 25, trend: 1, dead: false },
+      { key: 'deadline.done', users: 3, prev: 0, share: 25, trend: 3, dead: false },
+      { key: 'tab.forYou', users: 2, prev: 2, share: 17, trend: 0, dead: false },
+      { key: 'schedule.friend_added', users: 2, prev: 0, share: 17, trend: 2, dead: false },
+      { key: 'tab.profile', users: 2, prev: 1, share: 17, trend: 1, dead: false },
+      { key: 'deadline.moodle_open', users: 1, prev: 0, share: 8, trend: 1, dead: false },
+      { key: 'tab.startups', users: 0, prev: 1, share: 0, trend: -1, dead: true },
+      { key: 'tab.people', users: 0, prev: 0, share: 0, trend: 0, dead: true },
+      { key: 'opp.apply_click', users: 0, prev: 0, share: 0, trend: 0, dead: true },
+      { key: 'opp.saved', users: 0, prev: 0, share: 0, trend: 0, dead: true },
+    ],
+    pushes: [
+      { type: 'digest', sent: 58, opened: 14, ctr: 24 }, { type: 'd24', sent: 17, opened: 6, ctr: 35 },
+      { type: 'd3', sent: 9, opened: 5, ctr: 56 }, { type: 'change', sent: 6, opened: 3, ctr: 50 },
+      { type: 'urgent', sent: 4, opened: 0, ctr: 0 }, { type: 'onboarding', sent: 9, opened: 2, ctr: 22 },
+    ],
+    ai: {
+      daily: series(ai).map((p) => ({ day: p.day, messages: p.v })),
+      messages: 168, perActive: 14, limitHits: 2, errors: 1,
+      tools: [
+        { name: 'get_my_schedule', times: 41 }, { name: 'get_available_rooms', times: 23 }, { name: 'get_my_deadlines', times: 19 },
+        { name: 'book_room', times: 9 }, { name: 'search_kse_info', times: 8 }, { name: 'search_my_emails', times: 5 },
+      ],
+      topics: [
+        { topic: 'schedule', times: 52 }, { topic: 'rooms', times: 34 }, { topic: 'deadlines', times: 27 },
+        { topic: 'kse', times: 18 }, { topic: 'other', times: 22 }, { topic: 'mail', times: 9 },
+      ],
+    },
+    friends: { requests: 0, accepted: 0, invitesSent: 0, inviters: 0, joined: 0, inviteRate: 0, avgFriends: null },
+    health: [
+      { key: 'mail_revoked', value: 0, total: 12, alert: false }, { key: 'no_schedule', value: 2, total: 12, alert: false },
+      { key: 'no_moodle', value: 5, total: 12, alert: false }, { key: 'digest_failed', value: 1, total: 12, alert: true },
+      { key: 'bot_blocked', value: 0, total: 12, alert: false },
+    ],
+  };
+}
 
 const realFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
