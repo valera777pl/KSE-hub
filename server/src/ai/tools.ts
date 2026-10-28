@@ -152,6 +152,21 @@ export const toolDefinitions: OpenAI.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'create_reminder',
+      description: 'Remind the student about something at a time they name ("нагадай мені в пт о 18 почати есе"). The bot sends it in this chat. Confirm in one line with the returned "when": «Нагадаю пт 30.10 о 18:00».',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'What to remind about, short, in the student\'s words: «почати есе з ECON100».' },
+          at: { type: 'string', description: 'When, ISO 8601 with the Kyiv offset, computed from «Зараз» in the system prompt.' },
+        },
+        required: ['text', 'at'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_my_deadlines',
       description: 'Get the student\'s upcoming Moodle deadlines (assignments and quizzes), sorted by due date.',
       parameters: {

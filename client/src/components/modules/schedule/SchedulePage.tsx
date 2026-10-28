@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDrag } from '@use-gesture/react';
-import { CalendarCheck, ChevronLeft, ChevronRight, Coffee, Minus, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react';
+import { Bell, CalendarCheck, ChevronLeft, ChevronRight, Coffee, Minus, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react';
+import { RemindSheet, shortWhen } from '../../ui/RemindSheet';
 import { inviteFriend } from '../../../lib/invite';
 import { api } from '../../../api/client';
 import type { ClassEvent, ScheduleCompare, StudentMatch } from '../../../types';
@@ -352,7 +353,13 @@ function ClassSheet({ e, friends, onClose }: { e: ClassEvent; friends: Friend[];
   const key = dayKey(new Date(e.startAt));
   const kind = classKind(e.section);
   const [asking, setAsking] = useState(false);
+  const [reminding, setReminding] = useState(false);
   const code = `${e.courseCode}${e.section ? ` [${e.section}]` : ''}`;
+  if (reminding) {
+    const place = shortPlace(e.location);
+    return <RemindSheet text={`${code} — ${shortWhen(new Date(e.startAt))}${place ? ` · ${place}` : ''}`} at={new Date(e.startAt)}
+      startapp={`day_${key}`} onClose={() => setReminding(false)} />;
+  }
   if (asking) {
     return (
       <Sheet onClose={() => setAsking(false)} label="Copilot">
@@ -370,6 +377,13 @@ function ClassSheet({ e, friends, onClose }: { e: ClassEvent; friends: Friend[];
       <div className="group">
         <div className="row"><div className="row__main"><div className="row__title num">{hm(e.startAt)}–{hm(e.endAt)}</div><div className="row__meta">{key === todayKey() ? tr('сьогодні', 'today') : dayTitle(key)}{kind ? ` · ${kind}` : ''}</div></div></div>
         <div className="row"><div className="row__main"><div className="row__title">{shortPlace(e.location) ?? tr('Аудиторію не вказано', 'Room not given')}</div></div></div>
+        {new Date(e.startAt).getTime() > now().getTime() && (
+          <button className="row press" onClick={() => { haptic.tap(); setReminding(true); }}>
+            <Bell className="row-icon" strokeWidth={1.7} />
+            <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Нагадати…', 'Remind me…')}</div></div>
+            <ChevronRight className="chev" />
+          </button>
+        )}
       </div>
       {friends.length > 0 && (
         <>

@@ -14,6 +14,7 @@ import { toolDefinitions } from './tools.js';
 import { chatCompletion } from './client.js';
 import { AnalyticsService } from '../services/analyticsService.js';
 import { aiTopic } from '../utils/aiTopic.js';
+import { ReminderService } from '../services/reminderService.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { users } from '../db/schema.js';
 import { formatKyiv, kyivDate, kyivDayStart, kyivNowForPrompt } from '../utils/kyivTime.js';
@@ -40,6 +41,7 @@ function systemPrompt(): string {
 4. Листами — короткий зміст пошти @kse.org.ua, сповіщень Slack і Moodle.
 5. Стажуваннями, вакансіями та грантами; студентськими стартапами, яким потрібна команда (заявку подають у мініаппі: «Можливості» → «Стартапи»).
 6. Інформацією про KSE — програми, гранти й фінансова допомога, оплата, обмін, викладачі, контакти, кампус.
+7. Нагадуваннями — «нагадай мені в пт о 18 почати есе» (create_reminder); підтверджуй одним рядком: «Нагадаю пт 30.10 о 18:00».
 
 Правила:
 - Відповідай коротко, тією мовою, якою пише студент (за замовчуванням українською).
@@ -192,6 +194,13 @@ export class AIService {
       case 'find_free_classmates': {
         const free = await ScheduleService.freeClassmates(userId, new Date(args.start_time), new Date(args.end_time));
         return free.length ? free.map((s) => ({ name: s.name, cohort: s.cohort, telegram: s.username })) : { note: 'Нікого вільного серед одногрупників у KSE Hub.' };
+      }
+
+      case 'create_reminder': {
+        const at = new Date(String(args.at));
+        const reminder = await ReminderService.create(userId, { text: String(args.text ?? ''), remindAt: at });
+        const [u] = await db.select({ languagePref: users.languagePref }).from(users).where(eq(users.id, userId)).limit(1);
+        return { ok: true, when: ReminderService.when(reminder.remindAt, u?.languagePref === 'en' ? 'en' : 'uk') };
       }
 
       case 'get_my_deadlines': {

@@ -8,6 +8,7 @@ import { AnalyticsService } from '../services/analyticsService.js';
 import { StartupService, contactLink, displayName } from '../services/startupService.js';
 import { signState, verifyInvite } from '../utils/crypto.js';
 import { FriendService } from '../services/friendService.js';
+import { ReminderService } from '../services/reminderService.js';
 import { appUrl, chunkHtml, escapeHtml } from './send.js';
 import { appButton } from './messages.js';
 import { BookingService } from '../services/bookingService.js';
@@ -111,6 +112,14 @@ export function getBot(): Bot<BotContext> {
     } catch (err: any) {
       await ctx.answerCallbackQuery(err?.message ?? (en ? 'Something went wrong' : 'Не вийшло'));
     }
+  });
+
+  // "Не отримувати від Олега" under a friend's reminder
+  bot.callbackQuery(/^mute:(\d+)$/, async (ctx) => {
+    const en = ctx.dbUser.languagePref === 'en';
+    await ReminderService.mute(ctx.dbUser.id, parseInt(ctx.match[1], 10));
+    await ctx.answerCallbackQuery(en ? 'No more reminders from them' : 'Більше не надсилатимемо');
+    await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
   });
 
   // "Звільнити" under a booking confirmation

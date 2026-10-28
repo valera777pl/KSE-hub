@@ -267,3 +267,13 @@ export interface FriendsList {
   incoming: FriendCard[];
   outgoing: FriendCard[];
 }
+
+/** A reminder the bot hasn't sent yet (GET /reminders). */
+export interface Reminder {
+  id: number;
+  kind: 'self' | 'event';
+  text: string;
+  remindAt: string;
+  startapp: string | null;
+  eventId: number | null;
+}

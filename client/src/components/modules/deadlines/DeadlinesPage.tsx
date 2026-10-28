@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BookCheck, ChevronDown, ChevronRight, Link2 } from 'lucide-react';
+import { Bell, BookCheck, ChevronDown, ChevronRight, Link2 } from 'lucide-react';
+import { RemindSheet, shortWhen } from '../../ui/RemindSheet';
 import { api, track } from '../../../api/client';
 import type { DeadlineWithCourse } from '../../../types';
 import { addDays, dayKey, dayTitle, hm, now, plural, spanText, todayKey } from '../../../lib/time';
@@ -162,14 +163,19 @@ function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClos
   const [code, rest] = splitCourse(d.courseName);
   const big = spanText(Math.abs(left)).split(' ');
   const [asking, setAsking] = useState(false);
+  const [reminding, setReminding] = useState(false);
   useEffect(() => { track('deadline.sheet_open'); }, []);
 
   useMainButton({
     text: tr('Відкрити в Moodle', 'Open in Moodle'),
-    visible: !!a.sourceUrl && !asking,
+    visible: !!a.sourceUrl && !asking && !reminding,
     onClick: () => { if (a.sourceUrl) { track('deadline.moodle_open'); openExternal(a.sourceUrl); } },
   });
 
+  if (reminding) {
+    return <RemindSheet text={`${[code, a.title].filter(Boolean).join(' ')} — ${shortWhen(due)}`} at={due}
+      startapp={`deadline_${a.id}`} assignmentId={a.id} onClose={() => setReminding(false)} />;
+  }
   if (asking) {
     return (
       <Sheet onClose={() => setAsking(false)} label="Copilot">
@@ -197,6 +203,13 @@ function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClos
 
       <div className="group" style={{ marginTop: 16 }}>
         <div className="row"><div className="row__main"><div className="row__title num cap-first" style={{ fontWeight: 500 }}>{dayTitle(dayKey(due))}, {hm(due)}</div><div className="row__meta">{typeLabel()[a.type] ?? tr('Завдання', 'Assignment')}</div></div></div>
+        {!late && !a.isCompleted && (
+          <button className="row press" onClick={() => { haptic.tap(); setReminding(true); }}>
+            <Bell className="row-icon" strokeWidth={1.7} />
+            <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Нагадати…', 'Remind me…')}</div><div className="row__meta">{tr('Собі або другу', 'Yourself or a friend')}</div></div>
+            <ChevronRight className="chev" />
+          </button>
+        )}
         {a.feedbackAt && (
           <button className="row press" disabled={!a.sourceUrl} aria-label={tr('Відкрити відгук у Moodle', 'Open feedback in Moodle')}
             onClick={() => { track('deadline.feedback_open'); openExternal(a.sourceUrl!); }}>

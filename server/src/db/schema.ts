@@ -469,3 +469,27 @@ export const friendships = pgTable('friendships', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   decidedAt: timestamp('decided_at'),
 });
+
+/* ───────────── REMINDERS (012) ───────────── */
+
+export type ReminderKind = 'self' | 'friend' | 'event';
+
+/** To myself, from a friend (sent at once, kept for the daily limit) or the day before an event. */
+export const reminders = pgTable('reminders', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  fromUserId: integer('from_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  kind: varchar('kind', { length: 10 }).$type<ReminderKind>().default('self').notNull(),
+  text: varchar('text', { length: 300 }).notNull(),
+  remindAt: timestamp('remind_at').notNull(),
+  startapp: varchar('startapp', { length: 64 }),
+  eventId: integer('event_id'),
+  sentAt: timestamp('sent_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const reminderMutes = pgTable('reminder_mutes', {
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  mutedUserId: integer('muted_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [primaryKey({ columns: [table.userId, table.mutedUserId] })]);

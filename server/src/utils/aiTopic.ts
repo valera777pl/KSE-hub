@@ -3,7 +3,7 @@
  * the tools the model chose say it best, keywords catch questions answered without tools.
  * Only the topic is stored, never the question.
  */
-export type AiTopic = 'schedule' | 'deadlines' | 'rooms' | 'mail' | 'kse' | 'startups' | 'opportunities' | 'other';
+export type AiTopic = 'schedule' | 'deadlines' | 'rooms' | 'mail' | 'kse' | 'startups' | 'opportunities' | 'reminders' | 'other';
 
 const BY_TOOL: Record<string, AiTopic> = {
   get_my_schedule: 'schedule',
@@ -19,6 +19,7 @@ const BY_TOOL: Record<string, AiTopic> = {
   search_kse_info: 'kse',
   search_startups: 'startups',
   search_opportunities: 'opportunities',
+  create_reminder: 'reminders',
 };
 
 const BY_WORD: [AiTopic, RegExp][] = [

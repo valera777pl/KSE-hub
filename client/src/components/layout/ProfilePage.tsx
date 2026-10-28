@@ -12,6 +12,7 @@ import { getThemePref, haptic, openExternal, setThemePref, tg, useBackButton, ty
 import { Sheet } from '../ui/Sheet';
 import { MoodleConnectForm } from '../modules/deadlines/MoodleConnect';
 import { FriendsGroup } from './FriendsGroup';
+import { RemindersGroup } from './RemindersGroup';
 
 const digestLabel = (h: number) => (h < 0 ? tr('Не надсилати', "Don't send") : `${String(h).padStart(2, '0')}:00`);
 
@@ -139,6 +140,7 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
         </div>
 
         <FriendsGroup confirm={confirm} />
+        <RemindersGroup confirm={confirm} />
 
         <div className="caption">{tr('Дайджест у боті', 'Digest in the bot')}</div>
         <div className="group">

@@ -500,3 +500,7 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
 .adm-health__value--alert { color: var(--danger); }
 .adm-health__total { font-size: 13px; font-weight: 400; color: var(--text-secondary); }
 .adm-alert-icon { width: 18px; height: 18px; color: var(--danger); flex: none; }
+
+/* ─── «Нагадати…» sheet ─── */
+.remind-done { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 28px 0 12px; font-size: 17px; font-weight: 600; color: var(--success); }
+.remind-done svg { width: 22px; height: 22px; }

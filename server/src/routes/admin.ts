@@ -93,6 +93,7 @@ const FEATURE_KEYS = [
   'tab.today', 'tab.schedule', 'tab.deadlines', 'tab.rooms', 'tab.forYou', 'tab.startups', 'tab.people', 'tab.profile',
   'ai.message', 'booking.created', 'deadline.sheet_open', 'deadline.done', 'deadline.moodle_open',
   'schedule.friend_added', 'opp.apply_click', 'opp.saved',
+  'friend.request', 'invite.sent', 'reminder.created', 'deadline.feedback_open',
 ] as const;
 
 // GET /api/admin/analytics?days=7|14|30 — everything the dashboard draws, in one request

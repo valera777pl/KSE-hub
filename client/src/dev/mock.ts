@@ -355,6 +355,15 @@ const routes: [string, RegExp, Handler][] = [
     outgoing: [{ id: 41, projectId: 22, role: 'Backend', message: null, status: 'pending', createdAt: iso(NOW), project: { id: 22, title: 'CampusEats' }, author: { name: 'Данило Гнатенко', contact: null } }],
   })],
   ['GET', /^\/venture\/profile$/, () => ({ profile: null })],
+  ['GET', /^\/reminders$/, () => ({ reminders: empty ? [] : REMINDERS })],
+  ['POST', /^\/reminders$/, (_m, _u, b) => {
+    const { text, remindAt } = b as { text: string; remindAt: string };
+    const reminder = { id: REMINDERS.length + 100, kind: 'self', text, remindAt, startapp: null, eventId: null };
+    REMINDERS.push(reminder);
+    return { reminder };
+  }],
+  ['POST', /^\/reminders\/friend$/, () => ({ id: 1, delivered: true, opensDeadline: true })],
+  ['DELETE', /^\/reminders\/(\d+)$/, (m) => { REMINDERS.splice(REMINDERS.findIndex((r) => r.id === Number(m[1])), 1); return { ok: true }; }],
   ['GET', /^\/friends$/, () => (empty ? { friends: [], incoming: [], outgoing: [] } : FRIENDS)],
   ['GET', /^\/friends\/invite$/, () => ({ link: 'https://t.me/ksehub_bot?start=inv_1_mockcode' })],
   ['POST', /^\/friends\/request$/, () => ({ status: 'pending' })],
@@ -375,6 +384,10 @@ const routes: [string, RegExp, Handler][] = [
       ? { matched: true, matchedUser: { id: 3, telegramId: 3, username: 'okoval', fullName: 'Олена Коваленко', avatarUrl: null } }
       : { matched: false };
   }],
+];
+
+const REMINDERS = [
+  { id: 1, kind: 'self', text: 'почати есе з ECON100', remindAt: hours(30), startapp: null as string | null, eventId: null as number | null },
 ];
 
 // Данило is a friend, Олена asked us, we asked Марко

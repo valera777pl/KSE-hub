@@ -46,6 +46,8 @@ const FEATURE_LABELS: Record<string, string> = {
   'ai.message': 'Copilot', 'booking.created': 'Бронювання', 'deadline.sheet_open': 'Відкрили дедлайн',
   'deadline.done': 'Позначили зробленим', 'deadline.moodle_open': 'Перейшли в Moodle',
   'schedule.friend_added': 'Додали друга в розклад', 'opp.apply_click': 'Подали на можливість', 'opp.saved': 'Зберегли можливість',
+  'friend.request': 'Запит у друзі', 'invite.sent': 'Запросили друга', 'reminder.created': 'Поставили нагадування',
+  'deadline.feedback_open': 'Відкрили відгук',
 };
 const PUSH_LABELS: Record<string, string> = {
   digest: 'Дайджест', weekly: 'Дедлайни на тиждень', d24: 'Дедлайн за 24 год', d3: 'Дедлайн за 3 год',
@@ -58,11 +60,11 @@ const TOOL_LABELS: Record<string, string> = {
   get_available_rooms: 'Вільні кімнати', book_room: 'Бронювання', hot_book_room: 'Hot Booking', get_booking_quota: 'Квота бронювань',
   get_my_bookings: 'Мої броні', get_my_schedule: 'Мій розклад', compare_schedule: 'Спільні пари', find_free_classmates: 'Хто вільний',
   get_my_deadlines: 'Дедлайни', search_my_emails: 'Пошук у листах', search_opportunities: 'Стажування',
-  search_kse_info: 'База знань KSE', search_startups: 'Стартапи',
+  search_kse_info: 'База знань KSE', search_startups: 'Стартапи', create_reminder: 'Нагадування',
 };
 const TOPIC_LABELS: Record<string, string> = {
   schedule: 'Розклад', deadlines: 'Дедлайни', rooms: 'Кімнати', mail: 'Пошта', kse: 'KSE-інфо',
-  startups: 'Стартапи', opportunities: 'Можливості', other: 'Інше',
+  startups: 'Стартапи', opportunities: 'Можливості', reminders: 'Нагадування', other: 'Інше',
 };
 const HEALTH_LABELS: Record<string, string> = {
   mail_revoked: 'Відкликали доступ до пошти', no_schedule: 'Без розкладу', no_moodle: 'Без Moodle',
