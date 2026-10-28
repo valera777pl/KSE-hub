@@ -23,13 +23,18 @@ const DEFAULT_MIN = 60;
 /** "Skype Room 1 (2nd floor)" → "Skype Room 1" */
 const roomName = (r: Room) => r.name.replace(/\s*\(.*\)\s*$/, '');
 const roomMeta = (r: Room) => [r.floor && tr(`${r.floor} поверх`, `floor ${r.floor}`), r.capacity > 1 ? tr(`до ${r.capacity} людей`, `up to ${r.capacity} people`) : tr('на одного', 'for one')].filter(Boolean).join(' · ');
-const RoomIcon = ({ r }: { r: Room }) => (r.type === 'silent_box' ? <Headphones className="room__icon" strokeWidth={1.7} /> : <Video className="room__icon" strokeWidth={1.7} />);
+// The type sits in a small tile on --inset, so a long list has something to hold on to on the left
+const RoomIcon = ({ r }: { r: Room }) => (
+  <span className="room__tile" aria-hidden="true">
+    {r.type === 'silent_box' ? <Headphones className="room__icon" strokeWidth={1.7} /> : <Video className="room__icon" strokeWidth={1.7} />}
+  </span>
+);
 const untilLabel = (r: RoomFree) => (r.freeUntil ? `${tr('до', 'until')} ${hm(r.freeUntil)}` : tr('весь день', 'all day'));
 
 /** A free room: what it is, how long it stays free, tap to book */
 function RoomRow({ r, disabled, onPick }: { r: RoomFree; disabled: boolean; onPick: (r: RoomFree) => void }) {
   return (
-    <button className="row room press" disabled={disabled} onClick={() => onPick(r)}>
+    <button className="row row--roomy room press" disabled={disabled} onClick={() => onPick(r)}>
       <RoomIcon r={r} />
       <div className="row__main">
         <div className="row__title">{roomName(r)}</div>
@@ -144,7 +149,16 @@ export function RoomsPage() {
                 action={when === 'now' ? { label: tr('Подивитись через 30 хв', 'Check in 30 min'), onClick: () => pickWhen('soon') } : undefined} />
             </div>
           ) : (
-            <div className="group">{free.map((r) => <RoomRow key={r.id} r={r} disabled={outOfQuota} onPick={pick} />)}</div>
+            // Two groups instead of one long list: rooms for a group, then single boxes
+            ([['skype_room', 'Skype Rooms'], ['silent_box', 'Silent Box']] as const).map(([type, title], i) => {
+              const list = free.filter((r) => (r.type === 'silent_box') === (type === 'silent_box'));
+              return list.length > 0 && (
+                <section key={type}>
+                  <h3 className={`group-title${i === 0 ? ' group-title--first' : ''}`}>{title}</h3>
+                  <div className="group">{list.map((r) => <RoomRow key={r.id} r={r} disabled={outOfQuota} onPick={pick} />)}</div>
+                </section>
+              );
+            })
           )}
           {outOfQuota && <p className="note">{tr('Завтра знову 3 год.', 'Tomorrow you get 3 h again.')}</p>}
         </>
@@ -157,7 +171,7 @@ export function RoomsPage() {
         ) : mine.map(({ booking: b, room }) => {
           const live = new Date(b.startTime).getTime() <= now().getTime();
           return (
-            <div key={b.id} className={`row room${fresh === b.id ? ' fresh' : ''}`}>
+            <div key={b.id} className={`row row--roomy room${fresh === b.id ? ' fresh' : ''}`}>
               <RoomIcon r={room} />
               <div className="row__main">
                 <div className="row__title">{roomName(room)}</div>
