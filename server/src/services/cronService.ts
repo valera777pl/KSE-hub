@@ -8,7 +8,8 @@ import { DigestService } from './digestService.js';
 import { GmailService } from './gmailService.js';
 import { AnalyticsService } from './analyticsService.js';
 import { ScheduleService } from './scheduleService.js';
-import { escapeHtml, sendToUser } from '../bot/send.js';
+import { escapeHtml } from '../bot/send.js';
+import { PushService } from './pushService.js';
 import { appButton, bookingEndingText, deadlineReminderText, isGeneralCourse, weeklyText, type Lang } from '../bot/messages.js';
 import { formatKyiv, kyivHour, kyivWeekday } from '../utils/kyivTime.js';
 
@@ -62,7 +63,7 @@ export class CronService {
       if (!rows.length) continue;
       const lang = langOf(user);
       const text = weeklyText(lang, rows.map((r) => ({ title: r.assignment.title, courseName: r.courseName, dueDate: r.assignment.dueDate! })));
-      if (await sendToUser(user.telegramId, text, appButton(lang === 'en' ? 'Open deadlines' : 'Відкрити дедлайни', 'deadlines'))) {
+      if (await PushService.send(user, 'weekly', text, appButton(lang === 'en' ? 'Open deadlines' : 'Відкрити дедлайни', 'deadlines', 'weekly'))) {
         sent++;
         AnalyticsService.track(user.id, 'weekly.sent');
       }
@@ -172,7 +173,8 @@ export class CronService {
 
       const lang = langOf({ languagePref });
       const text = deadlineReminderText(lang, kind, { title: assignment.title, courseName, dueDate: due });
-      if (await sendToUser(telegramId, text, appButton(lang === 'en' ? 'Open deadline' : 'Відкрити дедлайн', `deadline_${assignment.id}`))) {
+      const push = kind === '3h' ? 'd3' : 'd24';
+      if (await PushService.send({ id: assignment.userId, telegramId }, push, text, appButton(lang === 'en' ? 'Open deadline' : 'Відкрити дедлайн', `deadline_${assignment.id}`, push))) {
         sent++;
         AnalyticsService.track(assignment.userId, 'reminder.sent', { kind });
       }
@@ -204,7 +206,7 @@ export class CronService {
       if (claimed.length === 0) continue;
       const en = languagePref === 'en';
       const text = `<b>${en ? 'Applications close' : 'Подача закінчується'} ${formatKyiv(opp.deadline!)}</b>\n${escapeHtml(opp.title)} · ${escapeHtml(opp.company)}`;
-      if (await sendToUser(telegramId, text, appButton(en ? 'Open' : 'Відкрити', `opp_${opp.id}`))) sent++;
+      if (await PushService.send({ id: userId, telegramId }, 'opp', text, appButton(en ? 'Open' : 'Відкрити', `opp_${opp.id}`, 'opp'))) sent++;
     }
     return sent;
   }
@@ -243,7 +245,7 @@ export class CronService {
 
       const en = languagePref === 'en';
       const keyboard = blocker ? undefined : new InlineKeyboard().text(en ? `Extend by ${EXTEND_MINUTES} min` : `Продовжити на ${EXTEND_MINUTES} хв`, `book:e:${b.id}`);
-      if (await sendToUser(telegramId, bookingEndingText(en ? 'en' : 'uk', room.name, b.endTime, blocker), keyboard)) sent++;
+      if (await PushService.send({ id: b.userId, telegramId }, 'booking_end', bookingEndingText(en ? 'en' : 'uk', room.name, b.endTime, blocker), keyboard)) sent++;
     }
     return sent;
   }
@@ -271,7 +273,7 @@ export class CronService {
       if (!digest) {
         // Nothing new in the chosen sources: no message, but visible in the admin dashboard
         AnalyticsService.track(user.id, 'digest.empty');
-      } else if (await sendToUser(user.telegramId, digest.text, appButton(user.languagePref === 'en' ? 'Open the day' : 'Відкрити день', digest.startapp))) {
+      } else if (await PushService.send(user, 'digest', digest.text, appButton(user.languagePref === 'en' ? 'Open the day' : 'Відкрити день', digest.startapp, 'digest'))) {
         sent++;
         AnalyticsService.track(user.id, 'digest.sent');
       } else {

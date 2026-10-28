@@ -36,6 +36,16 @@ export const useUi = create<UiState>((set) => ({
   closeProfile: () => set({ profileOpen: false }),
 }));
 
+/**
+ * A bot button's startapp carries the push type after "__": "deadline_12__d24", "day_2026-10-29__digest".
+ * Returns the screen part, the kind of screen (no ids) and the push type for analytics.
+ */
+export function splitStartParam(raw: string | null): { param: string | null; kind: string | null; push: string | null } {
+  if (!raw) return { param: null, kind: null, push: null };
+  const [param, push] = raw.split('__');
+  return { param: param || null, kind: param ? param.split('_')[0] : null, push: push || null };
+}
+
 /** startapp=today | day_2026-10-27 | deadlines | deadline_12 | booking_5 | opps | opp_3 */
 export function applyStartParam(param: string | null) {
   if (!param) return;

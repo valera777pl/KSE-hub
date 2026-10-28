@@ -71,7 +71,7 @@ export function DeadlinesPage() {
     try {
       await api.patch(`/moodle/assignments/${id}/toggle`);
       haptic.success();
-      if (!was) track('deadline.done');
+      if (!was) track('deadline.done', { via: 'button' });
     } catch {
       haptic.error();
       q.refresh();
@@ -162,6 +162,7 @@ function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClos
   const [code, rest] = splitCourse(d.courseName);
   const big = spanText(Math.abs(left)).split(' ');
   const [asking, setAsking] = useState(false);
+  useEffect(() => { track('deadline.sheet_open'); }, []);
 
   useMainButton({
     text: tr('Відкрити в Moodle', 'Open in Moodle'),

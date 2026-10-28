@@ -5,8 +5,20 @@ import { and, count, eq, gte } from 'drizzle-orm';
 import { kyivDate, kyivDayStart } from '../utils/kyivTime.js';
 
 /** Events the mini app may report itself; everything else is recorded server-side. */
-// Screen views and funnel steps the mini app may report (PRODUCT.md → funnels)
-export const CLIENT_EVENTS = /^(app\.open|tab\.(today|study|rooms|opps|schedule|moodle|venture|careers|copilot)|rooms\.open|room\.select|opps\.open|opp\.apply_click|deadline\.(done|moodle_open)|moodle\.connected|schedule\.friend_added|onboarding\.(step|skip)\.[a-z]+)$/;
+// Screen views, push opens, funnel steps and actions the mini app may report (PRODUCT.md → funnels, NEXT-PROMPT.md §2)
+export const CLIENT_EVENTS = /^(app\.open|tab\.(view|today|study|rooms|opps|schedule|moodle|venture|careers|copilot)|push\.open|rooms\.open|room\.select|booking\.confirm|opps\.open|opp\.apply_click|deadline\.(done|moodle_open|sheet_open|feedback_open)|moodle\.connected|schedule\.(friend_added|zoom)|course\.(open|slack_open)|event\.(open|register_click)|invite\.sent|onboarding\.(step|skip)\.[a-z]+)$/;
+
+/** Client props are untrusted: at most 5 flat keys, short strings, finite numbers, booleans. */
+export function cleanProps(raw: unknown): Record<string, string | number | boolean> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: Record<string, string | number | boolean> = {};
+  for (const [key, value] of Object.entries(raw).slice(0, 5)) {
+    if (!/^[a-z_]{1,20}$/.test(key)) continue;
+    if (typeof value === 'string') out[key] = value.slice(0, 40);
+    else if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) out[key] = value;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 
 export class AnalyticsService {
   /**

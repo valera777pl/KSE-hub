@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { sendToUser } from '../bot/send.js';
+import { PushService } from '../services/pushService.js';
 import { appButton, onboardedText } from '../bot/messages.js';
 import { kyivHour } from '../utils/kyivTime.js';
 import { db } from '../db/connection.js';
@@ -7,7 +7,7 @@ import { users } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { updateProfileSchema } from '../utils/validators.js';
 import { GoogleService } from '../services/googleService.js';
-import { AnalyticsService, CLIENT_EVENTS } from '../services/analyticsService.js';
+import { AnalyticsService, CLIENT_EVENTS, cleanProps } from '../services/analyticsService.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 const userRoutes = new Hono();
@@ -49,15 +49,15 @@ userRoutes.post('/me/onboarding', async (c) => {
   if (!user.onboardedAt) {
     AnalyticsService.track(user.id, 'onboarding.completed');
     const hour = kyivHour();
-    await sendToUser(user.telegramId, onboardedText(user.languagePref === 'en' ? 'en' : 'uk', user.digestHour, hour), appButton(user.languagePref === 'en' ? 'Open KSE Hub' : 'Відкрити KSE Hub', 'today'));
+    await PushService.send(user, 'onboarding', onboardedText(user.languagePref === 'en' ? 'en' : 'uk', user.digestHour, hour), appButton(user.languagePref === 'en' ? 'Open KSE Hub' : 'Відкрити KSE Hub', 'today', 'onboarding'));
   }
   return c.json({ user: updated });
 });
 
-// POST /users/me/events — the mini app reports screen views ({ event: "tab.schedule" })
+// POST /users/me/events — the mini app reports screen views ({ event: "tab.view", props: { tab: "schedule" } })
 userRoutes.post('/me/events', async (c) => {
-  const { event } = await c.req.json().catch(() => ({ event: '' }));
-  if (typeof event === 'string' && CLIENT_EVENTS.test(event)) AnalyticsService.track(c.get('dbUser').id, event);
+  const { event, props } = await c.req.json().catch(() => ({ event: '', props: undefined }));
+  if (typeof event === 'string' && CLIENT_EVENTS.test(event)) AnalyticsService.track(c.get('dbUser').id, event, cleanProps(props));
   return c.json({ ok: true });
 });
 

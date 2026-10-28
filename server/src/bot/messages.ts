@@ -12,9 +12,13 @@ const TZ = 'Europe/Kyiv';
 const t = (lang: Lang, uk: string, en: string) => (lang === 'en' ? en : uk);
 const loc = (lang: Lang) => (lang === 'en' ? 'en-GB' : 'uk-UA');
 
-/** A web-app button that opens the mini app on one screen: startapp=day_2026-10-27, deadline_12, … */
-export function appButton(label: string, startapp?: string) {
-  return new InlineKeyboard().webApp(label, startapp ? `${appUrl()}/?startapp=${encodeURIComponent(startapp)}` : appUrl());
+/**
+ * A web-app button that opens the mini app on one screen: startapp=day_2026-10-27, deadline_12, …
+ * `push` tags the kind of message after "__" (deadline_12__d24) so the app can report which pushes get opened.
+ */
+export function appButton(label: string, startapp?: string, push?: string) {
+  const param = push ? `${startapp ?? 'today'}__${push}` : startapp;
+  return new InlineKeyboard().webApp(label, param ? `${appUrl()}/?startapp=${encodeURIComponent(param)}` : appUrl());
 }
 
 /* ─── Dates and places ─── */

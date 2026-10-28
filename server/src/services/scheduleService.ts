@@ -6,7 +6,7 @@ import { AppError } from '../middleware/errorHandler.js';
 import { toLatin } from '../utils/translit.js';
 import { formatKyiv, kyivWeekStart } from '../utils/kyivTime.js';
 import { diffSchedule, type ScheduleChange } from '../utils/scheduleDiff.js';
-import { sendToUser } from '../bot/send.js';
+import { PushService } from './pushService.js';
 import { appButton, changeDay, classSoonText, scheduleChangeText } from '../bot/messages.js';
 import { AnalyticsService } from './analyticsService.js';
 
@@ -149,7 +149,7 @@ export class ScheduleService {
     for (const s of subscribers) {
       const lang = s.languagePref === 'en' ? 'en' : 'uk';
       const text = scheduleChangeText(lang, calendar.courseCode, calendar.section, changes);
-      if (await sendToUser(s.telegramId, text, appButton(lang === 'en' ? 'Open schedule' : 'Відкрити розклад', `day_${day}`))) {
+      if (await PushService.send(s, 'change', text, appButton(lang === 'en' ? 'Open schedule' : 'Відкрити розклад', `day_${day}`, 'change'))) {
         AnalyticsService.track(s.id, 'schedule.change_sent', { changes: changes.length });
       }
     }
@@ -216,7 +216,7 @@ export class ScheduleService {
         .onConflictDoNothing().returning();
       if (!claimed.length) continue;
       const minutes = Math.round((r.startAt.getTime() - now) / 60_000);
-      if (await sendToUser(r.telegramId, classSoonText(r.languagePref === 'en' ? 'en' : 'uk', r.courseCode, r.section, minutes, r.location, r.startAt))) {
+      if (await PushService.send({ id: r.userId, telegramId: r.telegramId }, 'soon', classSoonText(r.languagePref === 'en' ? 'en' : 'uk', r.courseCode, r.section, minutes, r.location, r.startAt))) {
         sent++;
         AnalyticsService.track(r.userId, 'class_reminder.sent');
       }

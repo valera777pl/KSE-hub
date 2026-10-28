@@ -144,7 +144,7 @@ export const api = {
     apiRequest<T>(endpoint, { method: 'DELETE' }),
 };
 
-/** Report a screen view or onboarding step for the admin dashboard; never throws. */
-export function track(event: string) {
-  apiRequest('/users/me/events', { method: 'POST', body: JSON.stringify({ event }) }).catch(() => {});
+/** Report a screen view, funnel step or action for the admin dashboard; never throws. Props: a few short flat values. */
+export function track(event: string, props?: Record<string, string | number | boolean>) {
+  apiRequest('/users/me/events', { method: 'POST', body: JSON.stringify({ event, props }) }).catch(() => {});
 }

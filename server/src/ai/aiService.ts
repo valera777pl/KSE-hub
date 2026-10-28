@@ -13,6 +13,7 @@ import { and, desc, eq, gt, gte, ilike, isNull, or } from 'drizzle-orm';
 import { toolDefinitions } from './tools.js';
 import { chatCompletion } from './client.js';
 import { AnalyticsService } from '../services/analyticsService.js';
+import { aiTopic } from '../utils/aiTopic.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { users } from '../db/schema.js';
 import { formatKyiv, kyivDate, kyivDayStart, kyivNowForPrompt } from '../utils/kyivTime.js';
@@ -101,6 +102,7 @@ export class AIService {
 
     const content = reply?.trim() || 'Не вдалося сформулювати відповідь, спробуй перепитати.';
     AnalyticsService.track(userId, 'ai.message', { source });
+    AnalyticsService.track(userId, 'ai.topic', { topic: aiTopic(toolCalls.map((t) => t.name), message) });
     await db.insert(chatMessages).values([
       { userId, role: 'user', content: message },
       { userId, role: 'assistant', content },

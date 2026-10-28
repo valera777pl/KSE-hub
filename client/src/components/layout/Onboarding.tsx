@@ -42,7 +42,11 @@ export function Onboarding() {
   const mailOk = !!google?.connected && !google.needsReconnect;
 
   useEffect(() => {
-    cloud.get(STEP_KEY).then((saved) => setStep(STEPS.includes(saved as Step) ? (saved as Step) : 'mail'));
+    cloud.get(STEP_KEY).then((saved) => {
+      if (STEPS.includes(saved as Step)) return setStep(saved as Step);
+      setStep('mail');
+      track('onboarding.step.mail');
+    });
     loadGoogle();
     // Back from Google sign-in in the browser
     const onVisible = () => document.visibilityState === 'visible' && loadGoogle();

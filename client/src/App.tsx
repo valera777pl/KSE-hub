@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLang } from './lib/i18n';
 import { useAuthStore } from './stores/authStore';
-import { applyStartParam, useUi } from './stores/uiStore';
+import { applyStartParam, splitStartParam, useUi } from './stores/uiStore';
 import { initTelegram, haptic, startParam } from './lib/telegram';
 import { canSignIn, onAuthLost, track } from './api/client';
 import { clearCache } from './lib/cache';
@@ -28,11 +28,23 @@ export default function App() {
     // Someone else used this phone before: their cached screens go
     clearCache(true);
     const off = onAuthLost(() => setSignInLost(true));
-    applyStartParam(startParam());
+    const start = splitStartParam(startParam());
+    applyStartParam(start.param);
     fetchUser();
-    track('app.open');
+    track('app.open', { start_param: start.kind ?? 'none', tab: useUi.getState().tab });
+    if (start.push) track('push.open', { type: start.push });
     return off;
   }, []);
+
+  // One view per screen the student actually sees: tabs and their sub-screens
+  const screen = useUi((s) => (s.tab === 'study' ? s.studyView : s.tab === 'opps' ? s.oppsView : s.tab));
+  const onboarded = !!user?.onboardedAt;
+  useEffect(() => {
+    if (onboarded) track('tab.view', { tab: screen });
+  }, [screen, onboarded]);
+  useEffect(() => {
+    if (profileOpen) track('tab.view', { tab: 'profile' });
+  }, [profileOpen]);
 
   useEffect(() => {
     if (!user?.languagePref) return;
@@ -42,7 +54,6 @@ export default function App() {
   const changeTab = (next: TabId) => {
     haptic.select();
     setTab(next);
-    track(`tab.${next}`);
   };
 
   // Telegram shows its own loader while we fetch the profile; an empty screen in the theme colour is calmer than a splash
