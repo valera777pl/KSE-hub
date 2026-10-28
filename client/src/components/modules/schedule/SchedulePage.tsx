@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDrag } from '@use-gesture/react';
-import { Bell, BookOpen, CalendarCheck, ChevronLeft, ChevronRight, Coffee, Minus, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react';
+import { Bell, BookOpen, CalendarCheck, ChevronLeft, ChevronRight, Minus, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react';
 import { RemindSheet, shortWhen } from '../../ui/RemindSheet';
 import { inviteFriend } from '../../../lib/invite';
 import { api } from '../../../api/client';
-import type { ClassEvent, ScheduleCompare, StudentMatch } from '../../../types';
-import { addDays, dayKey, dayMonth, dayNum, dayTitle, hm, mondayOf, now, spanText, todayKey, weekdayShort, weekOf } from '../../../lib/time';
+import type { ClassEvent, DeadlineWithCourse, ScheduleCompare, StudentMatch } from '../../../types';
+import { DayGrid, type GridColumn } from './DayGrid';
+import { EmptyDay, useZoom, usePinchZoom } from './gridParts';
+import { addDays, dayKey, dayMonth, dayNum, dayTitle, hm, mondayOf, now, todayKey, weekdayShort, weekOf } from '../../../lib/time';
 import { classKind, shortPlace } from '../../../lib/place';
 import { Avatar } from '../../ui/Avatar';
 import { cloud, haptic, openExternal } from '../../../lib/telegram';
@@ -26,8 +28,6 @@ const MODE_KEY = 'compare_mode';
 type Friend = { userId: number; name: string; avatarUrl?: string | null };
 /** Лише мої · Разом · Спільні */
 type Mode = 'mine' | 'together' | 'shared';
-/** A class on the day's list: mine, or only my friends' (then `theirs`), with the friends in it */
-type Row = { e: ClassEvent; theirs: boolean; friends: Friend[] };
 type Week = { connected: boolean; synced: boolean; events: ClassEvent[] };
 
 /** One week of my classes per Monday; the last good copy shows at once and when offline. */
@@ -120,25 +120,14 @@ function useFriends(monday: string) {
     friends.filter((f) => active.has(f.userId) && weeks.get(f.userId)?.events.some((x) => x.shared && x.calendarId === e.calendarId && x.startAt === e.startAt)),
   [friends, active, weeks]);
 
-  /** Active friends' classes on `day` that I'm not in, one row per class with everyone who's there. */
-  const theirsOn = useCallback((day: string, mine: ClassEvent[]): Row[] => {
-    const rows = new Map<string, Row>();
-    for (const f of friends) {
-      if (!active.has(f.userId)) continue;
-      for (const x of weeks.get(f.userId)?.events ?? []) {
-        if (dayKey(new Date(x.startAt)) !== day || mine.some((m) => m.calendarId === x.calendarId && m.startAt === x.startAt)) continue;
-        const k = `${x.calendarId}|${x.startAt}`;
-        const row = rows.get(k) ?? { e: x, theirs: true, friends: [] };
-        row.friends.push(f);
-        rows.set(k, row);
-      }
-    }
-    return [...rows.values()];
-  }, [friends, active, weeks]);
+  /** A friend's own classes on `day` (from their week), for their column in «Разом». */
+  const eventsOn = useCallback((id: number, day: string): (ClassEvent & { shared: boolean })[] =>
+    (weeks.get(id)?.events ?? []).filter((x) => dayKey(new Date(x.startAt)) === day).sort((a, b) => a.startAt.localeCompare(b.startAt)),
+  [weeks]);
 
   // Without anyone switched on there's nothing to compare: it's just my day
   const effectiveMode: Mode = active.size ? mode : 'mine';
-  return { friends, active, mode: effectiveMode, setMode, add, remove, toggle, withMe, theirsOn, notice, clearNotice: () => setNotice(null) };
+  return { friends, active, mode: effectiveMode, setMode, add, remove, toggle, withMe, eventsOn, notice, clearNotice: () => setNotice(null) };
 }
 
 export function SchedulePage() {
@@ -156,6 +145,11 @@ export function SchedulePage() {
   const weekQ = useWeek(monday);
   const week = weekQ.data;
   const pals = useFriends(monday);
+  // Same cache as the Дедлайни tab: the day's deadlines sit on top of the grid
+  const dues = useCached('deadlines', () => api.get<{ deadlines: DeadlineWithCourse[] }>('/moodle/deadlines?completed=true').then((r) => r.deadlines));
+  const zoom = useZoom();
+  const gridRef = useRef<HTMLDivElement>(null);
+  usePinchZoom(gridRef, zoom);
 
   const byDay = useMemo(() => {
     const map = new Map<string, ClassEvent[]>();
@@ -175,7 +169,7 @@ export function SchedulePage() {
   };
 
   // Swipe the list sideways for the neighbouring day
-  const bind = useDrag(({ swipe: [sx] }) => { if (sx) go(addDays(day, -sx)); }, { axis: 'x', filterTaps: true, swipe: { distance: 40, velocity: 0.3 } });
+  const bind = useDrag(({ swipe: [sx], touches }) => { if (sx && touches < 2) go(addDays(day, -sx)); }, { axis: 'x', filterTaps: true, swipe: { distance: 40, velocity: 0.3 } });
 
   const refresh = async () => {
     setRefreshing(true);
@@ -212,12 +206,19 @@ export function SchedulePage() {
   }
 
   const mineToday = byDay.get(day) ?? [];
-  const rows: Row[] = pals.mode === 'mine'
-    ? mineToday.map((e) => ({ e, theirs: false, friends: [] }))
-    : pals.mode === 'shared'
-      ? mineToday.map((e) => ({ e, theirs: false, friends: pals.withMe(e) })).filter((r) => r.friends.length > 0)
-      : [...mineToday.map((e) => ({ e, theirs: false, friends: pals.withMe(e) })), ...pals.theirsOn(day, mineToday)]
-        .sort((a, b) => a.e.startAt.localeCompare(b.e.startAt));
+  const activeFriends = pals.friends.filter((f) => pals.active.has(f.userId)).slice(0, MAX_FRIENDS - 1);
+  // Лише мої: one column. Разом: me | Данило | … side by side. Спільні: my classes shared with someone, ringed
+  const columns: GridColumn[] = pals.mode === 'together'
+    ? [{ key: 'me', who: null, classes: mineToday.map((e) => ({ e, friends: pals.withMe(e) })) },
+      ...activeFriends.map((f) => ({ key: `f${f.userId}`, who: f, classes: pals.eventsOn(f.userId, day).map((e) => ({ e, theirs: !e.shared })) }))]
+    : [{ key: 'me', who: null, classes: pals.mode === 'shared'
+      ? mineToday.map((e) => ({ e, friends: pals.withMe(e) })).filter((c) => c.friends.length > 0)
+      : mineToday.map((e) => ({ e })) }];
+  // For «Усі вільні» everyone's classes count as busy, not only the shared ones on screen
+  const busy = pals.mode === 'shared' ? [...mineToday, ...activeFriends.flatMap((f) => pals.eventsOn(f.userId, day))] : undefined;
+  const dueToday = (dues.data ?? []).filter((d) => d.assignment.dueDate && dayKey(new Date(d.assignment.dueDate)) === day
+    && !/general\s*\/\s*university/i.test(d.courseName ?? ''));
+  const empty = columns.every((c) => c.classes.length === 0);
   const range = `${dayMonth(days[0])} – ${dayMonth(days[6])}`.replace(/ (\S+) – (\d+) \1$/, ' – $2 $1');
 
   return (
@@ -300,14 +301,15 @@ export function SchedulePage() {
             <ErrorState error={weekQ.error} onRetry={weekQ.refresh} />
           ) : !week ? (
             <SkeletonRows rows={3} />
-          ) : rows.length === 0 ? (
-            <div className="group">
-              <EmptyState icon={Coffee} title={pals.mode === 'shared' ? tr('Цього дня спільних пар немає', 'No shared classes this day')
-                : day < today ? tr('Цього дня пар не було', 'No classes that day') : tr('Цього дня пар немає', 'No classes this day')} />
-            </div>
+          ) : empty && pals.mode !== 'shared' ? (
+            <EmptyDay day={day} today={today} deadlines={dueToday} />
           ) : (
-            <div className="group">
-              {rows.map((r) => <ClassRow key={`${r.theirs ? 't' : 'm'}${r.e.id}`} row={r} onOpen={() => { haptic.tap(); setOpen(r.e); }} />)}
+            <div ref={gridRef}>
+              {pals.mode === 'shared' && empty && <p className="note" style={{ padding: '0 0 8px' }}>{tr('Цього дня спільних пар немає', 'No shared classes this day')}</p>}
+              <DayGrid day={day} columns={columns} shared={pals.mode === 'shared'} busy={busy} deadlines={dueToday} hourPx={zoom.px}
+                onOpen={(e) => { haptic.tap(); setOpen(e); }}
+                onWindow={(at) => { haptic.tap(); useUi.getState().openRoomsAt(at.toISOString()); }}
+                onDeadline={(id) => { haptic.tap(); useUi.getState().openDeadline(id); }} />
             </div>
           )}
         </div>
@@ -317,35 +319,6 @@ export function SchedulePage() {
       {open && <ClassSheet e={open} friends={pals.withMe(open)} onClose={() => setOpen(null)} />}
       {adding && <AddFriendSheet taken={pals.friends} onPick={(s) => { haptic.success(); pals.add(s); setAdding(false); }} onRemove={pals.remove} onClose={() => setAdding(false)} />}
     </>
-  );
-}
-
-function ClassRow({ row: { e, theirs, friends }, onOpen }: { row: Row; onOpen: () => void }) {
-  const t = now().getTime();
-  const start = new Date(e.startAt).getTime();
-  const end = new Date(e.endAt).getTime();
-  const status = theirs ? 'theirs' : t >= end ? 'past' : t >= start ? 'now' : 'next';
-  const progress = status === 'now' ? ((t - start) / (end - start)) * 100 : 0;
-  const names = friends.map((f) => f.name.split(' ')[0]).join(', ');
-
-  return (
-    <button className={`class press class--${status}`} onClick={onOpen}>
-      <div className="class__time">{hm(e.startAt)}<span>{hm(e.endAt)}</span></div>
-      <div style={{ minWidth: 0 }}>
-        <div className="class__code">{e.courseCode}{e.section && <small>[{e.section}]</small>}</div>
-        <div className="class__place">
-          {theirs
-            ? `${friends.length > 1 ? tr('Пара друзів', 'Friends\' class') : tr('Пара друга', 'Friend\'s class')} · ${names}`
-            : status === 'now' ? `${shortPlace(e.location) ?? ''} · ${tr(`ще ${spanText(end - t)}`, `${spanText(end - t)} left`)}` : shortPlace(e.location)}
-        </div>
-        {status === 'now' && <div className="progress"><i style={{ width: `${progress}%` }} /></div>}
-      </div>
-      {friends.length > 0 && (
-        <span className="class__friends" aria-label={`${tr('Разом з', 'With')}: ${friends.map((f) => f.name).join(', ')}`}>
-          {friends.slice(0, 3).map((f) => <Avatar key={f.userId} name={f.name} url={f.avatarUrl} size={24} />)}
-        </span>
-      )}
-    </button>
   );
 }
 

@@ -3,6 +3,7 @@ import { Check, ChevronRight, DoorClosed, Headphones, Video, X } from 'lucide-re
 import { api, errorText, track } from '../../../api/client';
 import type { BookingWithRoom, QuotaInfo, Room } from '../../../types';
 import { addDays, dayKey, dayTitle, hm, now, todayKey, weekdayShort, dayNum } from '../../../lib/time';
+import { useUi } from '../../../stores/uiStore';
 import { haptic } from '../../../lib/telegram';
 import { ScreenHead } from '../../ui/ScreenHead';
 import { Sheet } from '../../ui/Sheet';
@@ -50,8 +51,10 @@ const roundUp = (d: Date, step: number) => new Date(Math.ceil(d.getTime() / (ste
 
 /** Кімнати: when → which room → how long → booked. */
 export function RoomsPage() {
-  const [when, setWhen] = useState<When>('now');
-  const [picked, setPicked] = useState<Date | null>(null);
+  // From a window in the schedule grid: open at that time, once
+  const [asked] = useState(() => { const at = useUi.getState().roomsAt; useUi.setState({ roomsAt: null }); return at ? new Date(at) : null; });
+  const [when, setWhen] = useState<When>(asked && asked.getTime() > now().getTime() + 60_000 ? 'pick' : 'now');
+  const [picked, setPicked] = useState<Date | null>(asked && asked.getTime() > now().getTime() + 60_000 ? roundUp(asked, 5) : null);
   const [reload, setReload] = useState(0);
   const [booking, setBooking] = useState<{ room: RoomFree; start: Date } | null>(null);
   const [picking, setPicking] = useState(false);
