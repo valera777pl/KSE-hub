@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDrag } from '@use-gesture/react';
-import { Bell, CalendarCheck, ChevronLeft, ChevronRight, Coffee, Minus, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react';
+import { Bell, BookOpen, CalendarCheck, ChevronLeft, ChevronRight, Coffee, Minus, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react';
 import { RemindSheet, shortWhen } from '../../ui/RemindSheet';
 import { inviteFriend } from '../../../lib/invite';
 import { api } from '../../../api/client';
@@ -377,6 +377,11 @@ function ClassSheet({ e, friends, onClose }: { e: ClassEvent; friends: Friend[];
       <div className="group">
         <div className="row"><div className="row__main"><div className="row__title num">{hm(e.startAt)}–{hm(e.endAt)}</div><div className="row__meta">{key === todayKey() ? tr('сьогодні', 'today') : dayTitle(key)}{kind ? ` · ${kind}` : ''}</div></div></div>
         <div className="row"><div className="row__main"><div className="row__title">{shortPlace(e.location) ?? tr('Аудиторію не вказано', 'Room not given')}</div></div></div>
+        <button className="row press" onClick={() => { haptic.tap(); onClose(); useUi.getState().openCourse(e.courseCode); }}>
+          <BookOpen className="row-icon" strokeWidth={1.7} />
+          <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr(`Сторінка курсу ${e.courseCode}`, `${e.courseCode} course page`)}</div><div className="row__meta">{tr('Дедлайни, Slack, друзі на курсі', 'Deadlines, Slack, friends on it')}</div></div>
+          <ChevronRight className="chev" />
+        </button>
         {new Date(e.startAt).getTime() > now().getTime() && (
           <button className="row press" onClick={() => { haptic.tap(); setReminding(true); }}>
             <Bell className="row-icon" strokeWidth={1.7} />

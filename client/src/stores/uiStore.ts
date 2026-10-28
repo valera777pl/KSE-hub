@@ -13,6 +13,10 @@ interface UiState {
   oppsView: OppsView;
   oppId: number | null;
   eventId: number | null;
+  /** The course page over the current tab: "ECON100" */
+  courseCode: string | null;
+  openCourse: (code: string) => void;
+  closeCourse: () => void;
   setOppsView: (v: OppsView) => void;
   setTab: (tab: TabId) => void;
   setStudyView: (v: 'schedule' | 'deadlines') => void;
@@ -31,6 +35,9 @@ export const useUi = create<UiState>((set) => ({
   oppsView: 'forYou',
   oppId: null,
   eventId: null,
+  courseCode: null,
+  openCourse: (courseCode) => set({ courseCode }),
+  closeCourse: () => set({ courseCode: null }),
   setOppsView: (oppsView) => set({ oppsView }),
   setTab: (tab) => set({ tab }),
   setStudyView: (studyView) => set({ studyView }),
@@ -50,7 +57,7 @@ export function splitStartParam(raw: string | null): { param: string | null; kin
   return { param: param || null, kind: param ? param.split('_')[0] : null, push: push || null };
 }
 
-/** startapp=today | day_2026-10-27 | deadlines | deadline_12 | booking_5 | opps | opp_3 | event_7 */
+/** startapp=today | day_2026-10-27 | deadlines | deadline_12 | booking_5 | opps | opp_3 | event_7 | course_ECON100 */
 export function applyStartParam(param: string | null) {
   if (!param) return;
   const s = useUi.getState();
@@ -61,6 +68,7 @@ export function applyStartParam(param: string | null) {
   else if (kind === 'booking') s.setTab('rooms');
   else if (kind === 'opp' && Number(value)) useUi.setState({ tab: 'opps', oppsView: 'forYou', oppId: Number(value) });
   else if (kind === 'event' && Number(value)) useUi.setState({ tab: 'opps', oppsView: 'events', eventId: Number(value) });
+  else if (kind === 'course' && /^[A-Z]{2,6}\d{3}[A-Z]?$/.test(value)) s.openCourse(value);
   else if (kind === 'opps') s.setTab('opps');
   else s.setTab('today');
 }

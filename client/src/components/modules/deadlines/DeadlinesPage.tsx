@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, BookCheck, ChevronDown, ChevronRight, Link2 } from 'lucide-react';
+import { Bell, BookCheck, BookOpen, ChevronDown, ChevronRight, Link2 } from 'lucide-react';
 import { RemindSheet, shortWhen } from '../../ui/RemindSheet';
 import { api, track } from '../../../api/client';
 import type { DeadlineWithCourse } from '../../../types';
@@ -203,6 +203,13 @@ function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClos
 
       <div className="group" style={{ marginTop: 16 }}>
         <div className="row"><div className="row__main"><div className="row__title num cap-first" style={{ fontWeight: 500 }}>{dayTitle(dayKey(due))}, {hm(due)}</div><div className="row__meta">{typeLabel()[a.type] ?? tr('Завдання', 'Assignment')}</div></div></div>
+        {/^[A-Z]{2,6}\d{3}/.test(code ?? '') && (
+          <button className="row press" onClick={() => { haptic.tap(); onClose(); useUi.getState().openCourse(code!.match(/^[A-Z]{2,6}\d{3}[A-Z]?/)![0]); }}>
+            <BookOpen className="row-icon" strokeWidth={1.7} />
+            <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr(`Сторінка курсу ${code}`, `${code} course page`)}</div></div>
+            <ChevronRight className="chev" />
+          </button>
+        )}
         {!late && !a.isCompleted && (
           <button className="row press" onClick={() => { haptic.tap(); setReminding(true); }}>
             <Bell className="row-icon" strokeWidth={1.7} />

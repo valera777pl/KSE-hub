@@ -510,3 +510,15 @@ export const events = pgTable('events', {
   sourceKey: varchar('source_key', { length: 100 }).notNull().unique(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+
+/* ───────────── COURSE LINKS (014) ───────────── */
+
+/** Per course, shared by everyone: its Slack channel (from Slack notification emails) and office hours. */
+export const courseLinks = pgTable('course_links', {
+  courseCode: varchar('course_code', { length: 20 }).primaryKey(),
+  slackTeam: varchar('slack_team', { length: 100 }),
+  slackChannelId: varchar('slack_channel_id', { length: 20 }),
+  slackChannelName: varchar('slack_channel_name', { length: 100 }),
+  officeHours: text('office_hours'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});

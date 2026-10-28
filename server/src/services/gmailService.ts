@@ -1,9 +1,9 @@
 import { db } from '../db/connection.js';
 import {
-  emails, events, googleAccounts, opportunities, summaries, users,
+  courseLinks, emails, events, googleAccounts, opportunities, summaries, users,
   type EmailCategory, type EmailSource,
 } from '../db/schema.js';
-import { and, eq, gt, inArray, ne, or } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, ne, or } from 'drizzle-orm';
 import { GoogleService } from './googleService.js';
 import { sha256 } from '../utils/crypto.js';
 import { escapeHtml } from '../bot/send.js';
@@ -13,6 +13,7 @@ import { AnalyticsService } from './analyticsService.js';
 import { MoodleService } from './moodleService.js';
 import { isOtherGroup, parseMoodleMail } from '../utils/moodleGroups.js';
 import { isMassMailing, parseKyivLocal } from '../utils/events.js';
+import { slackChannels } from '../utils/slackLinks.js';
 
 // Gemini's free tier allows only a few requests per minute, shared with the assistant
 const MAX_MESSAGES_PER_SYNC = 10;
@@ -48,6 +49,29 @@ export class GmailService {
       this.sync(account).catch((err) => console.error('On-demand Gmail sync failed:', err)),
       new Promise((resolve) => setTimeout(resolve, ON_DEMAND_TIMEOUT_MS)),
     ]);
+  }
+
+  /**
+   * Search the student's Gmail right now (nothing stored): subject, sender and time of the newest matches.
+   * Used by the course page («Листи про курс»).
+   */
+  static async searchLive(userId: number, query: string, max = 5) {
+    const [account] = await db.select().from(googleAccounts).where(eq(googleAccounts.userId, userId)).limit(1);
+    if (!account || account.syncError === 'invalid_grant') return [];
+    const token = await GoogleService.accessToken(account);
+    const list = await gmail<{ messages?: { id: string }[] }>(token, `messages?${new URLSearchParams({ q: `${query} ${BASE_QUERY}`, maxResults: String(max) })}`);
+    const found = await Promise.all((list.messages ?? []).map((m) =>
+      gmail<GmailMessage>(token, `messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`)));
+    return found.map((msg) => {
+      const header = (name: string) => msg.payload.headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? '';
+      return {
+        id: msg.id,
+        subject: header('Subject') || '(без теми)',
+        from: senderName(header('From')),
+        receivedAt: new Date(parseInt(msg.internalDate, 10)),
+        url: `https://mail.google.com/mail/?authuser=${encodeURIComponent(account.email)}#all/${msg.id}`,
+      };
+    });
   }
 
   /** Pull new mail for one account, summarize what's new, return how many emails were stored. */
@@ -122,6 +146,7 @@ export class GmailService {
       summaryId: summary.id,
     }).onConflictDoNothing().returning();
     if (!row) return null;
+    if (source === 'slack') await rememberSlackChannels(subject, body).catch((err) => console.error('Slack channel link failed:', err));
     if (moodleMail) await MoodleService.applyMail(account.userId, moodleMail, row.receivedAt).catch((err) => console.error('Moodle mail status failed:', err));
 
     // The same mailing can reach one inbox twice (two lists, slightly different
@@ -309,6 +334,19 @@ async function saveEvent(summary: Summary, subject: string, e: EventDetails, use
     userId,
     sourceKey: `summary:${summary.id}`,
   }).onConflictDoNothing();
+}
+
+/** A course's Slack channel, the first time a notification email shows it; later emails don't overwrite it. */
+async function rememberSlackChannels(subject: string, body: string) {
+  for (const ch of slackChannels(subject, body)) {
+    await db.insert(courseLinks)
+      .values({ courseCode: ch.courseCode, slackTeam: ch.team, slackChannelId: ch.channelId, slackChannelName: ch.name })
+      .onConflictDoUpdate({
+        target: courseLinks.courseCode,
+        set: { slackTeam: ch.team, slackChannelId: ch.channelId, slackChannelName: ch.name, updatedAt: new Date() },
+        setWhere: isNull(courseLinks.slackChannelId),
+      });
+  }
 }
 
 async function gmail<T>(token: string, path: string): Promise<T> {

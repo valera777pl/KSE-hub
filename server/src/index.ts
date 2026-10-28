@@ -25,6 +25,7 @@ import { authRoutes } from './routes/auth.js';
 import { friendRoutes } from './routes/friends.js';
 import { reminderRoutes } from './routes/reminders.js';
 import { eventRoutes } from './routes/events.js';
+import { courseRoutes } from './routes/courses.js';
 
 const app = new Hono();
 
@@ -67,6 +68,7 @@ api.route('/auth', authRoutes);
 api.route('/friends', friendRoutes);
 api.route('/reminders', reminderRoutes);
 api.route('/events', eventRoutes);
+api.route('/courses', courseRoutes);
 
 app.route('/api', api);
 

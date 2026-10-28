@@ -13,13 +13,14 @@ import { TodayPage } from './components/modules/today/TodayPage';
 import { StudyPage } from './components/modules/study/StudyPage';
 import { RoomsPage } from './components/modules/rooms/RoomsPage';
 import { OpportunitiesPage } from './components/modules/opportunities/OpportunitiesPage';
+import { CoursePage } from './components/modules/course/CoursePage';
 import type { TabId } from './types';
 
 export default function App() {
   const { fetchUser, user, loading, error } = useAuthStore();
   // Opened from a plain link or a reply keyboard there is no initData at all; no point asking the server
   const [signInLost, setSignInLost] = useState(() => !canSignIn());
-  const { tab, setTab, profileOpen, closeProfile } = useUi();
+  const { tab, setTab, profileOpen, closeProfile, courseCode, closeCourse } = useUi();
   const { lang, setLang } = useLang();
 
   useEffect(() => {
@@ -83,6 +84,7 @@ export default function App() {
       </main>
       <TabBar key={`tabs-${lang}`} active={tab} onChange={changeTab} />
       {profileOpen && <ProfilePage key={`profile-${lang}`} onClose={closeProfile} />}
+      {courseCode && <CoursePage key={`course-${courseCode}-${lang}`} code={courseCode} onClose={closeCourse} />}
     </div>
   );
 }

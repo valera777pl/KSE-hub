@@ -504,3 +504,8 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
 /* ─── «Нагадати…» sheet ─── */
 .remind-done { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 28px 0 12px; font-size: 17px; font-weight: 600; color: var(--success); }
 .remind-done svg { width: 22px; height: 22px; }
+
+/* ─── Course page (level 2 over a tab) ─── */
+.course__sub { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+.course__next { padding: 14px 16px; }
+.course__big { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; margin-bottom: 4px; }

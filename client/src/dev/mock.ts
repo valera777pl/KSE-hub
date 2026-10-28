@@ -355,6 +355,18 @@ const routes: [string, RegExp, Handler][] = [
     outgoing: [{ id: 41, projectId: 22, role: 'Backend', message: null, status: 'pending', createdAt: iso(NOW), project: { id: 22, title: 'CampusEats' }, author: { name: 'Данило Гнатенко', contact: null } }],
   })],
   ['GET', /^\/venture\/profile$/, () => ({ profile: null })],
+  ['GET', /^\/courses\/([A-Z0-9]+)\/mail$/, () => ({ emails: empty ? [] : [
+    { id: 'm1', subject: 'MATH111: перенесення консультації на четвер', from: 'Olena Hrytsenko', receivedAt: hours(-20), url: 'https://mail.google.com' },
+    { id: 'm2', subject: 'MATH111 Homework 2 is out', from: 'Moodle KSE', receivedAt: hours(-50), url: 'https://mail.google.com' },
+  ] })],
+  ['GET', /^\/courses\/([A-Z0-9]+)$/, (m) => ({
+    code: m[1], title: 'Introduction to Calculus', sections: ['L2', 'P6'],
+    nextClass: { id: 900, calendarId: 3, courseCode: m[1], section: 'P6', title: 'Introduction to Calculus', location: 'M. Shpaka 3, 3.05', startAt: hours(2), endAt: hours(3.5) },
+    deadlines: empty ? [] : DEADLINES.filter((d) => d.courseName.startsWith(m[1])),
+    slack: { url: 'https://kse-students.slack.com/archives/C07ABCDE12', name: `${m[1].toLowerCase()}-fall26` },
+    officeHours: null,
+    friends: [{ userId: 2, name: 'Danylo Bondar', avatarUrl: null, sameSection: true }],
+  })],
   ['GET', /^\/events$/, () => ({ events: empty ? [] : EVENTS })],
   ['GET', /^\/events\/(\d+)$/, (m) => ({ event: EVENTS.find((e) => e.id === Number(m[1])) })],
   ['POST', /^\/events\/(\d+)\/remind$/, (m) => { EVENTS.find((e) => e.id === Number(m[1]))!.reminded = true; return { reminded: true, remindAt: hours(20) }; }],

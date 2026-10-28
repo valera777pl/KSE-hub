@@ -293,3 +293,24 @@ export interface EventItem {
   reminded: boolean;
   createdAt: string;
 }
+
+/** GET /courses/:code — one course in one place. */
+export interface CoursePageData {
+  code: string;
+  title: string | null;
+  sections: string[];
+  nextClass: ClassEvent | null;
+  deadlines: DeadlineWithCourse[];
+  slack: { url: string; name: string | null } | null;
+  officeHours: string | null;
+  friends: { userId: number; name: string; avatarUrl: string | null; sameSection: boolean }[];
+}
+
+/** GET /courses/:code/mail — searched in Gmail on the spot. */
+export interface CourseMail {
+  id: string;
+  subject: string;
+  from: string;
+  receivedAt: string;
+  url: string;
+}
