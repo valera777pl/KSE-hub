@@ -3,6 +3,7 @@ import { AlertCircle, ArrowDown, ArrowUp, BarChart3 } from 'lucide-react';
 import { applyTheme } from '../../lib/telegram';
 import { hideSplash } from '../../lib/splash';
 import { EmptyState } from '../ui/States';
+import { Glow } from '../ui/Glow';
 
 /**
  * Admin dashboard at /admin, a lazy chunk students never download. Opened from the bot's /admin link
@@ -122,7 +123,8 @@ export function AdminPage() {
   }, [auth, days]);
 
   return (
-    <div className="shell"><main className="shell__main"><div className="screen adm">
+    <div className="shell"><main className="shell__main"><div className="screen adm has-glow">
+      <Glow />
       <header className="screen-head">
         <div>
           <p className="screen-sub">{data ? `${longDay(data.today)} · за ${days} днів` : 'Адмінка'}</p>

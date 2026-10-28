@@ -61,6 +61,7 @@ const TOKENS = {
     '--brand-card': '#070F6B', '--brand-text-2': '#C9D2FF', '--tabbar-bg': '#11141A', '--tab-inactive': '#8A91A0',
     '--avatar-bg': '#3A3F4B', '--success': '#2E9E68', '--success-fill': '#278658', '--warning': '#F0A95A',
     '--danger': '#FF6B6B', '--danger-fill': '#FF5C5C',
+    '--glow': 'rgba(54, 69, 242, 0.34)', '--glow-mid': 'rgba(54, 69, 242, 0.13)',
   },
   light: {
     '--bg': '#F2F3F7', '--surface': '#FFFFFF', '--inset': '#F2F3F7', '--fill': '#E6E8EE', '--surface-2': '#FFFFFF',
@@ -69,6 +70,7 @@ const TOKENS = {
     '--brand-card': '#070F6B', '--brand-text-2': '#C9D2FF', '--tabbar-bg': '#FFFFFF', '--tab-inactive': '#6B7280',
     '--avatar-bg': '#D9DCE3', '--success': '#1E7C4F', '--success-fill': '#1E7C4F', '--warning': '#AB5800',
     '--danger': '#D52828', '--danger-fill': '#D52828',
+    '--glow': 'rgba(43, 59, 214, 0.11)', '--glow-mid': 'rgba(43, 59, 214, 0.04)',
   },
 } as const;
 

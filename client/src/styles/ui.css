@@ -559,3 +559,14 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
 .grid__now::before { content: ''; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .grid__now span { position: absolute; left: -44px; top: -8px; width: 38px; text-align: right; font-size: 11px; font-weight: 600; line-height: 14px; color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .grid { transition: none; } }
+
+/* ─── Glow: one per screen, behind the top (DESIGN.md → Glow) ─── */
+.has-glow { position: relative; isolation: isolate; overflow-x: clip; }
+.glow { position: absolute; z-index: -1; left: 50%; top: -60px; width: 680px; height: 560px; transform: translateX(-50%); pointer-events: none;
+  background: radial-gradient(closest-side, var(--glow), var(--glow-mid) 55%, transparent); }
+.glow--drift { animation: glow-drift 26s ease-in-out infinite alternate; }
+@keyframes glow-drift { from { transform: translate(-56%, -10px); } to { transform: translate(-44%, 14px); } }
+/* Behind an empty state in the middle of a screen (Пар немає, Тиждень чистий) */
+.glow--center { top: 50%; width: 440px; height: 340px; transform: translate(-50%, -50%); }
+.empty-day { padding: 12px 0 8px; }
+@media (prefers-reduced-motion: reduce) { .glow--drift { animation: none; } }

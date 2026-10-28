@@ -9,6 +9,7 @@ import { hm, now } from '../../../lib/time';
 import { useUi } from '../../../stores/uiStore';
 import { courseCode } from '../../ui/DeadlineRow';
 import { EmptyState } from '../../ui/States';
+import { Glow } from '../../ui/Glow';
 import { ZOOM, zoomLevel } from './DayGrid';
 
 const ZOOM_KEY = 'schedule_zoom';
@@ -101,8 +102,10 @@ export function EmptyDay({ day, today, deadlines }: { day: string; today: string
   const text = deadlines.length
     ? deadlines.map((d) => `${hm(d.assignment.dueDate!)} · ${[courseCode(d.courseName), d.assignment.title].filter(Boolean).join(' ')}`).join('\n')
     : rooms ? tr(`Вільних кімнат зараз: ${rooms}`, `Rooms free now: ${rooms}`) : undefined;
+  // Not a card: an empty day is open space, with the screen's one glow behind it
   return (
-    <div className="group">
+    <div className="has-glow empty-day">
+      <Glow center />
       <EmptyState icon={Coffee} title={day < today ? tr('Цього дня пар не було', 'No classes that day') : tr('Пар немає', 'No classes')}
         text={text}
         action={day === today && rooms ? { label: tr('Відкрити кімнати', 'Open rooms'), onClick: () => useUi.getState().setTab('rooms') } : undefined} />

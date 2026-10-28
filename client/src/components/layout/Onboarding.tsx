@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Glow } from '../ui/Glow';
 import { CalendarDays, Check, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
 import { api, errorText, track } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
@@ -109,7 +110,9 @@ export function Onboarding() {
   if (!step) return <div className="onb" />;
 
   return (
-    <div className="onb">
+    <div className={`onb${step === 'done' ? ' has-glow' : ''}`}>
+      {/* The one place the glow may drift: the moment it's all set */}
+      {step === 'done' && <Glow drift />}
       <div className="onb__progress" aria-hidden="true"><i style={{ width: `${((index + 1) / STEPS.length) * 100}%` }} /></div>
       <div className="onb__body" key={step}>
         {step === 'mail' && <MailStep google={google} />}

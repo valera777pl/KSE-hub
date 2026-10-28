@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Glow } from '../../ui/Glow';
 import { ChevronRight } from 'lucide-react';
 import { api } from '../../../api/client';
 import type { ClassEvent, DeadlineWithCourse } from '../../../types';
@@ -61,7 +62,8 @@ export function TodayPage() {
   const synced = weeks?.[0]?.synced;
 
   return (
-    <div className="screen">
+    <div className="screen has-glow">
+      <Glow />
       <ScreenHead title={tr('Сьогодні', 'Today')} sub={dayTitle(today)} />
 
       {stale && <StaleBanner at={stale.staleAt!} error={stale.error} busy={stale.loading} onRetry={retry} />}
