@@ -195,7 +195,17 @@ export class AIService {
       }
 
       case 'get_my_deadlines': {
-        if (args.include_completed) return MoodleService.getDeadlines(userId, true);
+        if (args.include_completed) {
+          return (await MoodleService.getDeadlines(userId, true)).map(({ assignment, courseName }) => ({
+            title: assignment.title,
+            course: courseName,
+            due: assignment.dueDate ? formatKyiv(assignment.dueDate) : null,
+            done: !!assignment.isCompleted,
+            submitted: assignment.submittedAt ? formatKyiv(assignment.submittedAt) : null,
+            feedback: !!assignment.feedbackAt,
+            url: assignment.sourceUrl,
+          }));
+        }
         const days = Math.min(Math.max(Number(args.days) || 14, 1), 90);
         const now = new Date();
         const rows = await DigestService.upcomingDeadlines(userId, now, new Date(now.getTime() + days * 86_400_000), 30);
@@ -205,6 +215,7 @@ export class AIService {
           due: assignment.dueDate ? formatKyiv(assignment.dueDate) : null,
           type: assignment.type,
           url: assignment.sourceUrl,
+          ...(assignment.feedbackAt ? { feedback: true } : {}),
         }));
       }
 

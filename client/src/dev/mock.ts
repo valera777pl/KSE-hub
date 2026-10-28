@@ -226,8 +226,11 @@ const DEADLINES = [
   { id: 13, title: 'Essay draft: Study habits', courseName: 'KSE101 How to study at KSE', due: hours(100), type: 'assignment' },
   { id: 14, title: 'Фінальний захист проєктів | KSE Консультант/ка із безбар`єрності', courseName: 'General / University', due: hours(99), type: 'event' },
   { id: 15, title: 'Writing task 2', courseName: 'ENG111 English for Professional and Study Purposes I', due: hours(-30), type: 'assignment' },
+  // Handed in yesterday evening (Moodle receipt), Grader AI already replied
+  { id: 16, title: 'Homework 1', courseName: 'MATH111 Introduction to Calculus', due: hours(26), type: 'assignment', submittedAt: hours(-14), feedbackAt: hours(-2) },
 ].map((d) => ({
-  assignment: { id: d.id, userId: 1, courseId: null, externalId: null, title: d.title, dueDate: d.due, sourceUrl: 'https://teaching.kse.org.ua/mod/assign/view.php?id=1', isCompleted: false, type: d.type, createdAt: iso(NOW) },
+  assignment: { id: d.id, userId: 1, courseId: null, externalId: null, title: d.title, dueDate: d.due, sourceUrl: 'https://teaching.kse.org.ua/mod/assign/view.php?id=1',
+    isCompleted: !!d.submittedAt, type: d.type, createdAt: iso(NOW), submittedAt: d.submittedAt ?? null, feedbackAt: d.feedbackAt ?? null },
   courseName: d.courseName,
 }));
 

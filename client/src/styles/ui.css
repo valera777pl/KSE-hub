@@ -228,6 +228,7 @@ body { font-family: var(--font-family); font-size: 15px; line-height: 1.4; }
 .dl__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dl__title { font-size: 16px; font-weight: 600; line-height: 1.3; }
 .dl__meta { font-size: 13px; color: var(--text-secondary); }
+.dl__ok { color: var(--success); }
 .dl--late .dl__date b, .dl--late .dl__meta { color: var(--danger); }
 /* Done steps back by colour and a strike, not by fading */
 .dl--done .dl__title, .dl--done .dl__date b { color: var(--text-secondary); }

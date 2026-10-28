@@ -80,7 +80,7 @@ export type DigestMail = { subject: string | null; summary: string };
 
 /** The daily digest. Returns null when there's nothing to say. */
 export function digestText(p: {
-  lang: Lang; now: Date; day: Date; classes: DigestClass[]; deadlines: DigestDeadline[]; mail: DigestMail[]; slack: DigestMail[];
+  lang: Lang; now: Date; day: Date; classes: DigestClass[]; deadlines: DigestDeadline[]; moodle?: DigestMail[]; mail: DigestMail[]; slack: DigestMail[];
 }): string | null {
   const { lang, now } = p;
   const sections: string[] = [];
@@ -93,7 +93,12 @@ export function digestText(p: {
       `${shortDateTime(d.dueDate, lang)} · ${[courseCode(d.courseName), d.title].filter(Boolean).map(escapeHtml).join(' · ')} · ${inTime(d.dueDate, now, lang)}`).join('\n'));
   }
   const mailSection = (title: string, items: DigestMail[]) =>
-    `<b>${title}</b>\n` + items.map((m) => `${escapeHtml(m.subject || t(lang, 'Без теми', 'No subject'))}\n<blockquote expandable>${escapeHtml(m.summary)}</blockquote>`).join('\n');
+    `<b>${title}</b>\n` + items.map((m) => {
+      const subject = escapeHtml(m.subject || t(lang, 'Без теми', 'No subject'));
+      // Receipts and feedback carry no summary beyond the subject
+      return m.summary === m.subject ? subject : `${subject}\n<blockquote expandable>${escapeHtml(m.summary)}</blockquote>`;
+    }).join('\n');
+  if (p.moodle?.length) sections.push(mailSection('Moodle', p.moodle));
   if (p.mail.length) sections.push(mailSection(t(lang, 'Пошта', 'Mail'), p.mail));
   if (p.slack.length) sections.push(mailSection('Slack', p.slack));
   if (!sections.length) return null;

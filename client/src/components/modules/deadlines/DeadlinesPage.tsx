@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BookCheck, ChevronDown, Link2 } from 'lucide-react';
+import { BookCheck, ChevronDown, ChevronRight, Link2 } from 'lucide-react';
 import { api, track } from '../../../api/client';
 import type { DeadlineWithCourse } from '../../../types';
 import { addDays, dayKey, dayTitle, hm, now, plural, spanText, todayKey } from '../../../lib/time';
@@ -183,7 +183,9 @@ function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClos
   return (
     <Sheet onClose={onClose} label={a.title}>
       {a.isCompleted ? (
-        <div className="sheet__label">{tr('Зроблено', 'Done')}</div>
+        <div className="sheet__label" style={a.submittedAt ? { color: 'var(--success)' } : undefined}>
+          {a.submittedAt ? `${tr('Здано', 'Submitted')} ✓ ${dayTitle(dayKey(new Date(a.submittedAt)))}, ${hm(a.submittedAt)}` : tr('Зроблено', 'Done')}
+        </div>
       ) : (
         <>
           <div className="sheet__label" style={late ? { color: 'var(--danger)' } : undefined}>{late ? tr('Прострочено на', 'Overdue by') : tr('Залишилось', 'Time left')}</div>
@@ -195,6 +197,16 @@ function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClos
 
       <div className="group" style={{ marginTop: 16 }}>
         <div className="row"><div className="row__main"><div className="row__title num cap-first" style={{ fontWeight: 500 }}>{dayTitle(dayKey(due))}, {hm(due)}</div><div className="row__meta">{typeLabel()[a.type] ?? tr('Завдання', 'Assignment')}</div></div></div>
+        {a.feedbackAt && (
+          <button className="row press" disabled={!a.sourceUrl} aria-label={tr('Відкрити відгук у Moodle', 'Open feedback in Moodle')}
+            onClick={() => { track('deadline.feedback_open'); openExternal(a.sourceUrl!); }}>
+            <div className="row__main">
+              <div className="row__title" style={{ fontWeight: 500 }}>{tr('Є відгук', 'Feedback is in')}</div>
+              <div className="row__meta num cap-first">{dayTitle(dayKey(new Date(a.feedbackAt)))}, {hm(a.feedbackAt)}</div>
+            </div>
+            {a.sourceUrl && <ChevronRight className="chev" />}
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>

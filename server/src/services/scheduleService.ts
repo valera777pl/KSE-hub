@@ -9,6 +9,7 @@ import { diffSchedule, type ScheduleChange } from '../utils/scheduleDiff.js';
 import { PushService } from './pushService.js';
 import { appButton, changeDay, classSoonText, scheduleChangeText } from '../bot/messages.js';
 import { AnalyticsService } from './analyticsService.js';
+import { MoodleService } from './moodleService.js';
 
 type Account = typeof googleAccounts.$inferSelect;
 type CourseCalendar = typeof courseCalendars.$inferSelect;
@@ -66,6 +67,8 @@ export class ScheduleService {
       await db.insert(userCalendars).values(ids.map((calendarId) => ({ userId: account.userId, calendarId }))).onConflictDoNothing();
     }
     await db.update(googleAccounts).set({ calendarsSyncedAt: new Date() }).where(eq(googleAccounts.id, account.id));
+    // Sections decide which Moodle group copies are the student's (MATH101 [P8] → Група 8)
+    await MoodleService.refreshVisibility(account.userId).catch((err) => console.error('Moodle visibility refresh failed:', err));
 
     const staleBefore = Date.now() - EVENTS_SYNC_EVERY;
     const stale = subscribed.filter((c) => !c.eventsSyncedAt || c.eventsSyncedAt.getTime() < staleBefore);

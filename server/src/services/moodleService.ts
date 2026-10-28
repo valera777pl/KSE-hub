@@ -1,8 +1,10 @@
 import ical from 'node-ical';
 import { db } from '../db/connection.js';
-import { moodleCourses, moodleAssignments, users } from '../db/schema.js';
-import { eq, and, gte, asc } from 'drizzle-orm';
+import { courseCalendars, moodleCourses, moodleAssignments, userCalendars, users } from '../db/schema.js';
+import { eq, and, asc } from 'drizzle-orm';
 import { AppError } from '../middleware/errorHandler.js';
+import { AnalyticsService } from './analyticsService.js';
+import { matchAssignment, practiceGroups, visibility, type Groups, type MoodleMail } from '../utils/moodleGroups.js';
 
 export class MoodleService {
   /**
@@ -131,7 +133,61 @@ export class MoodleService {
       count++;
     }
 
+    await this.refreshVisibility(userId);
     return { totalEvents: count, coursesCount: courseMap.size };
+  }
+
+  /** The student's practice groups per course, from the schedule: MATH101 [P8] → { MATH101: [8] }. */
+  static async groups(userId: number): Promise<Groups> {
+    const rows = await db
+      .select({ courseCode: courseCalendars.courseCode, section: courseCalendars.section })
+      .from(userCalendars)
+      .innerJoin(courseCalendars, eq(courseCalendars.id, userCalendars.calendarId))
+      .where(eq(userCalendars.userId, userId));
+    return practiceGroups(rows);
+  }
+
+  /**
+   * Hide what isn't the student's: other practice groups' copies, "opens" entries, duplicates, items without a date.
+   * Runs after every Moodle sync and after the schedule's sections change.
+   */
+  static async refreshVisibility(userId: number) {
+    const rows = await db
+      .select({ id: moodleAssignments.id, title: moodleAssignments.title, dueDate: moodleAssignments.dueDate,
+        hidden: moodleAssignments.hidden, groupNo: moodleAssignments.groupNo, courseName: moodleCourses.courseName })
+      .from(moodleAssignments)
+      .leftJoin(moodleCourses, eq(moodleAssignments.courseId, moodleCourses.id))
+      .where(eq(moodleAssignments.userId, userId));
+    if (!rows.length) return;
+    const next = visibility(rows, await this.groups(userId));
+    for (const r of rows) {
+      const v = next.get(r.id)!;
+      if (v.hidden !== r.hidden || v.groupNo !== r.groupNo) {
+        await db.update(moodleAssignments).set({ hidden: v.hidden, groupNo: v.groupNo }).where(eq(moodleAssignments.id, r.id));
+      }
+    }
+  }
+
+  /**
+   * A Moodle receipt marks the assignment submitted (and done, so no more reminders);
+   * a feedback email marks "Є відгук". Returns whether an assignment matched.
+   */
+  static async applyMail(userId: number, mail: MoodleMail, at: Date): Promise<boolean> {
+    const rows = await db
+      .select({ id: moodleAssignments.id, title: moodleAssignments.title, dueDate: moodleAssignments.dueDate,
+        isCompleted: moodleAssignments.isCompleted, courseName: moodleCourses.courseName })
+      .from(moodleAssignments)
+      .leftJoin(moodleCourses, eq(moodleAssignments.courseId, moodleCourses.id))
+      .where(and(eq(moodleAssignments.userId, userId), eq(moodleAssignments.hidden, false)));
+    const id = matchAssignment(mail, rows, at);
+    if (!id) return false;
+    if (mail.kind === 'submitted') {
+      await db.update(moodleAssignments).set({ submittedAt: at, isCompleted: true }).where(eq(moodleAssignments.id, id));
+      if (!rows.find((r) => r.id === id)?.isCompleted) AnalyticsService.track(userId, 'deadline.done', { via: 'auto' });
+    } else {
+      await db.update(moodleAssignments).set({ feedbackAt: at }).where(eq(moodleAssignments.id, id));
+    }
+    return true;
   }
 
   /**
@@ -207,6 +263,7 @@ export class MoodleService {
   static async getDeadlines(userId: number, includeCompleted = false) {
     const conditions = [
       eq(moodleAssignments.userId, userId),
+      eq(moodleAssignments.hidden, false),
     ];
 
     if (!includeCompleted) {

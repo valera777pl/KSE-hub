@@ -16,12 +16,17 @@ export function DeadlineRow({ d, onOpen }: { d: DeadlineWithCourse; onOpen: () =
   const late = due.getTime() < now().getTime() && !a.isCompleted;
   const k = dayKey(due);
   const when = a.type === 'event' ? hm(due) : `${tr('до', 'by')} ${hm(due)}`;
+  // Handed in (from Moodle's receipt): said quietly in the caption, in green
+  const submitted = a.submittedAt ? `${tr('здано', 'submitted')} ✓ ${hm(a.submittedAt)}` : null;
   return (
     <button className={`dl press${late ? ' dl--late' : ''}${a.isCompleted ? ' dl--done' : ''}`} onClick={onOpen}>
       <span className="dl__date" aria-hidden="true"><span>{weekdayShort(k).toLowerCase()}</span><b className="num">{dayNum(k)}</b></span>
       <span className="dl__main">
         <span className="dl__title clamp2">{a.title}</span>
-        <span className="dl__meta num">{[courseCode(d.courseName), when].filter(Boolean).join(' · ')}</span>
+        <span className="dl__meta num">
+          {[courseCode(d.courseName), submitted ? null : when].filter(Boolean).join(' · ')}
+          {submitted && <>{courseCode(d.courseName) ? ' · ' : ''}<span className="dl__ok">{submitted}</span></>}
+        </span>
       </span>
     </button>
   );

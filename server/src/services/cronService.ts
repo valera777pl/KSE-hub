@@ -148,6 +148,7 @@ export class CronService {
       .where(
         and(
           eq(moodleAssignments.isCompleted, false),
+          eq(moodleAssignments.hidden, false),
           eq(users.botBlocked, false),
           gt(moodleAssignments.dueDate, now),
           lte(moodleAssignments.dueDate, new Date(now.getTime() + 24 * HOUR))

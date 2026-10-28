@@ -87,6 +87,10 @@ export interface MoodleAssignment {
   isCompleted: boolean;
   type: 'assignment' | 'quiz' | 'event';
   createdAt: string;
+  /** From Moodle's receipt email: handed in at this time */
+  submittedAt?: string | null;
+  /** From Moodle's feedback email: the teacher (or Grader AI) replied */
+  feedbackAt?: string | null;
 }
 
 export interface DeadlineWithCourse {

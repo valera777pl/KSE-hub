@@ -278,6 +278,12 @@ export const moodleAssignments = pgTable('moodle_assignments', {
   isCompleted: boolean('is_completed').default(false),
   type: assignmentTypeEnum('type').default('assignment'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  // 010: another practice group's copy, an "opens" entry, a duplicate or no due date (utils/moodleGroups.ts)
+  hidden: boolean('hidden').default(false).notNull(),
+  groupNo: integer('group_no'),
+  // 010: from Moodle's receipt and feedback emails
+  submittedAt: timestamp('submitted_at'),
+  feedbackAt: timestamp('feedback_at'),
 }, (table) => [
   index('assignments_user_due_idx').on(table.userId, table.dueDate),
 ]);

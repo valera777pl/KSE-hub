@@ -10,6 +10,8 @@ import { escapeHtml } from '../bot/send.js';
 import { PushService } from './pushService.js';
 import { chatCompletion, hasAI } from '../ai/client.js';
 import { AnalyticsService } from './analyticsService.js';
+import { MoodleService } from './moodleService.js';
+import { isOtherGroup, parseMoodleMail } from '../utils/moodleGroups.js';
 
 // Gemini's free tier allows only a few requests per minute, shared with the assistant
 const MAX_MESSAGES_PER_SYNC = 10;
@@ -101,7 +103,11 @@ export class GmailService {
     const messageIdHeader = header('Message-ID').trim().toLowerCase() || null;
     const body = extractText(msg.payload);
     const source = detectSource(from);
-    const { summary, opportunity } = await this.summaryFor(messageIdHeader, subject, from, body);
+    // Moodle receipts and feedback need no model: the subject says it all, and they update the assignment
+    const moodleMail = source === 'moodle' ? parseMoodleMail(subject, body) : null;
+    const { summary, opportunity } = moodleMail
+      ? { summary: await plainSummary(messageIdHeader, subject, body), opportunity: undefined }
+      : await this.summaryFor(messageIdHeader, subject, from, body);
 
     const [row] = await db.insert(emails).values({
       userId: account.userId,
@@ -113,6 +119,7 @@ export class GmailService {
       summaryId: summary.id,
     }).onConflictDoNothing().returning();
     if (!row) return null;
+    if (moodleMail) await MoodleService.applyMail(account.userId, moodleMail, row.receivedAt).catch((err) => console.error('Moodle mail status failed:', err));
 
     // The same mailing can reach one inbox twice (two lists, slightly different
     // footers): same summary, or same subject from the same sender within 2 days
@@ -161,8 +168,11 @@ export class GmailService {
 
     const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!user || user.botBlocked || !user.digestSources.includes(urgent[0].source)) return;
+    const groups = urgent.some((e) => e.source === 'moodle') ? await MoodleService.groups(userId) : new Map();
 
     for (const email of urgent) {
+      // A reminder about another practice group's quiz is not this student's business
+      if (email.source === 'moodle' && isOtherGroup(email.subject ?? '', null, groups)) continue;
       const text = `🚨 <b>${escapeHtml(email.subject ?? '')}</b>\n<i>${escapeHtml(email.fromName ?? '')}</i>\n\n${escapeHtml(email.summary.summary)}`;
       if (await PushService.send(user, 'urgent', text)) {
         AnalyticsService.track(userId, 'urgent.sent');
@@ -182,6 +192,15 @@ async function findSummary(messageIdHeader: string | null, bodyHash: string): Pr
       : eq(summaries.bodyHash, bodyHash))
     .limit(1);
   return row ?? null;
+}
+
+/** A summary without the model: the subject is the whole story (Moodle receipts and feedback). */
+async function plainSummary(messageIdHeader: string | null, subject: string, body: string): Promise<Summary> {
+  const bodyHash = sha256(normalize(`${subject}\n${body}`));
+  const existing = await findSummary(messageIdHeader, bodyHash);
+  if (existing) return existing;
+  await db.insert(summaries).values({ messageIdHeader, bodyHash, summary: subject, category: 'other', important: false }).onConflictDoNothing();
+  return (await findSummary(messageIdHeader, bodyHash))!;
 }
 
 async function summarize(subject: string, from: string, body: string) {
@@ -270,10 +289,11 @@ export function isClassScheduleNotice(from: string, subject: string): boolean {
   return /^(updated invitation|new event|invitation|event canceled|canceled event|cancelled event|оновлене запрошення|нова подія|запрошення|подію скасовано)[^:]{0,40}:\s*[A-Z]{2,6}\d{3}\b/i.test(subject.trim());
 }
 
-function detectSource(from: string): EmailSource {
+/** KSE's Moodle writes from msupport@kse.org.ua ("Не відповідайте на цей лист (via KSE)", "Grader AI (via KSE)"). */
+export function detectSource(from: string): EmailSource {
   const f = from.toLowerCase();
   if (f.includes('slack.com')) return 'slack';
-  if (f.includes('teaching.kse.org.ua') || f.includes('moodle')) return 'moodle';
+  if (f.includes('msupport@kse.org.ua') || f.includes('teaching.kse.org.ua') || f.includes('moodle')) return 'moodle';
   return 'gmail';
 }
 

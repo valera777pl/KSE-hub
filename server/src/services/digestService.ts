@@ -4,6 +4,8 @@ import { and, asc, desc, eq, gt, inArray, isNull, lte, ne } from 'drizzle-orm';
 import { digestText, isGeneralCourse, kyivDay, type Lang } from '../bot/messages.js';
 import { kyivDayStart, kyivHour } from '../utils/kyivTime.js';
 import { ScheduleService } from './scheduleService.js';
+import { MoodleService } from './moodleService.js';
+import { isOtherGroup } from '../utils/moodleGroups.js';
 
 type User = typeof users.$inferSelect;
 
@@ -46,10 +48,14 @@ export class DigestService {
       includedEmailIds.push(...rows.map((r) => r.id));
       return rows;
     };
+    // Moodle's own emails keep their section; reminders about other practice groups are dropped (still marked as digested)
+    const moodleMail = await mailFor('moodle');
+    const groups = moodleMail.length ? await MoodleService.groups(user.id) : new Map();
+    const moodle = moodleMail.filter((m) => !isOtherGroup(`${m.subject ?? ''} ${m.summary}`, null, groups));
     const mail = await mailFor('gmail');
     const slack = await mailFor('slack');
 
-    const text = digestText({ lang, now, day, classes, deadlines, mail, slack });
+    const text = digestText({ lang, now, day, classes, deadlines, moodle, mail, slack });
     if (markDigested && includedEmailIds.length) {
       await db.update(emails).set({ digestedAt: new Date() }).where(inArray(emails.id, includedEmailIds));
     }
@@ -86,6 +92,7 @@ export class DigestService {
         and(
           eq(moodleAssignments.userId, userId),
           eq(moodleAssignments.isCompleted, false),
+          eq(moodleAssignments.hidden, false),
           gt(moodleAssignments.dueDate, from),
           lte(moodleAssignments.dueDate, to)
         )
