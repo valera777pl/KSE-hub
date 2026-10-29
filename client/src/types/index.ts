@@ -19,6 +19,8 @@ export interface User {
   classReminders: boolean;
   /** The live pinned line in the bot chat */
   pinnedKind?: 'off' | 'next' | 'deadline' | 'day';
+  /** When the Slack digest comes: 09:00, 20:00 or both */
+  slackDigestSlots?: SlackSlot[];
   isAdmin: boolean;
   createdAt: string;
   updatedAt: string;
@@ -293,8 +295,38 @@ export interface EventItem {
   personal: boolean;
   /** «Нагадати за день» is on */
   reminded: boolean;
+  /** Posted in Slack: "#event" (the registration link is then the original message) */
+  slackChannel?: string | null;
   createdAt: string;
 }
+
+/* ─── Slack digests (SLACK-DIGEST-PROMPT.md): summaries of the student's channels ─── */
+
+export type SlackItemKind = 'deadline' | 'change' | 'announcement' | 'event' | 'other';
+export interface SlackSummary {
+  id: number;
+  channelId: string;
+  channelName: string;
+  isPrivate: boolean;
+  courseCode: string | null;
+  section: string | null;
+  url: string | null;
+  summary: string;
+  items: { kind: SlackItemKind; text: string; dueAt?: string; permalink: string }[];
+  publishedAt: string;
+}
+export type SlackSlot = 'morning' | 'evening';
+export interface SlackChannelSub {
+  channelId: string;
+  name: string;
+  isPrivate: boolean;
+  courseCode: string | null;
+  section: string | null;
+  program: string | null;
+  cohortYear: number | null;
+  on: boolean;
+}
+export interface SlackSubscriptions { slots: SlackSlot[]; channels: SlackChannelSub[] }
 
 /** GET /courses/:code — one course in one place. */
 export interface CoursePageData {

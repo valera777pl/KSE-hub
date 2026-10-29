@@ -16,6 +16,9 @@ body { font-family: var(--font-family); font-size: 15px; line-height: 1.4; }
 .screen-title { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
 /* Section switch as titles (Навчання: Розклад · Дедлайни) */
 .title-tabs { display: flex; align-items: baseline; gap: 18px; }
+/* Three titles next to the avatar fit a 375 px phone only a little smaller: 22 px there, 26 px at 430 */
+.title-tabs--3 { gap: 14px; }
+.title-tabs--3 .title-tab { font-size: clamp(20px, 6vw, 28px); }
 .title-tab { color: var(--title-inactive); padding: 6px 0; min-height: 44px; transition: color 150ms var(--ease); }
 .fade-in { animation: fade 150ms var(--ease); }
 .title-tab[aria-selected='true'] { color: var(--text); }
@@ -554,6 +557,31 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
 .adm-toggle small { display: block; font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
 .adm-toggle--off { opacity: 0.5; }
 .adm-ch__hide { align-self: flex-start; min-height: 44px; font-size: 15px; font-weight: 500; color: var(--danger); }
+
+/* ─── Навчання → Slack: summaries of the student's channels ─── */
+.slack-card { padding: 14px 16px 6px; margin-bottom: 10px; }
+.slack-card__head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
+.slack-card__icon { width: 18px; height: 18px; flex: none; color: var(--text-secondary); margin-top: 2px; }
+.slack-card__title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.slack-card__title b { font-size: 16px; font-weight: 600; }
+.slack-card__title span { font-size: 13px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slack-card__time { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.slack-points { list-style: none; margin: 0 -16px; }
+.slack-points li { position: relative; }
+.slack-points li + li::before { content: ''; position: absolute; top: 0; left: 44px; right: 0; border-top: 0.5px solid var(--separator); }
+.slack-point { display: grid; grid-template-columns: 1fr auto; align-items: start; column-gap: 10px; width: 100%; text-align: left; padding: 10px 16px 10px 44px; min-height: 44px; }
+.slack-point__text { font-size: 15px; line-height: 1.4; color: var(--text); }
+.slack-point__due { grid-column: 1; font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.slack-point__go { grid-column: 2; grid-row: 1; width: 16px; height: 16px; color: var(--accent); margin-top: 3px; }
+.slack-settings { display: block; margin: 6px auto 0; min-height: 44px; }
+.slack-ch .row-icon { align-self: flex-start; margin-top: 2px; }
+.slack-ch__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slack-guide { list-style: none; counter-reset: step; }
+.slack-guide li { counter-increment: step; position: relative; padding: 12px 16px 12px 52px; font-size: 15px; line-height: 1.4; min-height: 48px; }
+.slack-guide li::before { content: counter(step); position: absolute; left: 16px; top: 11px; width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 13px; font-weight: 600; background: var(--fill); color: var(--text); font-variant-numeric: tabular-nums; }
+.slack-guide li + li { border-top: 0.5px solid var(--separator); }
+.slack-guide__lead { padding-top: 0; margin-top: -2px; margin-bottom: 8px; }
 
 /* ─── «Нагадати…» sheet ─── */
 .remind-done { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 28px 0 12px; font-size: 17px; font-weight: 600; color: var(--success); }

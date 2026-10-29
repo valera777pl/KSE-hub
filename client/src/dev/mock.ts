@@ -392,6 +392,14 @@ const routes: [string, RegExp, Handler][] = [
   }],
   ['DELETE', /^\/friends\/(\d+)$/, (m) => { FRIENDS.friends = FRIENDS.friends.filter((f) => f.userId !== Number(m[1])); return { ok: true }; }],
   ['GET', /^\/admin\/analytics$/, (_m, url) => adminAnalytics(Number(url.searchParams.get('days')) || 7)],
+  ['GET', /^\/slack\/feed$/, () => ({ summaries: empty ? [] : SLACK_FEED })],
+  ['GET', /^\/slack\/subscriptions$/, () => ({ slots: user.slackDigestSlots ?? ['evening'], channels: empty ? [] : SLACK_SUBS })],
+  ['PUT', /^\/slack\/subscriptions$/, (_m, _u, b) => {
+    const { slots, channels } = b as { slots?: ('morning' | 'evening')[]; channels?: { channelId: string; on: boolean }[] };
+    if (slots) user.slackDigestSlots = slots;
+    for (const c of channels ?? []) { const x = SLACK_SUBS.find((s) => s.channelId === c.channelId); if (x) x.on = c.on; }
+    return { slots: user.slackDigestSlots ?? ['evening'], channels: SLACK_SUBS };
+  }],
   ['GET', /^\/admin\/slack$/, () => (empty ? { channels: [], drafts: [], courses: SLACK.courses, programs: SLACK.programs } : SLACK)],
   ['PATCH', /^\/admin\/slack\/channels\/(\w+)$/, (m, _u, b) => {
     const ch = SLACK.channels.find((c) => c.channelId === m[1])!;
@@ -425,6 +433,39 @@ const EVENTS = [
     description: 'Знайомство, формат British Parliamentary і перша тренувальна гра.', registrationUrl: null, personal: false, reminded: true, createdAt: iso(NOW) },
   { id: 3, title: 'Career Day: зустріч з Kyivstar', startsAt: hours(200), location: 'Online', programs: [] as string[],
     description: 'Як потрапити на літнє стажування: відбір, задачі, зарплата.', registrationUrl: 'https://forms.gle/mock2', personal: false, reminded: false, createdAt: iso(NOW) },
+  { id: 4, title: 'Як навчаються нейровідмінні люди', startsAt: hours(240), location: 'ICU Event Hall + Zoom', programs: [] as string[],
+    description: null, registrationUrl: 'https://ksestudents.slack.com/archives/C06KXECQQFQ/p1793200085849049', personal: false, reminded: false,
+    slackChannel: '#event', createdAt: iso(NOW) },
+];
+
+/* Навчання → Slack: what the student's channels said (published summaries) and their channel switches */
+const SLACK_FEED = [
+  { id: 11, channelId: 'C0BU8PC0TD2', channelName: 'intro_to_calculus-pr6-autumn-2026', isPrivate: true, courseCode: 'MATH111', section: 'P6',
+    url: 'https://ksestudents.slack.com/archives/C0BU8PC0TD2', summary: '', publishedAt: hours(-0.3),
+    items: [
+      { kind: 'change', text: 'Наступного тижня пари онлайн і без квізу', permalink: 'https://ksestudents.slack.com/archives/C0BU8PC0TD2/p1793175881366969' },
+      { kind: 'announcement', text: 'Через тиждень — 2 квізи: на першій і на другій парі', permalink: 'https://ksestudents.slack.com/archives/C0BU8PC0TD2/p1793175881366969' },
+    ] },
+  { id: 12, channelId: 'C05QB2Q0TJ8', channelName: 'students', isPrivate: false, courseCode: null, section: null,
+    url: 'https://ksestudents.slack.com/archives/C05QB2Q0TJ8', summary: '', publishedAt: hours(-0.3),
+    items: [
+      { kind: 'deadline', text: 'Probability and Games (KSE Quant Club): реєстрація на змагання', dueAt: '2026-12-10T23:59:00+02:00', permalink: 'https://ksestudents.slack.com/archives/C05QB2Q0TJ8/p1793216247829659' },
+      { kind: 'event', text: 'Talk to an Expert про GameDev із Lead Programmer 4A Games, кампус і онлайн', dueAt: '2026-11-06T18:00:00+02:00', permalink: 'https://ksestudents.slack.com/archives/C05QB2Q0TJ8/p1793115726802289' },
+    ] },
+  { id: 13, channelId: 'C05Q8FTNP0T', channelName: 'general', isPrivate: false, courseCode: null, section: null,
+    url: 'https://ksestudents.slack.com/archives/C05Q8FTNP0T', summary: '', publishedAt: hours(-26),
+    items: [
+      { kind: 'announcement', text: 'Психологічна служба: запис відкривається наприкінці кожного місяця на 3–4 тижні вперед', permalink: 'https://ksestudents.slack.com/archives/C05Q8FTNP0T/p1793108700126039' },
+      { kind: 'announcement', text: 'У Study Room на 3 поверсі встановили принтер', permalink: 'https://ksestudents.slack.com/archives/C05Q8FTNP0T/p1793180603643829' },
+    ] },
+];
+const SLACK_SUBS = [
+  { channelId: 'C0BU8PC0TD2', name: 'intro_to_calculus-pr6-autumn-2026', isPrivate: true, courseCode: 'MATH111', section: 'P6', program: null, cohortYear: null, on: true },
+  { channelId: 'G0COHORT30', name: 'be30', isPrivate: true, courseCode: null, section: null, program: 'BE', cohortYear: 2026, on: true },
+  { channelId: 'C06KXECQQFQ', name: 'event', isPrivate: false, courseCode: null, section: null, program: null, cohortYear: null, on: true },
+  { channelId: 'C05Q8FTNP0T', name: 'general', isPrivate: false, courseCode: null, section: null, program: null, cohortYear: null, on: true },
+  { channelId: 'C05Q8JQF03C', name: 'random', isPrivate: false, courseCode: null, section: null, program: null, cohortYear: null, on: false },
+  { channelId: 'C05QB2Q0TJ8', name: 'students', isPrivate: false, courseCode: null, section: null, program: null, cohortYear: null, on: false },
 ];
 
 /* /admin → Slack: drafts from the reader account's first run, channels with their ties */

@@ -13,6 +13,7 @@ import { Sheet } from '../ui/Sheet';
 import { MoodleConnectForm } from '../modules/deadlines/MoodleConnect';
 import { FriendsGroup } from './FriendsGroup';
 import { RemindersGroup } from './RemindersGroup';
+import { SlackChannelsSheet } from '../modules/slack/SlackChannelsSheet';
 
 /** What the pinned line in the bot chat can show: one short line each */
 const pinnedOptions = () => [
@@ -58,6 +59,7 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
   const [pick, setPick] = useState<Pick | null>(null);
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const [moodle, setMoodle] = useState(false);
+  const [slack, setSlack] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useBackButton(onClose);
@@ -167,6 +169,14 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
         </div>
         <p className="note">{tr('Нагадування про дедлайни (за 24 і за 3 год) і термінові листи приходять одразу.', 'Deadline reminders (24 and 3 h before) and urgent mail arrive right away.')}</p>
 
+        <div className="caption">Slack</div>
+        <div className="group">
+          <Row title={tr('Slack-канали', 'Slack channels')} sub={tr('Підсумки каналів окремим повідомленням', 'Channel summaries as a separate message')} onClick={() => { haptic.tap(); setSlack(true); }}>
+            <span className="row__value num">{(user.slackDigestSlots ?? ['evening']).length === 2 ? '09:00, 20:00' : (user.slackDigestSlots ?? ['evening'])[0] === 'morning' ? '09:00' : '20:00'}</span>
+            <ChevronRight className="chev" strokeWidth={1.75} />
+          </Row>
+        </div>
+
         <div className="caption">{tr('Закріплене в чаті', 'Pinned in the chat')}</div>
         <div className="group">
           <Row title={tr('Що показувати', 'What it shows')} onClick={() => setPick({
@@ -250,6 +260,7 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
           </div>
         </Sheet>
       )}
+      {slack && <SlackChannelsSheet onClose={() => { setSlack(false); useAuthStore.getState().fetchUser().catch(() => {}); }} />}
       {moodle && (
         <Sheet onClose={() => setMoodle(false)} label={tr('Дедлайни з Moodle', 'Deadlines from Moodle')}>
           <div className="sheet__title">{tr('Дедлайни з Moodle', 'Deadlines from Moodle')}</div>

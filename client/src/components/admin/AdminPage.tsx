@@ -64,7 +64,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_available_rooms: 'Вільні кімнати', book_room: 'Бронювання', hot_book_room: 'Hot Booking', get_booking_quota: 'Квота бронювань',
   get_my_bookings: 'Мої броні', get_my_schedule: 'Мій розклад', compare_schedule: 'Спільні пари', find_free_classmates: 'Хто вільний',
   get_my_deadlines: 'Дедлайни', search_my_emails: 'Пошук у листах', search_opportunities: 'Стажування',
-  search_kse_info: 'База знань KSE', search_startups: 'Стартапи', create_reminder: 'Нагадування',
+  search_kse_info: 'База знань KSE', search_startups: 'Стартапи', create_reminder: 'Нагадування', get_slack_summaries: 'Slack-підсумки',
 };
 const TOPIC_LABELS: Record<string, string> = {
   schedule: 'Розклад', deadlines: 'Дедлайни', rooms: 'Кімнати', mail: 'Пошта', kse: 'KSE-інфо',

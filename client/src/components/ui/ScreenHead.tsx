@@ -20,7 +20,7 @@ export function ScreenHead<T extends string>({ title, sub, note, tabs, active, o
       <div>
         {sub && <div className="screen-sub">{sub}</div>}
         {tabs ? (
-          <div className="title-tabs" role="tablist" onKeyDown={(e) => {
+          <div className={`title-tabs${tabs.length > 2 ? ' title-tabs--3' : ''}`} role="tablist" onKeyDown={(e) => {
             // Arrow keys move between the titles, like any tab list
             const i = tabs.findIndex((t) => t.id === active);
             const next = e.key === 'ArrowRight' ? tabs[i + 1] : e.key === 'ArrowLeft' ? tabs[i - 1] : undefined;

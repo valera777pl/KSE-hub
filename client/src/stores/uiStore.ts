@@ -2,11 +2,12 @@ import { create } from 'zustand';
 import type { ClassEvent, TabId } from '../types';
 
 export type OppsView = 'forYou' | 'events' | 'startups' | 'people';
+export type StudyView = 'schedule' | 'deadlines' | 'slack';
 
 /** App-level navigation: which tab is open and what a deep link asked for. */
 interface UiState {
   tab: TabId;
-  studyView: 'schedule' | 'deadlines';
+  studyView: StudyView;
   scheduleDay: string | null;
   deadlineId: number | null;
   profileOpen: boolean;
@@ -21,7 +22,7 @@ interface UiState {
   closeCourse: () => void;
   setOppsView: (v: OppsView) => void;
   setTab: (tab: TabId) => void;
-  setStudyView: (v: 'schedule' | 'deadlines') => void;
+  setStudyView: (v: StudyView) => void;
   openDay: (day: string) => void;
   openDeadline: (id: number) => void;
   openProfile: () => void;
@@ -60,7 +61,7 @@ export function splitStartParam(raw: string | null): { param: string | null; kin
   return { param: param || null, kind: param ? param.split('_')[0] : null, push: push || null };
 }
 
-/** startapp=today | day_2026-10-27 | deadlines | deadline_12 | booking_5 | opps | opp_3 | event_7 | course_ECON100 */
+/** startapp=today | day_2026-10-27 | deadlines | deadline_12 | booking_5 | opps | opp_3 | event_7 | course_ECON100 | slack */
 export function applyStartParam(param: string | null) {
   if (!param) return;
   const s = useUi.getState();
@@ -68,6 +69,7 @@ export function applyStartParam(param: string | null) {
   if (kind === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(value)) s.openDay(value);
   else if (kind === 'deadline' && Number(value)) s.openDeadline(Number(value));
   else if (kind === 'deadlines') useUi.setState({ tab: 'study', studyView: 'deadlines' });
+  else if (kind === 'slack') useUi.setState({ tab: 'study', studyView: 'slack' });
   else if (kind === 'booking') s.setTab('rooms');
   else if (kind === 'opp' && Number(value)) useUi.setState({ tab: 'opps', oppsView: 'forYou', oppId: Number(value) });
   else if (kind === 'event' && Number(value)) useUi.setState({ tab: 'opps', oppsView: 'events', eventId: Number(value) });
