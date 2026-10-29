@@ -15,6 +15,8 @@ export const ingestSchema = z.object({
     channelName: z.string().min(1).max(100).transform((s) => s.replace(/^#/, '').toLowerCase()),
     isPrivate: z.boolean(),
     team: z.string().max(100).optional(),
+    // Channel topic or purpose: often names the course ("MATH111 - Introduction to Calculus")
+    topic: z.string().max(500).nullish(),
     fromTs: ts,
     toTs: ts,
     summary: z.string().trim().min(1).max(2000).nullable(),

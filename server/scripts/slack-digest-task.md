@@ -21,7 +21,8 @@ as drafts for the owner to review, then shows them to students. Brief: `SLACK-DI
    It returns `{ "channels": [{ "channelId", "name", "lastTs" }] }`. If it fails, stop and report the error.
 
 2. **Channels.** `slack_list_user_channels` with `types: "public_channel,private_channel"`, `exclude_archived: true`,
-   `limit: 200` (follow `cursor` if there are more). These are the channels the reader account is in.
+   `limit: 200` (follow `cursor` if there are more). These are the channels the reader account is in. Keep each channel's
+   **Topic** (or Purpose) — it often names the course ("MATH111 - Introduction to Calculus") and goes into the JSON as `topic`.
 
 3. **Read each channel** since its cursor: `slack_read_channel` with `channel_id`, `oldest: <lastTs>` (a channel without a
    cursor: the last 3 days, `oldest` = now − 3 days as a Unix timestamp), `limit: 100`, `response_format: "detailed"`; follow
@@ -44,7 +45,7 @@ as drafts for the owner to review, then shows them to students. Brief: `SLACK-DI
 
 5. **Send.** Write the result to `$TMPDIR/kse-slack-ingest.json`:
    ```json
-   { "channels": [{ "channelId": "G0…", "channelName": "math101-pr8-autumn-2026", "isPrivate": true, "team": "ksestudents",
+   { "channels": [{ "channelId": "G0…", "channelName": "math101-pr8-autumn-2026", "isPrivate": true, "team": "ksestudents", "topic": "MATH111 - …",
      "fromTs": "…", "toTs": "…", "summary": "…" | null, "items": [ … ], "events": [ … ] }] }
    ```
    then

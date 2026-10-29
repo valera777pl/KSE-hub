@@ -26,6 +26,14 @@ test('a course written out in words matches the course title', () => {
   assert.equal(channelScope('intro_to-pr6', known), null);
 });
 
+test('a Cyrillic look-alike in the name and the course code in the topic', () => {
+  // the real channel: Cyrillic "с" in "сalculus", topic names the course
+  assert.deepEqual(channelScope('intro_to_\u0441alculus-pr6-autumn-2026', known), { kind: 'course', courseCode: 'MATH111', section: 'P6' });
+  assert.deepEqual(channelScope('be30-calculus-help', { courses: [], programs: [] }, 'MATH111 - Introduction to Calculus (Вступ до математичного аналізу)'),
+    { kind: 'course', courseCode: 'MATH111', section: null });
+  assert.equal(channelScope('kse-ba30', known, 'Потік бакалаврів 2030'), null);
+});
+
 test('a cohort channel: programme and graduation year → entry year', () => {
   assert.deepEqual(channelScope('be30', known), { kind: 'cohort', program: 'BE', cohortYear: 2026 });
   assert.equal(channelScope('kse-ba30', known), null);

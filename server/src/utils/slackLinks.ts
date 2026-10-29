@@ -50,6 +50,11 @@ const SECTION = /^(p|pr|l|lec)(\d{1,2})$/;
 const TERM = /^(autumn|fall|spring|summer|winter|\d{4}|\d{2})$/;
 const COHORT = /^([a-z]{2,4})-?(\d{2})$/;
 
+/** Cyrillic letters typed by mistake in Latin names: "intro_to_сalculus" (Cyrillic с) → "intro_to_calculus" */
+const LOOKALIKES: Record<string, string> = { а: 'a', в: 'b', е: 'e', і: 'i', к: 'k', м: 'm', н: 'h', о: 'o', р: 'p', с: 'c', т: 't', у: 'y', х: 'x',
+  А: 'A', В: 'B', Е: 'E', І: 'I', К: 'K', М: 'M', Н: 'H', О: 'O', Р: 'P', С: 'C', Т: 'T', Х: 'X' };
+export const latinLookalikes = (s: string) => s.replace(/[авеікмнорстухАВЕІКМНОРСТХ]/g, (ch) => LOOKALIKES[ch]);
+
 /** "pr8" → "P8", "l1" → "L1" */
 function sectionFrom(word: string): string | null {
   const m = word.match(SECTION);
@@ -68,14 +73,17 @@ const titleWords = (title: string) => title.replace(/\([^)]*\)/g, ' ').toLowerCa
  * Anything else (e.g. "kse-ba30") is null: the owner ties it in the admin.
  */
 export function channelScope(
-  name: string,
+  rawName: string,
   known: { courses: { courseCode: string; title: string }[]; programs: string[] },
+  topic?: string | null,
 ): ChannelScope | null {
-  const words = name.toLowerCase().split(/[-_]+/).filter(Boolean);
+  const name = latinLookalikes(rawName.toLowerCase());
+  const words = name.split(/[-_]+/).filter(Boolean);
   const at = words.findIndex((w) => sectionFrom(w));
   const section = at >= 0 ? sectionFrom(words[at]) : null;
 
-  const code = courseFromChannel(name);
+  // The name, or else the channel topic: "MATH111 - Introduction to Calculus"
+  const code = courseFromChannel(name) ?? (topic ? courseFromChannel(latinLookalikes(topic.trim())) : null);
   if (code) return { kind: 'course', courseCode: code, section };
 
   // The course words come before the section or the term: "intro_to_calculus-pr6-autumn-2026"
@@ -91,7 +99,7 @@ export function channelScope(
     if (codes.size === 1) return { kind: 'course', courseCode: [...codes][0], section };
   }
 
-  const cohort = words.length === 1 ? name.toLowerCase().match(COHORT) : null;
+  const cohort = words.length === 1 ? name.match(COHORT) : null;
   const program = cohort?.[1].toUpperCase();
   if (cohort && program && known.programs.includes(program)) {
     return { kind: 'cohort', program, cohortYear: 2000 + Number(cohort[2]) - BACHELOR_YEARS };

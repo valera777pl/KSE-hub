@@ -61,7 +61,7 @@ export class SlackService {
 
   private static async upsertChannel(c: IngestChannel, known: Awaited<ReturnType<typeof SlackService.knownCourses>>): Promise<Channel> {
     const [old] = await db.select().from(slackChannels).where(eq(slackChannels.channelId, c.channelId)).limit(1);
-    const scope = c.isPrivate ? channelScope(c.channelName, known) : null;
+    const scope = c.isPrivate ? channelScope(c.channelName, known, c.topic) : null;
     if (!old) {
       const [row] = await db.insert(slackChannels).values({
         channelId: c.channelId,
