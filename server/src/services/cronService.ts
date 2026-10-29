@@ -12,6 +12,7 @@ import { escapeHtml } from '../bot/send.js';
 import { PushService } from './pushService.js';
 import { ReminderService } from './reminderService.js';
 import { PinnedService } from './pinnedService.js';
+import { SlackDigestService } from './slackDigestService.js';
 import { appButton, bookingEndingText, deadlineReminderText, isGeneralCourse, weeklyText, type Lang } from '../bot/messages.js';
 import { formatKyiv, kyivHour, kyivWeekday } from '../utils/kyivTime.js';
 
@@ -43,13 +44,14 @@ export class CronService {
     const classReminders = await ScheduleService.sendClassReminders();
     const reminders = await this.sendDeadlineReminders();
     const digests = await this.sendDigests();
+    const slackDigests = await SlackDigestService.tick().catch((err) => { console.error('Slack digests failed:', err); return 0; });
     const weekly = await this.sendWeeklyDeadlines();
     const savedOpps = await this.sendSavedOpportunityReminders();
     const bookingEnds = await this.sendBookingEndReminders();
     const ownReminders = await ReminderService.sendDue();
     const pinned = await PinnedService.tick();
     const cleaned = await this.cleanup();
-    return { calendars, emails, schedules, courseCalendars, classReminders, reminders, digests, weekly, savedOpps, bookingEnds, ownReminders, pinned, cleaned };
+    return { calendars, emails, schedules, courseCalendars, classReminders, reminders, digests, slackDigests, weekly, savedOpps, bookingEnds, ownReminders, pinned, cleaned };
   }
 
   /**

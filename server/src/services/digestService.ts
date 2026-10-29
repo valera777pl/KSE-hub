@@ -7,6 +7,8 @@ import { ScheduleService } from './scheduleService.js';
 import { MoodleService } from './moodleService.js';
 import { isOtherGroup } from '../utils/moodleGroups.js';
 import { EventService } from './eventService.js';
+import { SlackService } from './slackService.js';
+import { channelNamesIn } from '../utils/slackLinks.js';
 
 type User = typeof users.$inferSelect;
 
@@ -54,7 +56,9 @@ export class DigestService {
     const groups = moodleMail.length ? await MoodleService.groups(user.id) : new Map();
     const moodle = moodleMail.filter((m) => !isOtherGroup(`${m.subject ?? ''} ${m.summary}`, null, groups));
     const mail = await mailFor('gmail');
-    const slack = await mailFor('slack');
+    // Slack notification emails stay — except from channels the student already gets through the reader account
+    const covered = new Set((await SlackService.subscribedChannels(user.id).catch(() => [])).map((ch) => ch.name));
+    const slack = (await mailFor('slack')).filter((m) => !channelNamesIn(m.subject ?? '').some((n) => covered.has(n)));
 
     // Events the student asked to be reminded about, on this day
     const dayEvents = (await EventService.remindedOn(user.id, dayStart, new Date(dayStart.getTime() + 24 * HOUR)))

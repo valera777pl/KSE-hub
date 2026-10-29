@@ -12,7 +12,7 @@ import { kyivDate, kyivDayStart } from '../utils/kyivTime.js';
  */
 export type PushType =
   | 'digest' | 'weekly' | 'd24' | 'd3' | 'change' | 'soon' | 'urgent' | 'opp'
-  | 'booking_end' | 'onboarding' | 'remind' | 'friend' | 'event';
+  | 'booking_end' | 'onboarding' | 'remind' | 'friend' | 'event' | 'slack';
 
 /**
  * At most 3 pushes a day that the student didn't ask for (NEXT-PROMPT.md §13.1).

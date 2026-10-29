@@ -110,6 +110,29 @@ export function digestText(p: {
   return `<b>${escapeHtml(dayHeading(p.day, lang))}</b>\n\n${sections.join('\n\n')}`;
 }
 
+export type SlackDigestChannel = {
+  name: string; courseCode: string | null; section: string | null; url: string | null;
+  points: { text: string; permalink: string }[];
+};
+
+/** At most this many points per channel: the most important come first (slack-digest-task.md) */
+export const SLACK_POINTS = 3;
+
+/**
+ * The Slack digest (SLACK-DIGEST-PROMPT.md §6): one message for all of the student's channels —
+ * the course (or #channel), up to 3 points, «Відкрити в Slack». Summaries themselves are in Ukrainian.
+ */
+export function slackDigestText(lang: Lang, now: Date, channels: SlackDigestChannel[]): string | null {
+  const blocks = channels.filter((c) => c.points.length).map((c) => {
+    const title = c.courseCode ? `<b>${escapeHtml(courseLabel(c.courseCode, c.section))}</b> · #${escapeHtml(c.name)}` : `<b>#${escapeHtml(c.name)}</b>`;
+    const points = c.points.slice(0, SLACK_POINTS).map((p) => escapeHtml(p.text)).join('\n');
+    const link = c.points.find((p) => p.permalink)?.permalink || c.url;
+    return `${title}\n${points}${link ? `\n<a href="${escapeHtml(link)}">${t(lang, 'Відкрити в Slack', 'Open in Slack')}</a>` : ''}`;
+  });
+  if (!blocks.length) return null;
+  return `<b>Slack · ${escapeHtml(dayHeading(now, lang))}</b>\n\n${blocks.join('\n\n')}`;
+}
+
 export type Change =
   | { kind: 'moved'; before: { startAt: Date }; after: { startAt: Date; location: string | null } }
   | { kind: 'room'; before: { startAt: Date }; after: { startAt: Date; location: string | null } }

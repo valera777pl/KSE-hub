@@ -56,7 +56,7 @@ const FEATURE_LABELS: Record<string, string> = {
 const PUSH_LABELS: Record<string, string> = {
   digest: 'Дайджест', weekly: 'Дедлайни на тиждень', d24: 'Дедлайн за 24 год', d3: 'Дедлайн за 3 год',
   change: 'Зміни в розкладі', soon: 'Пара через 15 хв', urgent: 'Терміновий лист', opp: 'Подача закінчується',
-  booking_end: 'Бронь закінчується', onboarding: 'Готово після реєстрації', remind: 'Нагадування', friend: 'Друзі', event: 'Події',
+  booking_end: 'Бронь закінчується', onboarding: 'Готово після реєстрації', remind: 'Нагадування', friend: 'Друзі', event: 'Події', slack: 'Slack-дайджест',
 };
 // Pushes without a button can't be "opened"
 const NO_BUTTON = new Set(['soon', 'urgent']);
