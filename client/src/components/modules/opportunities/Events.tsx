@@ -73,6 +73,7 @@ export function Events({ openId }: { openId: number | null }) {
                     <span className="dl__title clamp2">{e.title}</span>
                     <span className="dl__meta num">
                       {whereLine(e)}
+                      {e.slackChannel && <> · Slack</>}
                       {e.reminded && <> · {tr('нагадаю', 'reminder on')}</>}
                     </span>
                   </span>
@@ -91,8 +92,9 @@ function EventSheet({ e, onClose, onChange }: { e: EventItem; onClose: () => voi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // From Slack the link is the original message, not a form
   useMainButton({
-    text: tr('Зареєструватися ↗', 'Register ↗'),
+    text: e.slackChannel ? tr('Відкрити в Slack ↗', 'Open in Slack ↗') : tr('Зареєструватися ↗', 'Register ↗'),
     visible: !!e.registrationUrl,
     onClick: () => { if (e.registrationUrl) { track('event.register_click'); openExternal(e.registrationUrl); } },
   });
@@ -124,7 +126,8 @@ function EventSheet({ e, onClose, onChange }: { e: EventItem; onClose: () => voi
       <div className="tags">
         <span className="tag">{e.programs?.length ? e.programs.map(programName).join(', ') : tr('Усі програми', 'All programmes')}</span>
         {e.personal && <span className="tag">{tr('Запрошення тобі', 'Invited personally')}</span>}
-        {e.registrationUrl && <span className="tag">{tr('Потрібна реєстрація', 'Registration required')}</span>}
+        {e.slackChannel && <span className="tag">Slack · {e.slackChannel}</span>}
+        {e.registrationUrl && !e.slackChannel && <span className="tag">{tr('Потрібна реєстрація', 'Registration required')}</span>}
       </div>
       {e.description && <p className="desc">{e.description}</p>}
 
