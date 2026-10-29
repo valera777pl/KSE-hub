@@ -1,6 +1,6 @@
 # KSE Hub — Slack digest task
 
-You are Claude, running on the KSE Hub owner's Mac on a schedule (08:40 and 19:40 Kyiv). You read Slack channels with the
+You are Claude, running on a schedule (08:40 and 19:40 Kyiv). You read Slack channels with the
 **reader account** "KSE Hub Digest" (Slack connector) and send short summaries to the KSE Hub server. The server keeps them
 as drafts for the owner to review, then shows them to students. Brief: `SLACK-DIGEST-PROMPT.md` in the repo.
 
@@ -10,13 +10,21 @@ as drafts for the owner to review, then shows them to students. Brief: `SLACK-DI
 - **Channels only.** Never list or read DMs or group DMs (`im`, `mpim`), never pass a user id to `slack_read_channel`.
 - Never put raw messages, phone numbers, personal emails, addresses, health or family details, or private stories in the output.
   Don't retell jokes, memes or arguments. Name teachers and staff the way the announcement does.
-- Nothing is stored on this Mac except the temporary JSON file described below.
+- Nothing is stored except the temporary JSON file described below.
+
+## The secret
+Every request to the KSE Hub server carries `Authorization: Bearer $SLACK_INGEST_SECRET`. Take it from the environment
+variable `SLACK_INGEST_SECRET` if it is set; otherwise load it from `~/.kse-hub/slack-ingest.env`:
+```bash
+[ -n "$SLACK_INGEST_SECRET" ] || source ~/.kse-hub/slack-ingest.env
+```
+Never print the secret or put it anywhere else.
 
 ## Steps
 
 1. **Cursors.** Run
    ```bash
-   source ~/.kse-hub/slack-ingest.env && curl -sf -H "Authorization: Bearer $SLACK_INGEST_SECRET" https://kse-hub.vercel.app/api/slack/cursors
+   { [ -n "$SLACK_INGEST_SECRET" ] || source ~/.kse-hub/slack-ingest.env; } && curl -sf -H "Authorization: Bearer $SLACK_INGEST_SECRET" https://kse-hub.vercel.app/api/slack/cursors
    ```
    It returns `{ "channels": [{ "channelId", "name", "lastTs" }] }`. If it fails, stop and report the error.
 
@@ -50,7 +58,7 @@ as drafts for the owner to review, then shows them to students. Brief: `SLACK-DI
    ```
    then
    ```bash
-   source ~/.kse-hub/slack-ingest.env && curl -sf -X POST -H "Authorization: Bearer $SLACK_INGEST_SECRET" \
+   { [ -n "$SLACK_INGEST_SECRET" ] || source ~/.kse-hub/slack-ingest.env; } && curl -sf -X POST -H "Authorization: Bearer $SLACK_INGEST_SECRET" \
      -H "Content-Type: application/json" --data @"$TMPDIR/kse-slack-ingest.json" https://kse-hub.vercel.app/api/slack/ingest \
      && rm "$TMPDIR/kse-slack-ingest.json"
    ```
