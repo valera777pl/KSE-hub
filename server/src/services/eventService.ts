@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, inArray, isNull, lt, or } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { events, reminders, users } from '../db/schema.js';
+import { events, reminders, slackChannels, users } from '../db/schema.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { eventReminderText, eventRemindAt } from '../utils/events.js';
 import { ReminderService } from './reminderService.js';
@@ -16,21 +16,35 @@ async function visibleTo(userId: number) {
   );
 }
 
+/** "slack:C06KXECQQFQ:p1793…" → "C06KXECQQFQ": events posted in a Slack channel carry it in their key */
+export const slackChannelOf = (sourceKey: string) => sourceKey.match(/^slack:([CG][A-Z0-9]+):/)?.[1] ?? null;
+
+/** "#event" for events from Slack, so the app can say where it came from (SLACK-DIGEST-PROMPT.md §7.4) */
+async function slackNames(keys: string[]) {
+  const ids = [...new Set(keys.map(slackChannelOf).filter((id): id is string => !!id))];
+  if (!ids.length) return new Map<string, string>();
+  const rows = await db.select({ id: slackChannels.channelId, name: slackChannels.name }).from(slackChannels).where(inArray(slackChannels.channelId, ids));
+  return new Map(rows.map((r) => [r.id, `#${r.name}`]));
+}
+
 export class EventService {
   /** Upcoming events this student can see, each with whether «Нагадати за день» is on. */
   static async upcoming(userId: number, now = new Date()) {
     const rows = await db.select().from(events)
       .where(and(gt(events.startsAt, now), await visibleTo(userId)))
       .orderBy(asc(events.startsAt)).limit(60);
-    const reminded = await this.remindedIds(userId, rows.map((r) => r.id));
-    return rows.map(({ audience, userId: _owner, sourceKey: _key, ...e }) => ({ ...e, personal: audience === 'user', reminded: reminded.has(e.id) }));
+    const [reminded, names] = await Promise.all([this.remindedIds(userId, rows.map((r) => r.id)), slackNames(rows.map((r) => r.sourceKey))]);
+    return rows.map(({ audience, userId: _owner, sourceKey, slackChannelId: _ch, ...e }) => ({
+      ...e, personal: audience === 'user', reminded: reminded.has(e.id), slackChannel: names.get(slackChannelOf(sourceKey) ?? '') ?? null,
+    }));
   }
 
   static async get(userId: number, id: number) {
     const [row] = await db.select().from(events).where(and(eq(events.id, id), await visibleTo(userId))).limit(1);
     if (!row) throw new AppError('Подію не знайдено', 404);
-    const { audience, userId: _owner, sourceKey: _key, ...e } = row;
-    return { ...e, personal: audience === 'user', reminded: (await this.remindedIds(userId, [id])).has(id) };
+    const { audience, userId: _owner, sourceKey, slackChannelId: _ch, ...e } = row;
+    const [reminded, names] = await Promise.all([this.remindedIds(userId, [id]), slackNames([sourceKey])]);
+    return { ...e, personal: audience === 'user', reminded: reminded.has(id), slackChannel: names.get(slackChannelOf(sourceKey) ?? '') ?? null };
   }
 
   /** «Нагадати за день»: the bot writes the day before around 10:00. */

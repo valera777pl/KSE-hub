@@ -1,9 +1,10 @@
-import { and, asc, count, desc, eq, inArray, isNotNull, ne } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, ne } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import {
   courseCalendars, events, slackChannels, slackSummaries, userSlackSubscriptions, users, type SlackItem, type SlackSlot,
 } from '../db/schema.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { formatKyiv } from '../utils/kyivTime.js';
 import { channelScope, type ChannelScope } from '../utils/slackLinks.js';
 import { DEFAULT_ON, eventSourceKey, laterTs, type IngestChannel } from '../utils/slackIngest.js';
 import { SlackAccess } from './slackAccess.js';
@@ -174,6 +175,26 @@ export class SlackService {
     return { ok: true };
   }
 
+  /** Copilot's view (get_slack_summaries): only published summaries of channels this student may see. */
+  static async forCopilot(userId: number, args: { course?: unknown; days?: unknown }) {
+    const days = Math.min(Math.max(Number(args.days) || 7, 1), 30);
+    const course = typeof args.course === 'string' ? args.course.trim().toUpperCase().replace(/\s+/g, '') : null;
+    const channels = await SlackAccess.visibleChannels(userId);
+    const rows = channels.length
+      ? await db.select().from(slackSummaries)
+        .where(and(
+          eq(slackSummaries.status, 'published'),
+          inArray(slackSummaries.channelId, channels.map((c) => c.channelId)),
+          gt(slackSummaries.publishedAt, new Date(Date.now() - days * 86_400_000)),
+        ))
+        .orderBy(desc(slackSummaries.publishedAt)).limit(40)
+      : [];
+    const found = copilotSlackRows(rows, channels, course);
+    return found.length ? found : { note: course
+      ? `За ${days} дн. у Slack-каналах ${course} нічого не опубліковано (або канал ще не підключений до KSE Hub).`
+      : `За ${days} дн. у твоїх Slack-каналах нічого не опубліковано.` };
+  }
+
   /** Published summaries from channels this student may see, newest first. */
   static async feed(userId: number, limit = 30) {
     const channels = await SlackAccess.visibleChannels(userId);
@@ -186,7 +207,7 @@ export class SlackService {
       summaries: rows.map((s) => {
         const ch = byId.get(s.channelId)!;
         return {
-          id: s.id, channelId: s.channelId, channelName: ch.name, isPrivate: ch.isPrivate, courseCode: ch.courseCode,
+          id: s.id, channelId: s.channelId, channelName: ch.name, isPrivate: ch.isPrivate, courseCode: ch.courseCode, section: ch.section,
           url: ch.team ? `https://${ch.team}.slack.com/archives/${ch.channelId}` : null,
           summary: s.summary, items: s.items, publishedAt: s.publishedAt,
         };
@@ -236,4 +257,27 @@ export class SlackService {
     const mine = new Map(subs.map((s) => [s.channelId, s.on]));
     return channels.filter((ch) => mine.get(ch.channelId) ?? defaultOn(ch));
   }
+}
+
+/**
+ * What Copilot gets back: channels it can't see never get here (the rows are already filtered by canSee),
+ * and this keeps it that way even if a caller passes more — a summary from an unknown channel is dropped.
+ */
+export function copilotSlackRows(
+  rows: Pick<typeof slackSummaries.$inferSelect, 'channelId' | 'items' | 'summary' | 'publishedAt'>[],
+  visible: Pick<Channel, 'channelId' | 'name' | 'courseCode' | 'section'>[],
+  course: string | null,
+) {
+  const byId = new Map(visible.map((c) => [c.channelId, c]));
+  return rows
+    .filter((r) => byId.has(r.channelId) && (!course || byId.get(r.channelId)!.courseCode === course))
+    .map((r) => {
+      const ch = byId.get(r.channelId)!;
+      return {
+        channel: `#${ch.name}`,
+        course: ch.courseCode ? (ch.section ? `${ch.courseCode} [${ch.section}]` : ch.courseCode) : null,
+        published: r.publishedAt ? formatKyiv(r.publishedAt) : null,
+        points: r.items.length ? r.items.map((i) => ({ text: i.text, link: i.permalink, due: i.dueAt ?? null })) : r.summary.split('\n').map((text) => ({ text })),
+      };
+    });
 }

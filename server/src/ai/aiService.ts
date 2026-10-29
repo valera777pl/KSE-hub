@@ -4,6 +4,7 @@ import { BookingService } from '../services/bookingService.js';
 import { MoodleService } from '../services/moodleService.js';
 import { ScheduleService, type ScheduleEvent } from '../services/scheduleService.js';
 import { KnowledgeService } from '../services/knowledgeService.js';
+import { SlackService } from '../services/slackService.js';
 import { GmailService } from '../services/gmailService.js';
 import { StartupService } from '../services/startupService.js';
 import { DigestService } from '../services/digestService.js';
@@ -42,6 +43,7 @@ function systemPrompt(): string {
 5. Стажуваннями, вакансіями та грантами; студентськими стартапами, яким потрібна команда (заявку подають у мініаппі: «Можливості» → «Стартапи»).
 6. Інформацією про KSE — програми, гранти й фінансова допомога, оплата, обмін, викладачі, контакти, кампус.
 7. Нагадуваннями — «нагадай мені в пт о 18 почати есе» (create_reminder); підтверджуй одним рядком: «Нагадаю пт 30.10 о 18:00».
+8. Slack — що писали в каналах курсу, потоку й загальних каналах (get_slack_summaries): кажи, з якого каналу, і давай посилання на оригінал.
 
 Правила:
 - Відповідай коротко, тією мовою, якою пише студент (за замовчуванням українською).
@@ -255,6 +257,8 @@ export class AIService {
           : { note: 'Нічого не знайдено. Можливо, пошта ще не підключена в міні-застосунку.' };
       }
 
+      case 'get_slack_summaries':
+        return SlackService.forCopilot(userId, { course: args.course, days: args.days });
       case 'search_startups': {
         const found = await StartupService.list(userId, { query: args.query || undefined, role: args.role || undefined });
         return found.length

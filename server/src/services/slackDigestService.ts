@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, inArray, isNotNull, isNull, max, sql } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { slackDeliveries, slackSummaries, users, type SlackSlot } from '../db/schema.js';
-import { slackDigestText, type Lang, type SlackDigestChannel } from '../bot/messages.js';
+import { appButton, slackDigestText, type Lang, type SlackDigestChannel } from '../bot/messages.js';
 import { kyivHour } from '../utils/kyivTime.js';
 import { AnalyticsService } from './analyticsService.js';
 import { PushService } from './pushService.js';
@@ -93,7 +93,7 @@ export class SlackDigestService {
 
     // Stamp first: a crash mid-send must not turn into the same digest twice
     await db.insert(slackDeliveries).values(rows.map(({ s }) => ({ userId: user.id, summaryId: s.id }))).onConflictDoNothing();
-    const ok = await PushService.send(user, 'slack', text);
+    const ok = await PushService.send(user, 'slack', text, appButton(lang === 'en' ? 'All summaries' : 'Усі підсумки', 'slack', 'slack'));
     AnalyticsService.track(user.id, ok ? 'slack.digest.sent' : 'slack.digest.failed', { channels: byChannel.size });
     return ok;
   }

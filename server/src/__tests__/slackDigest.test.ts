@@ -42,3 +42,21 @@ test('after the owner publishes by hand: once things are quiet for 10 min, by da
   assert.equal(slackDigestDue({ hour: 14, slots: ['evening'], lastPublishedAt: ago(3 * 3_600_000), now }), null, 'long ago: waits for the slot');
   assert.equal(slackDigestDue({ hour: 23, slots: ['evening'], lastPublishedAt: ago(QUIET_MS + 60_000), now }), null, 'not at night');
 });
+
+test('Copilot sees only channels the student may see, and can narrow to a course', async () => {
+  const { copilotSlackRows } = await import('../services/slackService.js');
+  const visible = [{ channelId: 'G0MATH', name: 'math111-pr6', courseCode: 'MATH111', section: 'P6' }, { channelId: 'C0GEN', name: 'general', courseCode: null, section: null }];
+  const row = (channelId: string, text: string) => ({ channelId, summary: text, publishedAt: new Date('2026-10-30T07:00:00Z'),
+    items: [{ kind: 'other' as const, text, permalink: `https://ksestudents.slack.com/archives/${channelId}/p1` }] });
+  const rows = [row('G0MATH', 'квіз у пт'), row('C0GEN', 'принтер'), row('G0OTHER', 'чужа секція')];
+  const all = copilotSlackRows(rows, visible, null);
+  assert.deepEqual(all.map((r) => r.channel), ['#math111-pr6', '#general']);
+  assert.equal(all[0].course, 'MATH111 [P6]');
+  assert.deepEqual(copilotSlackRows(rows, visible, 'MATH111').map((r) => r.points[0].text), ['квіз у пт']);
+});
+
+test('events from Slack say which channel they came from', async () => {
+  const { slackChannelOf } = await import('../services/eventService.js');
+  assert.equal(slackChannelOf('slack:C06KXECQQFQ:p1793200085849049'), 'C06KXECQQFQ');
+  assert.equal(slackChannelOf('summary:123'), null);
+});

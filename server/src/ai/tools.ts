@@ -208,6 +208,20 @@ export const toolDefinitions: OpenAI.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'get_slack_summaries',
+      description: 'Short summaries of what was posted in the student\'s Slack channels (their course and section channels, cohort channels, open channels like #general and #event): deadlines, moved classes, teachers\' announcements, events. Only channels this student is in. Each point has a link to the original message.',
+      parameters: {
+        type: 'object',
+        properties: {
+          course: { type: 'string', description: 'Only this course, as its code: "MATH111".' },
+          days: { type: 'number', description: 'How many days back. Default 7, at most 30.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'search_startups',
       description: 'Student startups at KSE that are looking for teammates. Applying is done in the mini app («Можливості» → «Стартапи»).',
       parameters: {
