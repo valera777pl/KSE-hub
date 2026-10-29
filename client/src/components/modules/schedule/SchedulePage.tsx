@@ -5,7 +5,7 @@ import { inviteFriend } from '../../../lib/invite';
 import { api } from '../../../api/client';
 import type { ClassEvent, DeadlineWithCourse, ScheduleCompare, StudentMatch } from '../../../types';
 import { DayGrid, type GridColumn } from './DayGrid';
-import { EmptyDay, useZoom, usePinchZoom } from './gridParts';
+import { EmptyDay, useStripScrub, useZoom, usePinchZoom } from './gridParts';
 import { addDays, dayKey, dayMonth, dayNum, dayTitle, hm, mondayOf, now, todayKey, weekdayShort, weekOf } from '../../../lib/time';
 import { classKind, shortPlace } from '../../../lib/place';
 import { Avatar } from '../../ui/Avatar';
@@ -168,6 +168,9 @@ export function SchedulePage() {
   };
 
 
+  // Slide a finger along the day strip: the day under it opens as you go, a tick on each
+  const stripScrub = useStripScrub(days, go);
+
   const refresh = async () => {
     setRefreshing(true);
     try { await api.post('/schedule/refresh'); weekQ.refresh(); } catch { /* error shows on reload */ }
@@ -227,7 +230,7 @@ export function SchedulePage() {
         <button className="icon-btn press" aria-label={tr('Наступний тиждень', 'Next week')} onClick={() => go(addDays(monday, 7))}><ChevronRight strokeWidth={1.75} /></button>
       </div>
 
-      <div className="daystrip" role="group" aria-label={tr('День тижня', 'Day of the week')}>
+      <div className="daystrip" role="group" aria-label={tr('День тижня', 'Day of the week')} {...stripScrub}>
         {days.map((k) => (
           <button key={k} className={`day press${k === today ? ' day--today' : ''}`} aria-pressed={k === day} onClick={() => go(k)}
             aria-label={dayTitle(k)}>

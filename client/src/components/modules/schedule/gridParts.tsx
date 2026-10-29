@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 import { usePinch } from '@use-gesture/react';
 import { Coffee } from 'lucide-react';
 import { api, track as report } from '../../../api/client';
@@ -135,4 +135,35 @@ export function EmptyDay({ day, today, deadlines }: { day: string; today: string
         action={day === today && rooms ? { label: tr('Відкрити кімнати', 'Open rooms'), onClick: () => useUi.getState().setTab('rooms') } : undefined} />
     </div>
   );
+}
+
+/**
+ * The day strip as a slider: press anywhere on it and slide sideways, the day under the finger opens as you pass it.
+ * A tap still just picks a day. The end of the gesture is also caught on the window, so it always lets go.
+ */
+export function useStripScrub(days: string[], go: (day: string) => void) {
+  const s = useRef({ x0: 0, active: false, down: false, last: '' });
+  useEffect(() => {
+    const end = () => { s.current.down = false; s.current.active = false; };
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => { window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); };
+  }, []);
+  const dayAt = (el: HTMLElement, x: number) => {
+    const r = el.getBoundingClientRect();
+    const i = Math.min(days.length - 1, Math.max(0, Math.floor(((x - r.left) / r.width) * days.length)));
+    return days[i];
+  };
+  return {
+    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => { s.current = { x0: e.clientX, active: false, down: true, last: dayAt(e.currentTarget, e.clientX) }; },
+    onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => {
+      const st = s.current;
+      if (!st.down) return;
+      if (!st.active && Math.abs(e.clientX - st.x0) < 8) return;
+      st.active = true;
+      const day = dayAt(e.currentTarget, e.clientX);
+      if (day !== st.last) { st.last = day; go(day); }
+    },
+    onPointerLeave: () => { if (!s.current.active) s.current.down = false; },
+  };
 }
