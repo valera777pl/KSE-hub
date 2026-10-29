@@ -1,7 +1,8 @@
-import type { CSSProperties } from 'react';
+import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { ClassEvent, DeadlineWithCourse } from '../../../types';
 import { tr } from '../../../lib/i18n';
-import { hm, now, todayKey } from '../../../lib/time';
+import { hm, now, spanText, todayKey } from '../../../lib/time';
+import { haptic } from '../../../lib/telegram';
 import { shortPlace } from '../../../lib/place';
 import { Avatar } from '../../ui/Avatar';
 import { courseCode } from '../../ui/DeadlineRow';
@@ -96,6 +97,8 @@ export function DayGrid({ day, columns, shared, busy, deadlines, hourPx, onOpen,
           ))}
         </div>
 
+        <Scrub from={from} to={to} classes={columns[0]?.classes.map((g) => g.e) ?? []} />
+
         {nowH !== null && nowH >= from && nowH <= to && (
           <div className="grid__now" style={at(nowH - from)} aria-label={`${tr('Зараз', 'Now')} ${hm(t)}`}>
             <span className="num">{hm(t)}</span>
@@ -134,5 +137,74 @@ function Block({ g, at: start, length, codeOnly, ring, onOpen }: {
       {ring && <span className="gblock__friends">{g.friends!.slice(0, 3).map((f) => <Avatar key={f.userId} name={f.name} url={f.avatarUrl ?? null} size={20} />)}</span>}
       {live && <span className="gblock__progress"><i style={{ width: `${((t - s) / (end - s)) * 100}%` }} /></span>}
     </button>
+  );
+}
+
+const LONG_PRESS_MS = 320;
+const fmt = (h: number) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60) % 60).padStart(2, '0')}`;
+
+/**
+ * «Палець по лінії дня»: hold a finger on the hours column, then slide it. A line follows the finger with the time
+ * and what's happening then: «на парі ECON100 · ще 35 хв» or «вільно до 15:00». A tick at every class edge.
+ * Only the hours column reacts (touch-action: none there), so scrolling anywhere else is untouched.
+ */
+function Scrub({ from, to, classes }: { from: number; to: number; classes: ClassEvent[] }) {
+  const [at, setAt] = useState<number | null>(null);
+  const press = useRef<{ timer: number; y0: number; active: boolean; inside: string | null }>({ timer: 0, y0: 0, active: false, inside: null });
+  const box = useRef<HTMLDivElement>(null);
+  const spans = useMemo(() => classes.map((e) => ({ code: e.courseCode, s: hoursOfDay(e.startAt), e: hoursOfDay(e.endAt) }))
+    .sort((a, b) => a.s - b.s), [classes]);
+
+  const hourAt = (clientY: number) => {
+    const r = box.current!.getBoundingClientRect();
+    const h = from + ((clientY - r.top) / r.height) * (to - from);
+    // Steps of 5 minutes: easier to read, and the label doesn't flicker
+    return Math.min(to, Math.max(from, Math.round(h * 12) / 12));
+  };
+  const move = (clientY: number) => {
+    const h = hourAt(clientY);
+    const inside = spans.find((c) => h >= c.s && h < c.e);
+    const key = inside ? `${inside.code}${inside.s}` : null;
+    if (key !== press.current.inside) { haptic.select(); press.current.inside = key; }
+    setAt(h);
+  };
+
+  const status = (() => {
+    if (at === null) return '';
+    const inside = spans.find((c) => at >= c.s && at < c.e);
+    if (inside) return tr(`на парі ${inside.code} · ще ${spanText((inside.e - at) * 3_600_000)}`, `in ${inside.code} · ${spanText((inside.e - at) * 3_600_000)} left`);
+    const next = spans.find((c) => c.s > at);
+    return next ? tr(`вільно до ${fmt(next.s)}`, `free until ${fmt(next.s)}`) : tr('пари на сьогодні закінчились', 'no more classes this day');
+  })();
+
+  return (
+    <div ref={box} className="grid__scrub"
+      onPointerDown={(e) => {
+        const p = press.current;
+        p.y0 = e.clientY;
+        const target = e.currentTarget;
+        const id = e.pointerId;
+        p.timer = window.setTimeout(() => {
+          p.active = true;
+          p.inside = null;
+          target.setPointerCapture(id);
+          haptic.tap();
+          move(p.y0);
+        }, LONG_PRESS_MS);
+      }}
+      onPointerMove={(e) => {
+        const p = press.current;
+        if (p.active) move(e.clientY);
+        else if (Math.abs(e.clientY - p.y0) > 8) clearTimeout(p.timer);
+      }}
+      onPointerUp={() => { clearTimeout(press.current.timer); press.current.active = false; setAt(null); }}
+      onPointerCancel={() => { clearTimeout(press.current.timer); press.current.active = false; setAt(null); }}>
+      {at !== null && (
+        <div className="scrub" style={{ '--at': at - from } as CSSProperties} role="status">
+          <span className="scrub__pill num">{fmt(at)}</span>
+          <span className="scrub__text">{status}</span>
+        </div>
+      )}
+    </div>
   );
 }

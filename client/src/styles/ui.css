@@ -631,3 +631,11 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
 @media (prefers-reduced-motion: reduce) {
   .dl-wrap--completing, .dl-wrap--entering, .dl-wrap--completing .done-check path, .dl-wrap--completing .dl__title, .tick, .toast { animation: none; }
 }
+
+/* «Палець по лінії дня»: the hours column, held and slid */
+.grid__scrub { position: absolute; left: 0; top: 0; bottom: 0; width: 48px; z-index: 3; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.scrub { position: absolute; left: 0; width: calc(100vw - 32px); max-width: 568px; top: calc(var(--at) * var(--hour)); height: 0; border-top: 1.5px dashed var(--accent); pointer-events: none; }
+.scrub__pill { position: absolute; left: 0; top: -12px; height: 24px; padding: 0 8px; border-radius: 8px; background: var(--accent-fill); color: var(--on-accent);
+  font-size: 12px; font-weight: 600; line-height: 24px; }
+.scrub__text { position: absolute; left: 60px; top: -32px; max-width: calc(100% - 64px); padding: 4px 10px; border-radius: 8px; background: var(--surface-2);
+  box-shadow: 0 0 0 1px var(--separator); font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
