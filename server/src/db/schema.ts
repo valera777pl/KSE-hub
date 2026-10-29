@@ -38,6 +38,7 @@ export const notificationTypeEnum = pgEnum('notification_type', [
 
 /** What the pinned message in the bot chat shows (015). */
 export type PinnedKind = 'off' | 'next' | 'deadline' | 'day';
+export type SlackSlot = 'morning' | 'evening';
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -72,6 +73,8 @@ export const users = pgTable('users', {
   pinnedKind: varchar('pinned_kind', { length: 10 }).$type<PinnedKind>().default('off').notNull(),
   pinnedMessageId: integer('pinned_message_id'),
   pinnedText: text('pinned_text'),
+  // 016: when the Slack digest comes — morning (09:00), evening (20:00) or both
+  slackDigestSlots: jsonb('slack_digest_slots').$type<SlackSlot[]>().default(['evening']).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
@@ -512,9 +515,11 @@ export const events = pgTable('events', {
   description: text('description'),
   programs: varchar('programs', { length: 10 }).array().default(sql`'{}'`).notNull(),
   registrationUrl: text('registration_url'),
-  audience: varchar('audience', { length: 10 }).$type<'all' | 'user'>().default('all').notNull(),
+  audience: varchar('audience', { length: 10 }).$type<'all' | 'user' | 'slack'>().default('all').notNull(),
   userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
   sourceKey: varchar('source_key', { length: 100 }).notNull().unique(),
+  // 016: from a private Slack channel (audience 'slack') — seen by whoever sees that channel
+  slackChannelId: varchar('slack_channel_id', { length: 20 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -529,3 +534,70 @@ export const courseLinks = pgTable('course_links', {
   officeHours: text('office_hours'),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+/* ───────────── SLACK DIGESTS (016) ───────────── */
+
+export type SlackChannelStatus = 'pending' | 'active' | 'hidden';
+export type SlackSummaryStatus = 'draft' | 'published' | 'rejected';
+export type SlackItem = {
+  kind: 'deadline' | 'change' | 'announcement' | 'event' | 'other';
+  text: string;
+  dueAt?: string;
+  permalink: string;
+};
+
+/**
+ * A channel the reader account is in. A private one is tied to a course (+ section) or a cohort
+ * (programme + entry year), from its name or by the owner in the admin; until then it's `pending` and nobody sees it.
+ */
+export const slackChannels = pgTable('slack_channels', {
+  channelId: varchar('channel_id', { length: 20 }).primaryKey(),
+  name: varchar('name', { length: 100 }).notNull(),
+  team: varchar('team', { length: 100 }),
+  isPrivate: boolean('is_private').default(false).notNull(),
+  status: varchar('status', { length: 10 }).$type<SlackChannelStatus>().default('pending').notNull(),
+  courseCode: varchar('course_code', { length: 20 }),
+  section: varchar('section', { length: 20 }),
+  program: varchar('program', { length: 10 }),
+  cohortYear: integer('cohort_year'),
+  lastTs: varchar('last_ts', { length: 20 }),
+  defaultOn: boolean('default_on').default(false).notNull(),
+  autoPublish: boolean('auto_publish').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+/** What Claude's task wrote about a channel for one stretch of time; drafts wait for the owner's review. */
+export const slackSummaries = pgTable('slack_summaries', {
+  id: serial('id').primaryKey(),
+  channelId: varchar('channel_id', { length: 20 }).notNull().references(() => slackChannels.channelId, { onDelete: 'cascade' }),
+  fromTs: varchar('from_ts', { length: 20 }).notNull(),
+  toTs: varchar('to_ts', { length: 20 }).notNull(),
+  summary: text('summary').notNull(),
+  items: jsonb('items').$type<SlackItem[]>().default([]).notNull(),
+  status: varchar('status', { length: 10 }).$type<SlackSummaryStatus>().default('draft').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  publishedAt: timestamp('published_at'),
+}, (table) => [
+  uniqueIndex('slack_summaries_channel_to_idx').on(table.channelId, table.toTs),
+  index('slack_summaries_status_idx').on(table.status, table.publishedAt),
+]);
+
+/** A student's own choice; no row = the default (own private channel on, open channel per `default_on`). */
+export const userSlackSubscriptions = pgTable('user_slack_subscriptions', {
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  channelId: varchar('channel_id', { length: 20 }).notNull().references(() => slackChannels.channelId, { onDelete: 'cascade' }),
+  on: boolean('on').notNull(),
+}, (table) => [primaryKey({ columns: [table.userId, table.channelId] })]);
+
+export const slackDeliveries = pgTable('slack_deliveries', {
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  summaryId: integer('summary_id').notNull().references(() => slackSummaries.id, { onDelete: 'cascade' }),
+  deliveredAt: timestamp('delivered_at').defaultNow().notNull(),
+}, (table) => [primaryKey({ columns: [table.userId, table.summaryId] })]);
+
+/** Channels a student got Slack notification emails from — proof they're in it. */
+export const userSlackChannels = pgTable('user_slack_channels', {
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  channelId: varchar('channel_id', { length: 20 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [primaryKey({ columns: [table.userId, table.channelId] })]);

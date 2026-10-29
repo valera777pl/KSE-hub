@@ -1,6 +1,6 @@
 import { db } from '../db/connection.js';
 import {
-  courseLinks, emails, events, googleAccounts, opportunities, summaries, users,
+  courseLinks, emails, events, googleAccounts, opportunities, summaries, userSlackChannels, users,
   type EmailCategory, type EmailSource,
 } from '../db/schema.js';
 import { and, eq, gt, inArray, isNull, ne, or } from 'drizzle-orm';
@@ -13,7 +13,7 @@ import { AnalyticsService } from './analyticsService.js';
 import { MoodleService } from './moodleService.js';
 import { isOtherGroup, parseMoodleMail } from '../utils/moodleGroups.js';
 import { isMassMailing, parseKyivLocal } from '../utils/events.js';
-import { slackChannels } from '../utils/slackLinks.js';
+import { archiveChannelIds, slackChannels } from '../utils/slackLinks.js';
 
 // Gemini's free tier allows only a few requests per minute, shared with the assistant
 const MAX_MESSAGES_PER_SYNC = 10;
@@ -146,7 +146,10 @@ export class GmailService {
       summaryId: summary.id,
     }).onConflictDoNothing().returning();
     if (!row) return null;
-    if (source === 'slack') await rememberSlackChannels(subject, body).catch((err) => console.error('Slack channel link failed:', err));
+    if (source === 'slack') {
+      await rememberSlackChannels(subject, body).catch((err) => console.error('Slack channel link failed:', err));
+      await rememberMyChannels(account.userId, `${subject}\n${body}`).catch((err) => console.error('Slack membership failed:', err));
+    }
     if (moodleMail) await MoodleService.applyMail(account.userId, moodleMail, row.receivedAt).catch((err) => console.error('Moodle mail status failed:', err));
 
     // The same mailing can reach one inbox twice (two lists, slightly different
@@ -347,6 +350,12 @@ async function rememberSlackChannels(subject: string, body: string) {
         setWhere: isNull(courseLinks.slackChannelId),
       });
   }
+}
+
+/** The student got a notification from these channels, so they're in them (slackAccess.ts reads this). */
+async function rememberMyChannels(userId: number, text: string) {
+  const ids = archiveChannelIds(text);
+  if (ids.length) await db.insert(userSlackChannels).values(ids.map((channelId) => ({ userId, channelId }))).onConflictDoNothing();
 }
 
 async function gmail<T>(token: string, path: string): Promise<T> {
