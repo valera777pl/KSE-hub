@@ -64,7 +64,7 @@ body { font-family: var(--font-family); font-size: 15px; line-height: 1.4; }
 
 /* ─── DayStrip ─── */
 /* DayStrip: weekday above, the date in a rounded square, a dot when there are classes (not circles: DESIGN.md → Формы) */
-.daystrip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+.daystrip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; touch-action: none; -webkit-user-select: none; user-select: none; }
 .day { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 0; color: var(--text-secondary); font-size: 12px; font-weight: 500; }
 .day b { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-size: 17px; font-weight: 600; color: var(--text);
   font-variant-numeric: tabular-nums; transition: background-color 150ms var(--ease), color 150ms var(--ease); }

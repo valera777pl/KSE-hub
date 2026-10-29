@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { TabId } from '../types';
+import type { ClassEvent, TabId } from '../types';
 
 export type OppsView = 'forYou' | 'events' | 'startups' | 'people';
 
@@ -15,7 +15,9 @@ interface UiState {
   eventId: number | null;
   /** The course page over the current tab: "ECON100" */
   courseCode: string | null;
-  openCourse: (code: string) => void;
+  /** The class the course page was opened from (a tap in the grid or on «Зараз»), shown on top */
+  courseFocus: ClassEvent | null;
+  openCourse: (code: string, focus?: ClassEvent | null) => void;
   closeCourse: () => void;
   setOppsView: (v: OppsView) => void;
   setTab: (tab: TabId) => void;
@@ -36,8 +38,9 @@ export const useUi = create<UiState>((set) => ({
   oppId: null,
   eventId: null,
   courseCode: null,
-  openCourse: (courseCode) => set({ courseCode }),
-  closeCourse: () => set({ courseCode: null }),
+  courseFocus: null,
+  openCourse: (courseCode, focus = null) => set({ courseCode, courseFocus: focus }),
+  closeCourse: () => set({ courseCode: null, courseFocus: null }),
   setOppsView: (oppsView) => set({ oppsView }),
   setTab: (tab) => set({ tab }),
   setStudyView: (studyView) => set({ studyView }),

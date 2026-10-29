@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Clock, Hash, Mail } from 'lucide-react';
+import { Bell, BookOpen, ChevronRight, Clock, Hash, Mail } from 'lucide-react';
 import { api, errorText, track } from '../../../api/client';
 import type { CoursePageData, CourseMail } from '../../../types';
 import { tr } from '../../../lib/i18n';
-import { dayKey, dayMonth, now, spanText } from '../../../lib/time';
+import { dayKey, dayMonth, hm, now, spanText } from '../../../lib/time';
 import { classKind, shortPlace } from '../../../lib/place';
 import { haptic, openExternal, useBackButton } from '../../../lib/telegram';
 import { useUi } from '../../../stores/uiStore';
@@ -12,7 +12,7 @@ import { DeadlineRow } from '../../ui/DeadlineRow';
 import { EmptyState, SkeletonRows } from '../../ui/States';
 import { Sheet } from '../../ui/Sheet';
 import { AskPanel } from '../../ui/AskPanel';
-import { shortWhen } from '../../ui/RemindSheet';
+import { RemindSheet, shortWhen } from '../../ui/RemindSheet';
 import { DoneToast, useDoneFlow } from '../../ui/doneFlow';
 
 /**
@@ -39,8 +39,13 @@ export function CoursePage({ code, onClose }: { code: string; onClose: () => voi
     api.get<{ emails: CourseMail[] }>(`/courses/${code}/mail`).then((r) => setMail(r.emails)).catch(() => setMail([]));
   }, [code]);
 
-  const next = data?.nextClass;
-  const live = next && new Date(next.startAt).getTime() <= now().getTime();
+  // Opened from a class: that class on top; otherwise the next one
+  const focus = useUi((s) => s.courseFocus);
+  const next = focus ?? data?.nextClass ?? null;
+  const t = now().getTime();
+  const live = !!next && new Date(next.startAt).getTime() <= t && t < new Date(next.endAt).getTime();
+  const past = !!next && new Date(next.endAt).getTime() <= t;
+  const [reminding, setReminding] = useState(false);
   const sections = data?.sections.map((s) => `[${s}]`).join(' · ');
 
   return (
@@ -56,15 +61,26 @@ export function CoursePage({ code, onClose }: { code: string; onClose: () => voi
           <>
             {next && (
               <>
-                <div className="section-head"><h2>{live ? tr('Зараз', 'Now') : tr('Наступна пара', 'Next class')}</h2></div>
-                <div className="group course__next">
-                  <div className="course__big num">
-                    {live ? tr(`ще ${spanText(new Date(next.endAt).getTime() - now().getTime())}`, `${spanText(new Date(next.endAt).getTime() - now().getTime())} left`)
-                      : tr(`через ${spanText(new Date(next.startAt).getTime() - now().getTime())}`, `in ${spanText(new Date(next.startAt).getTime() - now().getTime())}`)}
+                <div className="section-head"><h2>{live ? tr('Зараз', 'Now') : focus ? tr('Ця пара', 'This class') : tr('Наступна пара', 'Next class')}</h2></div>
+                <div className="group">
+                  <div className="course__next">
+                    <div className="course__big num">
+                      {live ? tr(`ще ${spanText(new Date(next.endAt).getTime() - t)}`, `${spanText(new Date(next.endAt).getTime() - t)} left`)
+                        : past ? `${hm(next.startAt)}–${hm(next.endAt)}`
+                        : tr(`через ${spanText(new Date(next.startAt).getTime() - t)}`, `in ${spanText(new Date(next.startAt).getTime() - t)}`)}
+                    </div>
+                    <div className="row__meta num">
+                      {[shortWhen(new Date(next.startAt)), next.section && `[${next.section}] ${classKind(next.section) ?? ''}`.trim(), shortPlace(next.location)].filter(Boolean).join(' · ')}
+                    </div>
+                    {live && <div className="progress"><i style={{ width: `${((t - new Date(next.startAt).getTime()) / (new Date(next.endAt).getTime() - new Date(next.startAt).getTime())) * 100}%` }} /></div>}
                   </div>
-                  <div className="row__meta num">
-                    {[shortWhen(new Date(next.startAt)), classKind(next.section), shortPlace(next.location)].filter(Boolean).join(' · ')}
-                  </div>
+                  {!past && !live && (
+                    <button className="row press" onClick={() => { haptic.tap(); setReminding(true); }}>
+                      <Bell className="row-icon" strokeWidth={1.7} />
+                      <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Нагадати…', 'Remind me…')}</div></div>
+                      <ChevronRight className="chev" />
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -140,6 +156,10 @@ export function CoursePage({ code, onClose }: { code: string; onClose: () => voi
       </div>
 
       <DoneToast flow={flow} />
+      {reminding && next && (
+        <RemindSheet text={`${next.courseCode}${next.section ? ` [${next.section}]` : ''} — ${shortWhen(new Date(next.startAt))}${shortPlace(next.location) ? ` · ${shortPlace(next.location)}` : ''}`}
+          at={new Date(next.startAt)} startapp={`course_${next.courseCode}`} onClose={() => setReminding(false)} />
+      )}
       {asking && data && (
         <Sheet onClose={() => setAsking(false)} label="Copilot">
           <AskPanel about={code} onBack={() => setAsking(false)}

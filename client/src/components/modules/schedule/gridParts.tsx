@@ -138,32 +138,48 @@ export function EmptyDay({ day, today, deadlines }: { day: string; today: string
 }
 
 /**
- * The day strip as a slider: press anywhere on it and slide sideways, the day under the finger opens as you pass it.
- * A tap still just picks a day. The end of the gesture is also caught on the window, so it always lets go.
+ * The day strip as a slider: press anywhere on it and slide sideways, the day under the finger lights up at once
+ * (with a tick) and the grid follows without holding the finger back. Fast flicks count too: the pointer is captured,
+ * the strip doesn't hand the gesture to scrolling (touch-action: none), and the day under the finger on release wins.
  */
-export function useStripScrub(days: string[], go: (day: string) => void) {
+export function useStripScrub(days: string[], onHover: (day: string | null) => void, commit: (day: string) => void) {
   const s = useRef({ x0: 0, active: false, down: false, last: '' });
-  useEffect(() => {
-    const end = () => { s.current.down = false; s.current.active = false; };
-    window.addEventListener('pointerup', end);
-    window.addEventListener('pointercancel', end);
-    return () => { window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); };
-  }, []);
   const dayAt = (el: HTMLElement, x: number) => {
     const r = el.getBoundingClientRect();
     const i = Math.min(days.length - 1, Math.max(0, Math.floor(((x - r.left) / r.width) * days.length)));
     return days[i];
   };
+  const finish = (el: HTMLElement | null, x: number | null) => {
+    const st = s.current;
+    if (st.active && el && x !== null) commit(dayAt(el, x));
+    st.down = false;
+    st.active = false;
+    onHover(null);
+  };
+  useEffect(() => {
+    const end = () => { if (s.current.down) finish(null, null); };
+    window.addEventListener('pointercancel', end);
+    return () => window.removeEventListener('pointercancel', end);
+  });
   return {
-    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => { s.current = { x0: e.clientX, active: false, down: true, last: dayAt(e.currentTarget, e.clientX) }; },
+    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => {
+      s.current = { x0: e.clientX, active: false, down: true, last: dayAt(e.currentTarget, e.clientX) };
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic */ }
+    },
     onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => {
       const st = s.current;
       if (!st.down) return;
-      if (!st.active && Math.abs(e.clientX - st.x0) < 8) return;
+      if (!st.active && Math.abs(e.clientX - st.x0) < 6) return;
       st.active = true;
       const day = dayAt(e.currentTarget, e.clientX);
-      if (day !== st.last) { st.last = day; go(day); }
+      if (day !== st.last) {
+        st.last = day;
+        haptic.select();
+        onHover(day);
+        commit(day);
+      }
     },
-    onPointerLeave: () => { if (!s.current.active) s.current.down = false; },
+    onPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => finish(e.currentTarget, e.clientX),
+    onLostPointerCapture: () => { if (s.current.down) finish(null, null); },
   };
 }

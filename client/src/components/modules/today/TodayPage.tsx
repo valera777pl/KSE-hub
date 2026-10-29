@@ -83,7 +83,7 @@ export function TodayPage() {
           <div className="now__place">{tr('Один крок на schedule.kse.ua — покажемо як', 'One step on schedule.kse.ua, we\'ll show you how')}</div>
         </button>
       ) : (
-        <NowCard current={current} next={current ? laterToday[0] : upcoming[0]} after={laterToday.slice(1, 3)} today={today} onOpen={(d) => { haptic.tap(); openDay(d); }} />
+        <NowCard current={current} next={current ? laterToday[0] : upcoming[0]} after={laterToday.slice(1, 3)} today={today} onOpen={(e) => { haptic.tap(); useUi.getState().openCourse(e.courseCode, e); }} />
       )}
 
       {!deadlinesFailed && (
@@ -141,7 +141,7 @@ function waitText(ms: number) {
 
 /** One big number: minutes left in this class, or until the next one. */
 function NowCard({ current, next, after, today, onOpen }: {
-  current?: ClassEvent; next?: ClassEvent; after: ClassEvent[]; today: string; onOpen: (day: string) => void;
+  current?: ClassEvent; next?: ClassEvent; after: ClassEvent[]; today: string; onOpen: (e: ClassEvent) => void;
 }) {
   const t = now().getTime();
   const focus = current ?? next;
@@ -176,7 +176,7 @@ function NowCard({ current, next, after, today, onOpen }: {
   const pill = big.unit ? null : `${tr('через', 'in')} ${waitText(startsIn)}`;
 
   return (
-    <button className="now press" onClick={() => onOpen(focusDay)}>
+    <button className="now press" onClick={() => onOpen(focus)}>
       <div className="now__top">
         <span className="now__label">{label}</span>
         {pill && <span className="now__pill num">{pill}</span>}

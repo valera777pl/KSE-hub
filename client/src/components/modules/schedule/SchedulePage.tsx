@@ -1,20 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Bell, BookOpen, CalendarCheck, ChevronLeft, ChevronRight, Minus, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react';
-import { RemindSheet, shortWhen } from '../../ui/RemindSheet';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { CalendarCheck, ChevronLeft, ChevronRight, Minus, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react';
 import { inviteFriend } from '../../../lib/invite';
 import { api } from '../../../api/client';
 import type { ClassEvent, DeadlineWithCourse, ScheduleCompare, StudentMatch } from '../../../types';
 import { DayGrid, type GridColumn } from './DayGrid';
 import { EmptyDay, useStripScrub, useZoom, usePinchZoom } from './gridParts';
-import { addDays, dayKey, dayMonth, dayNum, dayTitle, hm, mondayOf, now, todayKey, weekdayShort, weekOf } from '../../../lib/time';
-import { classKind, shortPlace } from '../../../lib/place';
+import { addDays, dayKey, dayMonth, dayNum, dayTitle, mondayOf, todayKey, weekdayShort, weekOf } from '../../../lib/time';
 import { Avatar } from '../../ui/Avatar';
 import { cloud, haptic, openExternal } from '../../../lib/telegram';
 import { useUi } from '../../../stores/uiStore';
 import { Sheet } from '../../ui/Sheet';
 import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from '../../ui/States';
 import { useCached } from '../../../lib/cache';
-import { AskPanel } from '../../ui/AskPanel';
 import { track } from '../../../api/client';
 import { tr } from '../../../lib/i18n';
 
@@ -135,7 +132,6 @@ export function SchedulePage() {
   const [day, setDay] = useState(requested ?? today);
   const [dir, setDir] = useState<'next' | 'prev' | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [open, setOpen] = useState<ClassEvent | null>(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
 
@@ -168,8 +164,12 @@ export function SchedulePage() {
   };
 
 
-  // Slide a finger along the day strip: the day under it opens as you go, a tick on each
-  const stripScrub = useStripScrub(days, go);
+  // Slide a finger along the day strip: the day under it lights up at once, the grid follows in a transition
+  const [hoverDay, setHoverDay] = useState<string | null>(null);
+  const stripScrub = useStripScrub(days, setHoverDay, (next) => {
+    if (next === day) return;
+    startTransition(() => { setDir(next > day ? 'next' : 'prev'); setDay(next); });
+  });
 
   const refresh = async () => {
     setRefreshing(true);
@@ -232,7 +232,7 @@ export function SchedulePage() {
 
       <div className="daystrip" role="group" aria-label={tr('День тижня', 'Day of the week')} {...stripScrub}>
         {days.map((k) => (
-          <button key={k} className={`day press${k === today ? ' day--today' : ''}`} aria-pressed={k === day} onClick={() => go(k)}
+          <button key={k} className={`day press${k === today ? ' day--today' : ''}`} aria-pressed={k === (hoverDay ?? day)} onClick={() => go(k)}
             aria-label={dayTitle(k)}>
             {weekdayShort(k)}
             <b className="num">{dayNum(k)}</b>
@@ -308,7 +308,7 @@ export function SchedulePage() {
             <div ref={gridRef} className="grid-zoom" style={{ '--hour': `${zoom.px}px` } as CSSProperties}>
               {pals.mode === 'shared' && empty && <p className="note" style={{ padding: '0 0 8px' }}>{tr('Цього дня спільних пар немає', 'No shared classes this day')}</p>}
               <DayGrid day={day} columns={columns} shared={pals.mode === 'shared'} busy={busy} deadlines={dueToday} hourPx={zoom.px}
-                onOpen={(e) => { haptic.tap(); setOpen(e); }}
+                onOpen={(e) => { haptic.tap(); useUi.getState().openCourse(e.courseCode, e); }}
                 onDeadline={(id) => { haptic.tap(); useUi.getState().openDeadline(id); }} />
             </div>
           )}
@@ -316,65 +316,8 @@ export function SchedulePage() {
       </div>
       {pals.mode === 'shared' && <p className="note num" style={{ padding: '10px 0 0' }}>{tr('Спільних пар цього тижня', 'Shared classes this week')}: {sharedThisWeek}</p>}
 
-      {open && <ClassSheet e={open} friends={pals.withMe(open)} onClose={() => setOpen(null)} />}
       {adding && <AddFriendSheet taken={pals.friends} onPick={(s) => { haptic.success(); pals.add(s); setAdding(false); }} onRemove={pals.remove} onClose={() => setAdding(false)} />}
     </>
-  );
-}
-
-function ClassSheet({ e, friends, onClose }: { e: ClassEvent; friends: Friend[]; onClose: () => void }) {
-  const key = dayKey(new Date(e.startAt));
-  const kind = classKind(e.section);
-  const [asking, setAsking] = useState(false);
-  const [reminding, setReminding] = useState(false);
-  const code = `${e.courseCode}${e.section ? ` [${e.section}]` : ''}`;
-  if (reminding) {
-    const place = shortPlace(e.location);
-    return <RemindSheet text={`${code} — ${shortWhen(new Date(e.startAt))}${place ? ` · ${place}` : ''}`} at={new Date(e.startAt)}
-      startapp={`day_${key}`} onClose={() => setReminding(false)} />;
-  }
-  if (asking) {
-    return (
-      <Sheet onClose={() => setAsking(false)} label="Copilot">
-        <AskPanel about={code} onBack={() => setAsking(false)}
-          context={`${code} ${e.title}, ${dayTitle(key)} ${hm(e.startAt)}–${hm(e.endAt)}, ${shortPlace(e.location) ?? ''}`}
-          starters={[tr('Що в мене після цієї пари?', 'What do I have after this class?'), tr('Які дедлайни з цього курсу найближчі?', "What's due soon for this course?")]} />
-      </Sheet>
-    );
-  }
-  return (
-    <Sheet onClose={onClose} label={e.courseCode}>
-      <div className="sheet__title">{e.courseCode}{e.section ? ` [${e.section}]` : ''}</div>
-      <div className="sheet__sub">{e.title}</div>
-      <div className="caption">{tr('Коли і де', 'When and where')}</div>
-      <div className="group">
-        <div className="row"><div className="row__main"><div className="row__title num">{hm(e.startAt)}–{hm(e.endAt)}</div><div className="row__meta">{key === todayKey() ? tr('сьогодні', 'today') : dayTitle(key)}{kind ? ` · ${kind}` : ''}</div></div></div>
-        <div className="row"><div className="row__main"><div className="row__title">{shortPlace(e.location) ?? tr('Аудиторію не вказано', 'Room not given')}</div></div></div>
-        <button className="row press" onClick={() => { haptic.tap(); onClose(); useUi.getState().openCourse(e.courseCode); }}>
-          <BookOpen className="row-icon" strokeWidth={1.7} />
-          <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr(`Сторінка курсу ${e.courseCode}`, `${e.courseCode} course page`)}</div><div className="row__meta">{tr('Дедлайни, Slack, друзі на курсі', 'Deadlines, Slack, friends on it')}</div></div>
-          <ChevronRight className="chev" />
-        </button>
-        {new Date(e.startAt).getTime() > now().getTime() && (
-          <button className="row press" onClick={() => { haptic.tap(); setReminding(true); }}>
-            <Bell className="row-icon" strokeWidth={1.7} />
-            <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Нагадати…', 'Remind me…')}</div></div>
-            <ChevronRight className="chev" />
-          </button>
-        )}
-      </div>
-      {friends.length > 0 && (
-        <>
-          <div className="caption">{tr('Там же', 'Also there')}</div>
-          <div className="group">
-            {friends.map((f) => (
-              <div className="row" key={f.userId}><Avatar name={f.name} url={f.avatarUrl} size={28} /><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{f.name}</div></div></div>
-            ))}
-          </div>
-        </>
-      )}
-      <button className="btn-plain press" style={{ marginTop: 16 }} onClick={() => setAsking(true)}>{tr('Запитати Copilot', 'Ask Copilot')}</button>
-    </Sheet>
   );
 }
 
