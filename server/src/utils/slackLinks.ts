@@ -38,10 +38,10 @@ export function channelNamesIn(text: string): string[] {
   return [...new Set([...text.matchAll(CHANNEL_NAME)].map((m) => m[1].toLowerCase()))];
 }
 
-/** Who a private channel is for: a course (one section or all of them) or a cohort (programme + entry year). */
+/** Who a private channel is for: a course (one section or all of them) or a cohort (programme, or all of them, + entry year). */
 export type ChannelScope =
   | { kind: 'course'; courseCode: string; section: string | null }
-  | { kind: 'cohort'; program: string; cohortYear: number };
+  | { kind: 'cohort'; program: string | null; cohortYear: number };
 
 /** Bachelor's takes 4 years, and cohort channels carry the graduation year: "be30" = BE, entered 2026. */
 export const BACHELOR_YEARS = 4;

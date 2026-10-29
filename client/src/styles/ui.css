@@ -506,6 +506,55 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
 .adm-health__total { font-size: 13px; font-weight: 400; color: var(--text-secondary); }
 .adm-alert-icon { width: 18px; height: 18px; color: var(--danger); flex: none; }
 
+/* Admin → Slack: drafts to review and the channels the reader account is in */
+.adm-draft__head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+.adm-draft__title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.adm-draft__title b { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.adm-draft__title span { font-size: 13px; color: var(--text-secondary); }
+.adm-ch__icon { width: 18px; height: 18px; flex: none; color: var(--text-secondary); margin-top: 1px; }
+.adm-points { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.adm-points p { font-size: 15px; line-height: 1.4; }
+.adm-points__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; margin-top: 3px; font-size: 13px; color: var(--text-secondary); }
+.adm-points__meta a { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); font-weight: 500; min-height: 28px; }
+.adm-points__meta a svg { width: 13px; height: 13px; }
+.adm-points__edit { display: flex; align-items: flex-start; gap: 8px; }
+.adm-points__edit textarea.field { min-height: 64px; background: var(--inset); font-size: 15px; }
+.adm-icon-btn { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%; color: var(--text-secondary); }
+.adm-icon-btn svg { width: 18px; height: 18px; }
+.adm-icon-btn:disabled { opacity: 0.3; }
+.adm-draft__events { margin-top: 12px; font-size: 13px; color: var(--text-secondary); line-height: 1.4; }
+.adm-draft__error { margin-top: 10px; font-size: 13px; color: var(--danger); }
+.adm-draft--done { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: var(--success); padding: 16px; }
+.adm-draft--done svg { width: 20px; height: 20px; }
+.adm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.adm-btn { height: 44px; padding: 0 14px; border-radius: 10px; font-size: 15px; font-weight: 600; color: var(--accent); border: 1px solid var(--separator); }
+.adm-btn--wide { grid-column: 1 / -1; width: 100%; }
+.adm-btn--accent { background: var(--accent-fill); color: var(--on-accent); border-color: transparent; }
+.adm-btn--danger { color: var(--danger); }
+.adm-btn:disabled { opacity: 0.45; }
+
+.adm-ch__row { align-items: flex-start; }
+.adm-ch__name { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+.adm-ch__sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.adm-ch__sub--warn { color: var(--warning); }
+.adm-ch__chev { margin-top: 1px; transition: transform 200ms var(--ease); }
+.adm-ch__row[aria-expanded='true'] .adm-ch__chev { transform: rotate(180deg); }
+.adm-ch { position: relative; }
+.adm-ch + .adm-ch::before { content: ''; position: absolute; top: 0; left: 46px; right: 0; border-top: 0.5px solid var(--separator); }
+.adm-ch__panel { padding: 0 16px 14px 46px; display: flex; flex-direction: column; gap: 4px; }
+.adm-bind .field-label { margin: 4px 0 8px; }
+.adm-bind .seg { margin-bottom: 8px; }
+.adm-bind__fields { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.adm-bind select.field { background: var(--inset); font-size: 15px; }
+.adm-bind__save { margin-top: 10px; }
+.adm-bind__saved { display: flex; align-items: center; gap: 6px; margin-top: 10px; min-height: 44px; font-size: 14px; color: var(--text-secondary); }
+.adm-bind__saved svg { width: 16px; height: 16px; color: var(--success); flex: none; }
+.adm-ch__drafts { font-size: 13px; font-weight: 600; color: var(--warning); margin-top: 2px; }
+.adm-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; font-size: 15px; }
+.adm-toggle small { display: block; font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.adm-toggle--off { opacity: 0.5; }
+.adm-ch__hide { align-self: flex-start; min-height: 44px; font-size: 15px; font-weight: 500; color: var(--danger); }
+
 /* ─── «Нагадати…» sheet ─── */
 .remind-done { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 28px 0 12px; font-size: 17px; font-weight: 600; color: var(--success); }
 .remind-done svg { width: 22px; height: 22px; }

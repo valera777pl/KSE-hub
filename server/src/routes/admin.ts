@@ -5,6 +5,9 @@ import { verifyState } from '../utils/crypto.js';
 import { validateTelegramInitData } from '../utils/telegramHash.js';
 import * as Metrics from '../services/adminMetrics.js';
 import { FUNNEL_EVENTS } from '../services/adminMetrics.js';
+import { SlackService } from '../services/slackService.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { adminChannelSchema, adminPublishSchema } from '../utils/slackIngest.js';
 
 /**
  * Admin dashboard API. Two ways in:
@@ -237,5 +240,31 @@ adminRoutes.get('/analytics', async (c) => {
     }, n('onboarded')),
   });
 });
+
+/* ─── Slack digests: channels and drafts (SLACK-DIGEST-PROMPT.md §5.2) ─── */
+
+const summaryId = (v: string) => {
+  const id = parseInt(v, 10);
+  if (!Number.isSafeInteger(id)) throw new AppError('Bad id', 400);
+  return id;
+};
+
+// GET /api/admin/slack — drafts waiting for review, every channel with its tie
+adminRoutes.get('/slack', async (c) => c.json(await SlackService.adminOverview()));
+
+// PATCH /api/admin/slack/channels/:id — tie to a course or cohort, hide, auto-publish
+adminRoutes.patch('/slack/channels/:id', async (c) => {
+  const patch = adminChannelSchema.parse(await c.req.json());
+  return c.json({ channel: await SlackService.updateChannel(c.req.param('id'), patch) });
+});
+
+// POST /api/admin/slack/summaries/:id/publish — as is, or with the owner's edited points
+adminRoutes.post('/slack/summaries/:id/publish', async (c) => {
+  const body = adminPublishSchema.parse(await c.req.json().catch(() => ({})));
+  return c.json({ summary: await SlackService.publish(summaryId(c.req.param('id')), body.items ? { items: body.items } : undefined) });
+});
+
+// POST /api/admin/slack/summaries/:id/reject
+adminRoutes.post('/slack/summaries/:id/reject', async (c) => c.json(await SlackService.reject(summaryId(c.req.param('id')))));
 
 export { adminRoutes };

@@ -392,6 +392,21 @@ const routes: [string, RegExp, Handler][] = [
   }],
   ['DELETE', /^\/friends\/(\d+)$/, (m) => { FRIENDS.friends = FRIENDS.friends.filter((f) => f.userId !== Number(m[1])); return { ok: true }; }],
   ['GET', /^\/admin\/analytics$/, (_m, url) => adminAnalytics(Number(url.searchParams.get('days')) || 7)],
+  ['GET', /^\/admin\/slack$/, () => (empty ? { channels: [], drafts: [], courses: SLACK.courses, programs: SLACK.programs } : SLACK)],
+  ['PATCH', /^\/admin\/slack\/channels\/(\w+)$/, (m, _u, b) => {
+    const ch = SLACK.channels.find((c) => c.channelId === m[1])!;
+    const { scope, ...rest } = b as { scope?: { kind: string; courseCode?: string; section?: string | null; program?: string | null; cohortYear?: number } | null };
+    Object.assign(ch, rest);
+    if (scope !== undefined) {
+      Object.assign(ch, { courseCode: scope?.courseCode ?? null, section: scope?.section ?? null, program: scope?.program ?? null, cohortYear: scope?.cohortYear ?? null });
+      if (ch.isPrivate && ch.status !== 'hidden') ch.status = scope ? 'active' : 'pending';
+    }
+    return { channel: ch };
+  }],
+  ['POST', /^\/admin\/slack\/summaries\/(\d+)\/(publish|reject)$/, (m) => {
+    SLACK.drafts = SLACK.drafts.filter((d) => d.id !== Number(m[1]));
+    return m[2] === 'publish' ? { summary: { id: Number(m[1]), status: 'published' } } : { ok: true };
+  }],
   ['GET', /^\/venture\/deck$/, () => ({ cards: empty ? [] : DECK })],
   // Олена has already said "Цікаво" to us, so only our own "Цікаво" makes it mutual
   ['POST', /^\/venture\/swipe$/, (_m, _u, b) => {
@@ -411,6 +426,60 @@ const EVENTS = [
   { id: 3, title: 'Career Day: зустріч з Kyivstar', startsAt: hours(200), location: 'Online', programs: [] as string[],
     description: 'Як потрапити на літнє стажування: відбір, задачі, зарплата.', registrationUrl: 'https://forms.gle/mock2', personal: false, reminded: false, createdAt: iso(NOW) },
 ];
+
+/* /admin → Slack: drafts from the reader account's first run, channels with their ties */
+const slackLink = (ch: string, ts: string) => `https://ksestudents.slack.com/archives/${ch}/p${ts}`;
+const slackChannel = (channelId: string, name: string, isPrivate: boolean, extra: Record<string, unknown> = {}) => ({
+  channelId, name, team: 'ksestudents', isPrivate, status: 'active' as string, courseCode: null as string | null, section: null as string | null,
+  program: null as string | null, cohortYear: null as number | null, lastTs: '1793305990.827519', defaultOn: false, autoPublish: false,
+  createdAt: iso(NOW), drafts: 0, published: 0, ...extra,
+});
+const SLACK = {
+  channels: [
+    slackChannel('C0BU8PC0TD2', 'intro_to_calculus-pr6-autumn-2026', true, { courseCode: 'MATH111', section: 'P6', drafts: 1 }),
+    slackChannel('G0COHORT30', 'be30', true, { program: 'BE', cohortYear: 2026, published: 3 }),
+    slackChannel('G0KSEBA30', 'kse-ba30', true, { status: 'pending' }),
+    slackChannel('C05Q8FTNP0T', 'general', false, { defaultOn: true, drafts: 1 }),
+    slackChannel('C06KXECQQFQ', 'event', false, { defaultOn: true, drafts: 1, autoPublish: true }),
+    slackChannel('C05QB2Q0TJ8', 'students', false, { drafts: 1 }),
+    slackChannel('C05Q8JQF03C', 'random', false, { status: 'hidden' }),
+  ],
+  drafts: [
+    { id: 1, channelId: 'C0BU8PC0TD2', channelName: 'intro_to_calculus-pr6-autumn-2026', isPrivate: true, courseCode: 'MATH111', section: 'P6',
+      fromTs: '1793047000.000000', toTs: '1793305990.827519', status: 'draft', createdAt: hours(-0.5), publishedAt: null,
+      summary: 'Наступного тижня пари онлайн і без квізу\nЧерез тиждень — 2 квізи',
+      items: [
+        { kind: 'change', text: 'Наступного тижня пари онлайн і без квізу', permalink: slackLink('C0BU8PC0TD2', '1793175881366969') },
+        { kind: 'announcement', text: 'Через тиждень — 2 квізи: на першій і на другій парі', permalink: slackLink('C0BU8PC0TD2', '1793175881366969') },
+      ],
+      events: [] as { title: string; startsAt: string; place?: string; permalink: string }[] },
+    { id: 2, channelId: 'C05Q8FTNP0T', channelName: 'general', isPrivate: false, courseCode: null, section: null,
+      fromTs: '1793047000.000000', toTs: '1793286952.584809', status: 'draft', createdAt: hours(-0.5), publishedAt: null,
+      summary: '',
+      items: [
+        { kind: 'announcement', text: 'Психологічна служба: запис відкривається наприкінці кожного місяця на 3–4 тижні вперед, до 10 консультацій на рік', permalink: slackLink('C05Q8FTNP0T', '1793108700126039') },
+        { kind: 'announcement', text: 'У Study Room на 3 поверсі встановили принтер', permalink: slackLink('C05Q8FTNP0T', '1793180603643829') },
+      ],
+      events: [] },
+    { id: 3, channelId: 'C05QB2Q0TJ8', channelName: 'students', isPrivate: false, courseCode: null, section: null,
+      fromTs: '1793047000.000000', toTs: '1793303763.977339', status: 'draft', createdAt: hours(-0.5), publishedAt: null,
+      summary: '',
+      items: [
+        { kind: 'deadline', text: 'Probability and Games (KSE Quant Club): реєстрація', dueAt: '2026-12-10T23:59:00+02:00', permalink: slackLink('C05QB2Q0TJ8', '1793216247829659') },
+        { kind: 'event', text: 'Talk to an Expert: GameDev, кампус і онлайн', dueAt: '2026-11-06T18:00:00+02:00', permalink: slackLink('C05QB2Q0TJ8', '1793115726802289') },
+        { kind: 'other', text: 'ACLED: оплачувана часткова дослідницька позиція', permalink: slackLink('C05QB2Q0TJ8', '1793204816122639') },
+      ],
+      events: [{ title: 'Talk to an Expert: GameDev', startsAt: '2026-11-06T18:00:00+02:00', place: 'KSE Dragon Capital Building + онлайн', permalink: slackLink('C05QB2Q0TJ8', '1793115726802289') }] },
+  ],
+  courses: [
+    { courseCode: 'ECON100', title: 'Principles of Economics (BE)', sections: ['L1', 'P6'] },
+    { courseCode: 'ENG111', title: 'English for Professional and Study Purposes I (BE, EBD)', sections: ['P11'] },
+    { courseCode: 'KSE101', title: 'How to study at KSE (BE, EBD, SE)', sections: ['L3'] },
+    { courseCode: 'MATH101', title: 'Introduction to Mathematics', sections: ['P8'] },
+    { courseCode: 'MATH111', title: 'Introduction to Calculus (BE, EBD)', sections: ['P6', 'P7'] },
+  ],
+  programs: ['BE', 'EBD'],
+};
 
 const REMINDERS = [
   { id: 1, kind: 'self', text: 'почати есе з ECON100', remindAt: hours(30), startapp: null as string | null, eventId: null as number | null },

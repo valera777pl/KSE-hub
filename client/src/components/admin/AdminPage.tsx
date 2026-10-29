@@ -4,6 +4,7 @@ import { applyTheme } from '../../lib/telegram';
 import { hideSplash } from '../../lib/splash';
 import { EmptyState } from '../ui/States';
 import { Glow } from '../ui/Glow';
+import { AdminSlack } from './AdminSlack';
 
 /**
  * Admin dashboard at /admin, a lazy chunk students never download. Opened from the bot's /admin link
@@ -100,13 +101,25 @@ const plural = (n: number, one: string, few: string, many: string) => {
   return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
 };
 
+type View = 'analytics' | 'slack';
+const VIEW_KEY = 'kse_admin_view';
+
 export function AdminPage() {
+  const [view, setView] = useState<View>(() => {
+    try { return localStorage.getItem(VIEW_KEY) === 'slack' ? 'slack' : 'analytics'; } catch { return 'analytics'; }
+  });
+  const [slackSub, setSlackSub] = useState('Чернетки й канали');
   const [days, setDays] = useState<(typeof PERIODS)[number]>(7);
   const [data, setData] = useState<Analytics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [auth] = useState(authHeader);
 
   useEffect(() => { applyTheme(); hideSplash(); }, []);
+
+  const pick = (v: View) => {
+    setView(v);
+    try { localStorage.setItem(VIEW_KEY, v); } catch { /* storage blocked */ }
+  };
 
   useEffect(() => {
     if (!auth) { setError('Відкрий посилання, яке надсилає бот на /admin.'); return; }
@@ -128,19 +141,34 @@ export function AdminPage() {
       <Glow />
       <header className="screen-head">
         <div>
-          <p className="screen-sub">{data ? `${longDay(data.today)} · за ${days} днів` : 'Адмінка'}</p>
-          <h1 className="screen-title">Аналітика</h1>
+          <p className="screen-sub">{view === 'slack' ? slackSub : data ? `${longDay(data.today)} · за ${days} днів` : 'Адмінка'}</p>
+          {/* The two titles are the switch, as in «Навчання» */}
+          <div className="title-tabs" role="tablist">
+            {([['analytics', 'Аналітика'], ['slack', 'Slack']] as const).map(([id, label]) => (
+              <button key={id} id={`tab-${id}`} role="tab" className="screen-title title-tab" aria-selected={view === id}
+                aria-controls={`panel-${id}`} onClick={() => pick(id)}>{label}</button>
+            ))}
+          </div>
         </div>
       </header>
-      <div className="seg" role="group" aria-label="Період">
-        {PERIODS.map((p) => <button key={p} aria-pressed={p === days} onClick={() => setDays(p)}>{p} днів</button>)}
-      </div>
 
-      {error && !data && <EmptyState icon={AlertCircle} title="Не вдалося завантажити" text={error} />}
-      {!error && !data && <Skeleton />}
-      {data && (data.pulse.users === 0
-        ? <EmptyState icon={BarChart3} title="Поки ніхто не зареєструвався" text="Цифри зʼявляться після першого /start у боті." />
-        : <Dashboard d={data} />)}
+      {view === 'slack' ? (
+        <div role="tabpanel" id="panel-slack" aria-labelledby="tab-slack" className="fade-in">
+          {auth ? <AdminSlack auth={auth} onCount={setSlackSub} /> : <EmptyState icon={AlertCircle} title="Не вдалося завантажити" text="Відкрий посилання, яке надсилає бот на /admin." />}
+        </div>
+      ) : (
+        <div role="tabpanel" id="panel-analytics" aria-labelledby="tab-analytics" className="fade-in">
+          <div className="seg" role="group" aria-label="Період">
+            {PERIODS.map((p) => <button key={p} aria-pressed={p === days} onClick={() => setDays(p)}>{p} днів</button>)}
+          </div>
+
+          {error && !data && <EmptyState icon={AlertCircle} title="Не вдалося завантажити" text={error} />}
+          {!error && !data && <Skeleton />}
+          {data && (data.pulse.users === 0
+            ? <EmptyState icon={BarChart3} title="Поки ніхто не зареєструвався" text="Цифри зʼявляться після першого /start у боті." />
+            : <Dashboard d={data} />)}
+        </div>
+      )}
     </div></main></div>
   );
 }

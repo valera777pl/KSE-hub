@@ -9,6 +9,13 @@ import { z } from 'zod';
 const ts = z.string().regex(/^\d{9,11}(\.\d{1,6})?$/);
 const permalink = z.string().url().regex(/^https:\/\/[a-z0-9-]+\.slack\.com\/archives\//);
 
+const item = z.object({
+  kind: z.enum(['deadline', 'change', 'announcement', 'event', 'other']),
+  text: z.string().trim().min(1).max(500),
+  dueAt: z.string().datetime({ offset: true }).nullish().transform((v) => v ?? undefined),
+  permalink,
+});
+
 export const ingestSchema = z.object({
   channels: z.array(z.object({
     channelId: z.string().regex(/^[CG][A-Z0-9]{6,19}$/),
@@ -20,12 +27,7 @@ export const ingestSchema = z.object({
     fromTs: ts,
     toTs: ts,
     summary: z.string().trim().min(1).max(2000).nullable(),
-    items: z.array(z.object({
-      kind: z.enum(['deadline', 'change', 'announcement', 'event', 'other']),
-      text: z.string().trim().min(1).max(500),
-      dueAt: z.string().datetime({ offset: true }).nullish().transform((v) => v ?? undefined),
-      permalink,
-    })).max(10).default([]),
+    items: z.array(item).max(10).default([]),
     events: z.array(z.object({
       title: z.string().trim().min(1).max(300),
       startsAt: z.string().datetime({ offset: true }),
@@ -36,6 +38,20 @@ export const ingestSchema = z.object({
 });
 
 export type IngestChannel = z.infer<typeof ingestSchema>['channels'][number];
+
+/** The owner's edit before publishing: the points as they should go out (at least one). */
+export const adminPublishSchema = z.object({ items: z.array(item).min(1).max(10).optional() });
+
+/** The owner ties a channel (course + section, or programme + entry year), hides it, or lets it auto-publish. */
+export const adminChannelSchema = z.object({
+  scope: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('course'), courseCode: z.string().regex(/^[A-Z]{2,6}\d{3}[A-Z]?$/), section: z.string().max(20).nullable() }),
+    z.object({ kind: z.literal('cohort'), program: z.string().regex(/^[A-Z]{2,5}$/).nullable(), cohortYear: z.number().int().min(2015).max(2040) }),
+  ]).nullable().optional(),
+  status: z.enum(['active', 'hidden']).optional(),
+  autoPublish: z.boolean().optional(),
+  defaultOn: z.boolean().optional(),
+});
 
 /** Later of two Slack timestamps (they compare as numbers, not strings). */
 export function laterTs(a: string | null, b: string): string {

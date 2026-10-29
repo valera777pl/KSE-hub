@@ -1,7 +1,7 @@
-import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, ne } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import {
-  courseCalendars, events, slackChannels, slackSummaries, userSlackSubscriptions, users, type SlackSlot,
+  courseCalendars, events, slackChannels, slackSummaries, userSlackSubscriptions, users, type SlackItem, type SlackSlot,
 } from '../db/schema.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { channelScope, type ChannelScope } from '../utils/slackLinks.js';
@@ -86,12 +86,18 @@ export class SlackService {
     return row;
   }
 
-  /** A summary goes out: visible in the feed, its events land in «Події». */
-  static async publish(id: number, edit?: { summary?: string }) {
+  /**
+   * A summary goes out: visible in the feed, its events land in «Події».
+   * The owner may have edited the points first — then the summary is those points, one per line.
+   */
+  static async publish(id: number, edit?: { items: SlackItem[] }) {
     const [s] = await db.update(slackSummaries)
-      .set({ status: 'published', publishedAt: new Date(), ...(edit?.summary ? { summary: edit.summary } : {}) })
-      .where(eq(slackSummaries.id, id)).returning();
-    if (!s) throw new AppError('Підсумок не знайдено', 404);
+      .set({
+        status: 'published', publishedAt: new Date(),
+        ...(edit ? { items: edit.items, summary: edit.items.map((i) => i.text).join('\n') } : {}),
+      })
+      .where(and(eq(slackSummaries.id, id), ne(slackSummaries.status, 'published'))).returning();
+    if (!s) throw new AppError('Чернетку не знайдено або її вже опубліковано', 404);
     const [ch] = await db.select().from(slackChannels).where(eq(slackChannels.channelId, s.channelId)).limit(1);
     for (const e of s.events) {
       await db.insert(events).values({
@@ -105,6 +111,65 @@ export class SlackService {
       }).onConflictDoNothing();
     }
     return s;
+  }
+
+  /* ─── Admin (SLACK-DIGEST-PROMPT.md §5.2, §5.3): the owner reviews drafts and ties channels ─── */
+
+  /** Drafts oldest first, every channel with its tie, and what a channel can be tied to. */
+  static async adminOverview() {
+    const [channels, drafts, counts, courses, programs] = await Promise.all([
+      db.select().from(slackChannels).orderBy(desc(slackChannels.isPrivate), asc(slackChannels.name)),
+      db.select().from(slackSummaries).where(eq(slackSummaries.status, 'draft')).orderBy(asc(slackSummaries.createdAt)).limit(50),
+      db.select({ channelId: slackSummaries.channelId, status: slackSummaries.status, n: count() })
+        .from(slackSummaries).groupBy(slackSummaries.channelId, slackSummaries.status),
+      db.selectDistinct({ courseCode: courseCalendars.courseCode, section: courseCalendars.section, title: courseCalendars.title })
+        .from(courseCalendars).orderBy(asc(courseCalendars.courseCode)),
+      this.knownCourses().then((k) => k.programs),
+    ]);
+    const byCourse = new Map<string, { courseCode: string; title: string; sections: string[] }>();
+    for (const c of courses) {
+      const entry = byCourse.get(c.courseCode) ?? { courseCode: c.courseCode, title: c.title, sections: [] };
+      if (c.section && !entry.sections.includes(c.section)) entry.sections.push(c.section);
+      byCourse.set(c.courseCode, entry);
+    }
+    const names = new Map(channels.map((ch) => [ch.channelId, ch]));
+    const tally = (id: string, status: string) => counts.find((r) => r.channelId === id && r.status === status)?.n ?? 0;
+    return {
+      channels: channels.map((ch) => ({ ...ch, drafts: tally(ch.channelId, 'draft'), published: tally(ch.channelId, 'published') })),
+      drafts: drafts.map((d) => {
+        const ch = names.get(d.channelId);
+        return { ...d, channelName: ch?.name ?? d.channelId, isPrivate: ch?.isPrivate ?? false, courseCode: ch?.courseCode ?? null, section: ch?.section ?? null };
+      }),
+      courses: [...byCourse.values()].map((c) => ({ ...c, sections: c.sections.sort((a, b) => a.localeCompare(b, 'en', { numeric: true })) })),
+      programs,
+    };
+  }
+
+  /** The owner ties a channel to a course or cohort, hides it, or lets it publish on its own. */
+  static async updateChannel(channelId: string, patch: {
+    scope?: ChannelScope | null; status?: 'active' | 'hidden'; autoPublish?: boolean; defaultOn?: boolean;
+  }) {
+    const [old] = await db.select().from(slackChannels).where(eq(slackChannels.channelId, channelId)).limit(1);
+    if (!old) throw new AppError('Канал не знайдено', 404);
+    const set: Partial<Channel> = {};
+    if (patch.scope !== undefined) {
+      Object.assign(set, scopeColumns(patch.scope));
+      // A private channel without a tie is nobody's; with one it goes live (unless hidden)
+      if (old.isPrivate && old.status !== 'hidden') set.status = patch.scope ? 'active' : 'pending';
+    }
+    if (patch.status) set.status = patch.status === 'active' && old.isPrivate && !(set.courseCode ?? old.courseCode) && !(set.cohortYear ?? old.cohortYear)
+      ? 'pending' : patch.status;
+    if (patch.autoPublish !== undefined) set.autoPublish = patch.autoPublish;
+    if (patch.defaultOn !== undefined) set.defaultOn = patch.defaultOn;
+    const [row] = await db.update(slackChannels).set(set).where(eq(slackChannels.channelId, channelId)).returning();
+    return row;
+  }
+
+  static async reject(id: number) {
+    const [s] = await db.update(slackSummaries).set({ status: 'rejected' })
+      .where(and(eq(slackSummaries.id, id), eq(slackSummaries.status, 'draft'))).returning({ id: slackSummaries.id });
+    if (!s) throw new AppError('Чернетку не знайдено', 404);
+    return { ok: true };
   }
 
   /** Published summaries from channels this student may see, newest first. */
