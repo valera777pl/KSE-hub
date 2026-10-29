@@ -49,11 +49,14 @@ export function AdminSlack({ auth, onCount }: { auth: string; onCount: (sub: str
   const [error, setError] = useState<string | null>(null);
 
   const call = async <T,>(path: string, init?: RequestInit): Promise<T> => {
-    const r = await fetch(`${API}/admin${path}`, { ...init, headers: { Authorization: auth, 'Content-Type': 'application/json' } });
+    const r = await fetch(`${API}/admin${path}`, { ...init, headers: { Authorization: auth, 'Content-Type': 'application/json' } })
+      .catch(() => { throw new Error('Немає звʼязку з сервером. Перевір інтернет і спробуй ще раз.'); });
     if (r.status === 401 || r.status === 403) throw new Error('Посилання недійсне або застаріло — надішли боту /admin ще раз.');
-    // 4xx carry our own Ukrainian reason ("Чернетку не знайдено…"); anything else is the server failing
-    const reason = r.status < 500 ? (await r.json().catch(() => null))?.error : null;
-    if (!r.ok) throw new Error(typeof reason === 'string' ? reason : 'Сервер не відповів. Онови сторінку за хвилину.');
+    if (!r.ok) {
+      // 4xx carry our own Ukrainian reason ("Чернетку не знайдено…"); anything else is the server failing
+      const reason = r.status < 500 ? (await r.json().catch(() => null))?.error : null;
+      throw new Error(typeof reason === 'string' ? reason : 'Сервер не відповів. Онови сторінку за хвилину.');
+    }
     return r.json() as Promise<T>;
   };
 
