@@ -14,6 +14,14 @@ import { MoodleConnectForm } from '../modules/deadlines/MoodleConnect';
 import { FriendsGroup } from './FriendsGroup';
 import { RemindersGroup } from './RemindersGroup';
 
+/** What the pinned line in the bot chat can show: one short line each */
+const pinnedOptions = () => [
+  { key: 'off', label: tr('Вимкнено', 'Off') },
+  { key: 'next', label: tr('Наступна пара', 'Next class'), sub: tr('Далі: MATH101 [P8] о 11:30 · M. Shpaka 3', 'Next: MATH101 [P8] at 11:30 · M. Shpaka 3') },
+  { key: 'deadline', label: tr('Найближчий дедлайн', 'Nearest deadline'), sub: tr('Дедлайн: ECON100 PS3 — пт 30.10, 23:59', 'Due: ECON100 PS3 — fri 30.10, 23:59') },
+  { key: 'day', label: tr('День коротко', 'The day in brief'), sub: tr('Сьогодні: 4 пари · 1 дедлайн', 'Today: 4 classes · 1 deadline') },
+];
+
 const digestLabel = (h: number) => (h < 0 ? tr('Не надсилати', "Don't send") : `${String(h).padStart(2, '0')}:00`);
 
 function confirm(text: string): Promise<boolean> {
@@ -158,6 +166,20 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
           <Row title="Slack" sub={tr('Лише листи-сповіщення від Slack', 'Only Slack notification emails')}><Toggle label="Slack" on={user.digestSources.includes('slack')} onChange={(v) => toggleSource('slack', v)} /></Row>
         </div>
         <p className="note">{tr('Нагадування про дедлайни (за 24 і за 3 год) і термінові листи приходять одразу.', 'Deadline reminders (24 and 3 h before) and urgent mail arrive right away.')}</p>
+
+        <div className="caption">{tr('Закріплене в чаті', 'Pinned in the chat')}</div>
+        <div className="group">
+          <Row title={tr('Що показувати', 'What it shows')} onClick={() => setPick({
+            title: tr('Закріплене в чаті бота', 'Pinned in the bot chat'),
+            note: tr('Один рядок угорі чату, оновлюється сам і без сповіщень.', 'One line at the top of the chat, updates itself, silently.'),
+            options: pinnedOptions(),
+            value: user.pinnedKind ?? 'off',
+            onPick: (k) => save({ pinnedKind: k as User['pinnedKind'] }),
+          })}>
+            <span className="row__value">{pinnedOptions().find((o) => o.key === (user.pinnedKind ?? 'off'))?.label}</span>
+            <ChevronRight className="chev" strokeWidth={1.75} />
+          </Row>
+        </div>
 
         <div className="caption">{tr('Сповіщення про пари', 'Class alerts')}</div>
         <div className="group">

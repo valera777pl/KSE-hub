@@ -36,6 +36,9 @@ export const notificationTypeEnum = pgEnum('notification_type', [
 
 /* ───────────── USERS ───────────── */
 
+/** What the pinned message in the bot chat shows (015). */
+export type PinnedKind = 'off' | 'next' | 'deadline' | 'day';
+
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   telegramId: bigint('telegram_id', { mode: 'number' }).notNull().unique(),
@@ -65,6 +68,10 @@ export const users = pgTable('users', {
   isAdmin: boolean('is_admin').default(false).notNull(),
   // 011: who sent the invite link this student came from
   invitedBy: integer('invited_by'),
+  // 015: the live pinned message in the bot chat — what it shows, its id, its current text
+  pinnedKind: varchar('pinned_kind', { length: 10 }).$type<PinnedKind>().default('off').notNull(),
+  pinnedMessageId: integer('pinned_message_id'),
+  pinnedText: text('pinned_text'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [

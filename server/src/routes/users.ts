@@ -10,6 +10,7 @@ import { GoogleService } from '../services/googleService.js';
 import { AnalyticsService, CLIENT_EVENTS, cleanProps } from '../services/analyticsService.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { FriendService } from '../services/friendService.js';
+import { PinnedService } from '../services/pinnedService.js';
 
 const userRoutes = new Hono();
 
@@ -35,6 +36,11 @@ userRoutes.patch('/me', async (c) => {
     .where(eq(users.id, currentUser.id))
     .returning();
 
+  // The pinned message follows the choice right away, not at the next cron tick
+  if (data.pinnedKind && data.pinnedKind !== currentUser.pinnedKind) {
+    AnalyticsService.track(currentUser.id, 'pinned.set', { kind: data.pinnedKind });
+    await PinnedService.refresh(updated).catch((err) => console.error('Pinned message failed:', err));
+  }
   return c.json({ user: updated });
 });
 

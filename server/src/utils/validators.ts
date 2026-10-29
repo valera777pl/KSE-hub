@@ -37,6 +37,8 @@ export const updateProfileSchema = z.object({
   scheduleVisible: z.boolean().optional(),
   notifyScheduleChanges: z.boolean().optional(),
   classReminders: z.boolean().optional(),
+  // The live pinned message in the bot chat
+  pinnedKind: z.enum(['off', 'next', 'deadline', 'day']).optional(),
 });
 
 /* ───── Venture Profile Validators ───── */

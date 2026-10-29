@@ -17,6 +17,8 @@ export interface User {
   onboardedAt: string | null;
   notifyScheduleChanges: boolean;
   classReminders: boolean;
+  /** The live pinned line in the bot chat */
+  pinnedKind?: 'off' | 'next' | 'deadline' | 'day';
   isAdmin: boolean;
   createdAt: string;
   updatedAt: string;
