@@ -261,7 +261,7 @@ adminRoutes.patch('/slack/channels/:id', async (c) => {
 // POST /api/admin/slack/summaries/:id/publish — as is, or with the owner's edited points
 adminRoutes.post('/slack/summaries/:id/publish', async (c) => {
   const body = adminPublishSchema.parse(await c.req.json().catch(() => ({})));
-  return c.json({ summary: await SlackService.publish(summaryId(c.req.param('id')), body.items ? { items: body.items } : undefined) });
+  return c.json({ summary: await SlackService.publish(summaryId(c.req.param('id')), body.items ? { items: body.items } : undefined, { reviewed: true }) });
 });
 
 // POST /api/admin/slack/summaries/:id/reject

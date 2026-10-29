@@ -72,6 +72,7 @@ export class SlackService {
         ...scopeColumns(scope),
         lastTs: c.toTs,
         defaultOn: !c.isPrivate && DEFAULT_ON.has(c.channelName),
+        autoPublish: true,
       }).returning();
       return row;
     }
@@ -88,12 +89,13 @@ export class SlackService {
 
   /**
    * A summary goes out: visible in the feed, its events land in «Події».
-   * The owner may have edited the points first — then the summary is those points, one per line.
+   * `reviewed`: the owner published it from the admin (maybe after editing the points — then the summary is
+   * those points, one per line); automatic publishing from ingest leaves it false.
    */
-  static async publish(id: number, edit?: { items: SlackItem[] }) {
+  static async publish(id: number, edit?: { items: SlackItem[] }, { reviewed = false } = {}) {
     const [s] = await db.update(slackSummaries)
       .set({
-        status: 'published', publishedAt: new Date(),
+        status: 'published', publishedAt: new Date(), reviewed,
         ...(edit ? { items: edit.items, summary: edit.items.map((i) => i.text).join('\n') } : {}),
       })
       .where(and(eq(slackSummaries.id, id), ne(slackSummaries.status, 'published'))).returning();

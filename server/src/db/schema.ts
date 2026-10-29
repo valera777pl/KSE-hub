@@ -550,6 +550,7 @@ export type SlackEvent = { title: string; startsAt: string; place?: string; perm
 /**
  * A channel the reader account is in. A private one is tied to a course (+ section) or a cohort
  * (programme + entry year), from its name or by the owner in the admin; until then it's `pending` and nobody sees it.
+ * Summaries of an active channel go out on their own unless the owner turned `auto_publish` off.
  */
 export const slackChannels = pgTable('slack_channels', {
   channelId: varchar('channel_id', { length: 20 }).primaryKey(),
@@ -563,7 +564,8 @@ export const slackChannels = pgTable('slack_channels', {
   cohortYear: integer('cohort_year'),
   lastTs: varchar('last_ts', { length: 20 }),
   defaultOn: boolean('default_on').default(false).notNull(),
-  autoPublish: boolean('auto_publish').default(false).notNull(),
+  // 017: on by default — summaries go out without review; the owner can switch a channel to drafts
+  autoPublish: boolean('auto_publish').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -580,6 +582,8 @@ export const slackSummaries = pgTable('slack_summaries', {
   status: varchar('status', { length: 10 }).$type<SlackSummaryStatus>().default('draft').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   publishedAt: timestamp('published_at'),
+  // 017: published by the owner from the admin (not automatically) — sends the digest soon after
+  reviewed: boolean('reviewed').default(false).notNull(),
 }, (table) => [
   uniqueIndex('slack_summaries_channel_to_idx').on(table.channelId, table.toTs),
   index('slack_summaries_status_idx').on(table.status, table.publishedAt),

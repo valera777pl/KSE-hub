@@ -3,9 +3,9 @@ import { AlertCircle, Check, ChevronDown, ExternalLink, Hash, Lock, MessagesSqua
 import { EmptyState } from '../ui/States';
 
 /**
- * /admin → Slack (SLACK-DIGEST-PROMPT.md §5.2–5.3): what Claude's task wrote waits here as drafts —
- * the owner publishes, edits the points or rejects; below, every channel the reader account is in,
- * with who sees it. Owner-only, Ukrainian only.
+ * /admin → Slack (SLACK-DIGEST-PROMPT.md §5.2–5.3): summaries go out on their own; drafts wait here only from
+ * channels with auto-publish off or not tied yet — the owner publishes, edits the points or rejects. Below, every
+ * channel the reader account is in, with who sees it. Owner-only, Ukrainian only.
  */
 
 type Item = { kind: 'deadline' | 'change' | 'announcement' | 'event' | 'other'; text: string; dueAt?: string; permalink: string };
@@ -92,7 +92,7 @@ export function AdminSlack({ auth, onCount }: { auth: string; onCount: (sub: str
         <h2 className="adm-headline">
           {data.drafts.length
             ? `${data.drafts.length} ${plural(data.drafts.length, 'чернетка чекає', 'чернетки чекають', 'чернеток чекають')} перевірки`
-            : `Усе перевірено. Наступний прогін ${nextRun()}`}
+            : `Нових чернеток немає — підсумки йдуть студентам самі. Наступний прогін ${nextRun()}`}
         </h2>
         {data.drafts.map((d) => (
           <DraftCard key={d.id} draft={d}
@@ -252,7 +252,7 @@ function ChannelRow({ ch, courses, programs, onPatch }: {
           {!ch.isPrivate && (
             <Toggle label="Увімкнений для нових студентів" checked={ch.defaultOn} onChange={(v) => save({ defaultOn: v })} />
           )}
-          <Toggle label="Автопублікація" note="Без перевірки: підсумок одразу йде студентам"
+          <Toggle label="Автопублікація" note="Вимкни, щоб підсумки цього каналу спершу чекали тут на перевірку"
             checked={ch.autoPublish} disabled={ch.status !== 'active'} onChange={(v) => save({ autoPublish: v })} />
           {error && <p className="adm-draft__error" role="alert">{error}</p>}
           <button className="adm-ch__hide press" onClick={() => save({ status: ch.status === 'hidden' ? 'active' : 'hidden' })}>

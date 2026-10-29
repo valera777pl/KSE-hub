@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNotNull, isNull, max } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, isNull, max, sql } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { slackDeliveries, slackSummaries, users, type SlackSlot } from '../db/schema.js';
 import { slackDigestText, type Lang, type SlackDigestChannel } from '../bot/messages.js';
@@ -21,8 +21,8 @@ const DAY_FROM = 8;
 const DAY_TO = 22;
 
 /**
- * Whether this tick sends a student their Slack digest:
- * at their slot hour, or soon after the owner published drafts by hand (the review weeks, §5.3).
+ * Whether this tick sends a student their Slack digest: at their slot hour, or soon after the owner
+ * published drafts by hand (`lastPublishedAt` counts only those — automatic summaries wait for the slot).
  */
 export function slackDigestDue(p: { hour: number; slots: SlackSlot[]; lastPublishedAt: Date | null; now: Date }): 'slot' | 'review' | null {
   if (p.slots.some((s) => SLOT_HOUR[s] === p.hour)) return 'slot';
@@ -35,11 +35,14 @@ export class SlackDigestService {
   /** One tick of the cron: everyone whose digest is due gets what they haven't seen yet. */
   static async tick(now = new Date()) {
     const hour = kyivHour(now);
-    const [{ last } = { last: null }] = await db.select({ last: max(slackSummaries.publishedAt) }).from(slackSummaries)
-      .where(eq(slackSummaries.status, 'published'));
-    const lastPublishedAt = last ? new Date(last) : null;
+    const [{ last, reviewed } = { last: null, reviewed: null }] = await db.select({
+      last: max(slackSummaries.publishedAt),
+      reviewed: sql<Date | null>`max(${slackSummaries.publishedAt}) filter (where ${slackSummaries.reviewed})`,
+    }).from(slackSummaries).where(eq(slackSummaries.status, 'published'));
     // Nothing published lately: nothing to check per student
-    if (!lastPublishedAt || now.getTime() - lastPublishedAt.getTime() > LOOKBACK_MS) return 0;
+    if (!last || now.getTime() - new Date(last).getTime() > LOOKBACK_MS) return 0;
+    // Only the owner's hand-published summaries go out between the slots; automatic ones wait for 09:00 / 20:00
+    const lastPublishedAt = reviewed ? new Date(reviewed) : null;
     const isSlotHour = Object.values(SLOT_HOUR).includes(hour);
     if (!isSlotHour && !slackDigestDue({ hour, slots: [], lastPublishedAt, now })) return 0;
 
