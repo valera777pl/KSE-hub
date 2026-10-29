@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS "slack_summaries" (
   "to_ts" varchar(20) NOT NULL,
   "summary" text NOT NULL,
   "items" jsonb DEFAULT '[]'::jsonb NOT NULL,
+  -- go to the events table only when the summary is published
+  "events" jsonb DEFAULT '[]'::jsonb NOT NULL,
   "status" varchar(10) DEFAULT 'draft' NOT NULL,
   "created_at" timestamp DEFAULT now() NOT NULL,
   "published_at" timestamp

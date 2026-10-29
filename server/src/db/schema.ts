@@ -545,6 +545,7 @@ export type SlackItem = {
   dueAt?: string;
   permalink: string;
 };
+export type SlackEvent = { title: string; startsAt: string; place?: string; permalink: string };
 
 /**
  * A channel the reader account is in. A private one is tied to a course (+ section) or a cohort
@@ -574,6 +575,8 @@ export const slackSummaries = pgTable('slack_summaries', {
   toTs: varchar('to_ts', { length: 20 }).notNull(),
   summary: text('summary').notNull(),
   items: jsonb('items').$type<SlackItem[]>().default([]).notNull(),
+  // Go to `events` only on publish, so a draft can't show up in «Події»
+  events: jsonb('events').$type<SlackEvent[]>().default([]).notNull(),
   status: varchar('status', { length: 10 }).$type<SlackSummaryStatus>().default('draft').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   publishedAt: timestamp('published_at'),

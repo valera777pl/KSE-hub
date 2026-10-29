@@ -26,6 +26,7 @@ import { friendRoutes } from './routes/friends.js';
 import { reminderRoutes } from './routes/reminders.js';
 import { eventRoutes } from './routes/events.js';
 import { courseRoutes } from './routes/courses.js';
+import { slackRoutes, slackTaskRoutes } from './routes/slack.js';
 
 const app = new Hono();
 
@@ -49,6 +50,8 @@ app.route('/cron', cronRoutes);
 app.route('/api/google', googleCallback);
 // Admin dashboard has its own auth (bot link or admin's initData)
 app.route('/api/admin', adminRoutes);
+// Claude's scheduled Slack task (Bearer SLACK_INGEST_SECRET): /api/slack/cursors, /api/slack/ingest
+app.route('/api/slack', slackTaskRoutes);
 
 // ─── Protected Routes (Telegram Auth required) ───
 const api = new Hono();
@@ -69,6 +72,7 @@ api.route('/friends', friendRoutes);
 api.route('/reminders', reminderRoutes);
 api.route('/events', eventRoutes);
 api.route('/courses', courseRoutes);
+api.route('/slack', slackRoutes);
 
 app.route('/api', api);
 

@@ -4,21 +4,30 @@ import { events, reminders, users } from '../db/schema.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { eventReminderText, eventRemindAt } from '../utils/events.js';
 import { ReminderService } from './reminderService.js';
+import { SlackAccess } from './slackAccess.js';
 
-const visibleTo = (userId: number) => or(eq(events.audience, 'all'), eq(events.userId, userId));
+/** Mass mailings, my own invites, and events from private Slack channels I may see (slackAccess.ts). */
+async function visibleTo(userId: number) {
+  const channels = (await SlackAccess.visibleChannels(userId)).filter((ch) => ch.isPrivate).map((ch) => ch.channelId);
+  return or(
+    eq(events.audience, 'all'),
+    eq(events.userId, userId),
+    channels.length ? and(eq(events.audience, 'slack'), inArray(events.slackChannelId, channels)) : undefined,
+  );
+}
 
 export class EventService {
   /** Upcoming events this student can see, each with whether «Нагадати за день» is on. */
   static async upcoming(userId: number, now = new Date()) {
     const rows = await db.select().from(events)
-      .where(and(gt(events.startsAt, now), visibleTo(userId)))
+      .where(and(gt(events.startsAt, now), await visibleTo(userId)))
       .orderBy(asc(events.startsAt)).limit(60);
     const reminded = await this.remindedIds(userId, rows.map((r) => r.id));
     return rows.map(({ audience, userId: _owner, sourceKey: _key, ...e }) => ({ ...e, personal: audience === 'user', reminded: reminded.has(e.id) }));
   }
 
   static async get(userId: number, id: number) {
-    const [row] = await db.select().from(events).where(and(eq(events.id, id), visibleTo(userId))).limit(1);
+    const [row] = await db.select().from(events).where(and(eq(events.id, id), await visibleTo(userId))).limit(1);
     if (!row) throw new AppError('Подію не знайдено', 404);
     const { audience, userId: _owner, sourceKey: _key, ...e } = row;
     return { ...e, personal: audience === 'user', reminded: (await this.remindedIds(userId, [id])).has(id) };

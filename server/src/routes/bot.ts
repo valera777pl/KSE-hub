@@ -13,7 +13,7 @@ function webhookSecret(): string {
   return createHash('sha256').update(`webhook:${process.env.BOT_SECRET ?? ''}`).digest('hex');
 }
 
-function hasBearer(c: Context, secret: string | undefined): boolean {
+export function hasBearer(c: Context, secret: string | undefined): boolean {
   if (!secret) return false;
   const given = Buffer.from(c.req.header('Authorization') ?? '');
   const expected = Buffer.from(`Bearer ${secret}`);
