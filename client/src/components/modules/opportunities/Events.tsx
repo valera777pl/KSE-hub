@@ -11,7 +11,9 @@ import { Sheet } from '../../ui/Sheet';
 import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from '../../ui/States';
 import { shortWhen } from '../../ui/RemindSheet';
 
-const whereLine = (e: EventItem) => [hm(e.startsAt), e.location].filter(Boolean).join(' · ');
+/** "Online" in a mailing reads «Онлайн» in the app, like rooms in the schedule */
+const placeOf = (e: EventItem) => (e.location && /^online$/i.test(e.location.trim()) ? tr('Онлайн', 'Online') : e.location);
+const whereLine = (e: EventItem) => [hm(e.startsAt), placeOf(e)].filter(Boolean).join(' · ');
 
 /**
  * Можливості → Події: seminars, talks and club meetups from KSE mailings, this week first.
@@ -71,7 +73,7 @@ export function Events({ openId }: { openId: number | null }) {
                     <span className="dl__title clamp2">{e.title}</span>
                     <span className="dl__meta num">
                       {whereLine(e)}
-                      {e.reminded && <> · <span className="dl__ok">{tr('нагадаю', 'reminder on')}</span></>}
+                      {e.reminded && <> · {tr('нагадаю', 'reminder on')}</>}
                     </span>
                   </span>
                 </button>
@@ -118,7 +120,7 @@ function EventSheet({ e, onClose, onChange }: { e: EventItem; onClose: () => voi
   return (
     <Sheet onClose={onClose} label={e.title}>
       <div className="sheet__title">{e.title}</div>
-      <div className="sheet__sub num">{[shortWhen(new Date(e.startsAt)), e.location].filter(Boolean).join(' · ')}</div>
+      <div className="sheet__sub num">{[shortWhen(new Date(e.startsAt)), placeOf(e)].filter(Boolean).join(' · ')}</div>
       <div className="tags">
         <span className="tag">{e.programs?.length ? e.programs.map(programName).join(', ') : tr('Усі програми', 'All programmes')}</span>
         {e.personal && <span className="tag">{tr('Запрошення тобі', 'Invited personally')}</span>}

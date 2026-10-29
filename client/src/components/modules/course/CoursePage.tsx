@@ -13,6 +13,7 @@ import { EmptyState, SkeletonRows } from '../../ui/States';
 import { Sheet } from '../../ui/Sheet';
 import { AskPanel } from '../../ui/AskPanel';
 import { shortWhen } from '../../ui/RemindSheet';
+import { DoneToast, useDoneFlow } from '../../ui/doneFlow';
 
 /**
  * One course in one place (level 2, nothing deeper): my sections, the next class, my group's deadlines,
@@ -24,11 +25,16 @@ export function CoursePage({ code, onClose }: { code: string; onClose: () => voi
   const [mail, setMail] = useState<CourseMail[] | null>(null);
   const [asking, setAsking] = useState(false);
   const openDeadline = useUi((s) => s.openDeadline);
+  const [reload, setReload] = useState(0);
+  // The same «Зроблено» as on Today and in Дедлайни
+  const flow = useDoneFlow(() => setReload((n) => n + 1));
 
   useBackButton(onClose);
   useEffect(() => {
-    track('course.open');
     api.get<CoursePageData>(`/courses/${code}`).then(setData).catch((e) => setError(errorText(e)));
+  }, [code, reload]);
+  useEffect(() => {
+    track('course.open');
     // Searched in Gmail on the spot, nothing is kept: a moment later than the rest
     api.get<{ emails: CourseMail[] }>(`/courses/${code}/mail`).then((r) => setMail(r.emails)).catch(() => setMail([]));
   }, [code]);
@@ -67,7 +73,10 @@ export function CoursePage({ code, onClose }: { code: string; onClose: () => voi
             {data.deadlines.length ? (
               <div className="group">
                 {/* Still to do first, handed in last */}
-                {[...data.deadlines].sort((x, y) => Number(x.assignment.isCompleted) - Number(y.assignment.isCompleted)).map((d) => <DeadlineRow key={d.assignment.id} d={d} onOpen={() => { onClose(); openDeadline(d.assignment.id); }} />)}
+                {[...flow.apply(data.deadlines)!].sort((x, y) => Number(x.assignment.isCompleted) - Number(y.assignment.isCompleted)).map((d) => (
+                  <DeadlineRow key={d.assignment.id} d={d} onOpen={() => { onClose(); openDeadline(d.assignment.id); }} phase={flow.phaseOf(d.assignment.id)}
+                    onCheck={(via) => (d.assignment.isCompleted ? flow.set(d.assignment.id, false) : flow.complete(d.assignment.id, via))} />
+                ))}
               </div>
             ) : <div className="group"><p className="group-note">{tr('Своїй групі нічого здавати.', 'Nothing due for your group.')}</p></div>}
 
@@ -130,6 +139,7 @@ export function CoursePage({ code, onClose }: { code: string; onClose: () => voi
         )}
       </div>
 
+      <DoneToast flow={flow} />
       {asking && data && (
         <Sheet onClose={() => setAsking(false)} label="Copilot">
           <AskPanel about={code} onBack={() => setAsking(false)}
