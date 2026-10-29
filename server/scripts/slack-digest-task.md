@@ -13,12 +13,17 @@ as drafts for the owner to review, then shows them to students. Brief: `SLACK-DI
 - Nothing is stored except the temporary JSON file described below.
 
 ## The secret
-Every request to the KSE Hub server carries `Authorization: Bearer $SLACK_INGEST_SECRET`. Take it from the environment
-variable `SLACK_INGEST_SECRET` if it is set; otherwise load it from `~/.kse-hub/slack-ingest.env`:
+Every request to the KSE Hub server carries `Authorization: Bearer <secret>`. Where the secret comes from:
+- **claude.ai scheduled task:** the first line of this prompt is `SLACK_INGEST_SECRET=<value>` (the owner puts it there;
+  the copy in the repo has no such line). Start every shell command that calls the server with
+  `export SLACK_INGEST_SECRET='<value>'; ` — each command may run in a fresh shell.
+- **Claude Code on the owner's Mac:** the environment variable `SLACK_INGEST_SECRET`, or else `~/.kse-hub/slack-ingest.env`.
+
+The commands below load it like this, which works in both places once the variable is exported:
 ```bash
 [ -n "$SLACK_INGEST_SECRET" ] || source ~/.kse-hub/slack-ingest.env
 ```
-Never print the secret or put it anywhere else.
+Never print the secret, never put it in the JSON, a report or anywhere else.
 
 ## Steps
 
@@ -41,6 +46,8 @@ Never print the secret or put it anywhere else.
 4. **Summarize each channel** (Ukrainian, plain text, no emoji, no Markdown):
    - `summary`: 1–5 short points joined by newlines, the most important first — deadlines, moved or cancelled classes,
      room changes, teachers' announcements, events. Nothing important → `summary: null`.
+   - Leave out: events and deadlines that have already passed, surveys and requests to fill in a form, lost and found,
+     ticket swaps, personal requests for help (they carry phone numbers or health details), chit-chat.
    - `items[]`: one per point: `{ "kind": "deadline"|"change"|"announcement"|"event"|"other", "text", "dueAt"?, "permalink" }`.
      `dueAt` — ISO 8601 with the Kyiv offset (`2026-10-31T23:59:00+02:00`) when the point has a date and time.
    - `events[]` for talks, meetups, club events with a known start: `{ "title", "startsAt" (ISO with offset), "place"?, "permalink" }`.
@@ -51,7 +58,7 @@ Never print the secret or put it anywhere else.
    - A channel with no new messages: leave it out — unless it isn't in the cursors yet; then send it with `summary: null`,
      `items: []`, `fromTs` = `toTs` = its newest message TS (or now, as `<unix seconds>.000000`) so the server learns about it.
 
-5. **Send.** Write the result to `$TMPDIR/kse-slack-ingest.json`:
+5. **Send.** Write the result to `${TMPDIR:-/tmp}/kse-slack-ingest.json`:
    ```json
    { "channels": [{ "channelId": "G0…", "channelName": "math101-pr8-autumn-2026", "isPrivate": true, "team": "ksestudents", "topic": "MATH111 - …",
      "fromTs": "…", "toTs": "…", "summary": "…" | null, "items": [ … ], "events": [ … ] }] }
@@ -59,8 +66,8 @@ Never print the secret or put it anywhere else.
    then
    ```bash
    { [ -n "$SLACK_INGEST_SECRET" ] || source ~/.kse-hub/slack-ingest.env; } && curl -sf -X POST -H "Authorization: Bearer $SLACK_INGEST_SECRET" \
-     -H "Content-Type: application/json" --data @"$TMPDIR/kse-slack-ingest.json" https://kse-hub.vercel.app/api/slack/ingest \
-     && rm "$TMPDIR/kse-slack-ingest.json"
+     -H "Content-Type: application/json" --data @"${TMPDIR:-/tmp}/kse-slack-ingest.json" https://kse-hub.vercel.app/api/slack/ingest \
+     && rm "${TMPDIR:-/tmp}/kse-slack-ingest.json"
    ```
    The answer is `{ "ok": true, "channels", "drafts", "published" }`. On a 400, read the error, fix the JSON and send once more.
    Sending the same `toTs` twice is harmless.
