@@ -15,7 +15,7 @@ import { ZOOM, zoomLevel } from './DayGrid';
 const ZOOM_KEY = 'schedule_zoom';
 const clamp = (px: number) => Math.min(ZOOM.max, Math.max(ZOOM.min, px));
 
-export type Zoom = { px: number; set: (px: number) => void; save: () => void };
+export type Zoom = { px: number; set: (px: number) => void; save: () => void; get: () => number };
 
 /** Height of an hour in the grid, remembered in Telegram cloud storage. */
 export function useZoom(): Zoom {
@@ -26,44 +26,67 @@ export function useZoom(): Zoom {
   }, []);
   return {
     px,
-    set: (next) => {
-      const v = clamp(next);
-      // A tick each time the text density changes: compact / normal / detailed
-      if (zoomLevel(v) !== zoomLevel(latest.current)) haptic.select();
-      latest.current = v;
-      setPx(v);
-    },
+    get: () => latest.current,
+    set: (next) => { latest.current = clamp(next); setPx(latest.current); },
     save: () => cloud.set(ZOOM_KEY, String(Math.round(latest.current))),
   };
 }
 
 /**
- * Two fingers pinch the hours taller or shorter; the point between the fingers stays put.
+ * Two fingers stretch or squeeze the hours, the point between the fingers stays put. During the gesture only
+ * the CSS variable --hour and the scroll position change, once per frame, so nothing re-renders and it stays smooth;
+ * React learns the final value when the fingers lift. A tick (selectionChanged) at each density step.
  * One finger still scrolls (touch-action: pan-y). A double tap switches between compact and detailed.
  */
 export function usePinchZoom(ref: RefObject<HTMLDivElement | null>, zoom: Zoom) {
-  const start = useRef(zoom.px);
-  usePinch(({ first, last, offset: [scale], origin: [, oy], memo }) => {
+  const g = useRef({ start: zoom.px, px: zoom.px, frame: 0, oy: 0 });
+
+  usePinch(({ first, last, offset: [scale], origin: [, oy] }) => {
     const el = ref.current;
-    if (!el) return memo;
-    const scroller = el.closest('.shell__main') as HTMLElement | null;
-    if (first) start.current = zoom.px;
-    const prev = (memo as number | undefined) ?? zoom.px;
-    const next = clamp(start.current * scale);
-    if (scroller && next !== prev) {
-      // Keep the content under the fingers in place while the hours stretch
-      const offset = oy - el.getBoundingClientRect().top;
-      scroller.scrollTop += offset * (next / prev - 1);
+    if (!el) return;
+    const s = g.current;
+    if (first) {
+      s.start = zoom.get();
+      s.px = s.start;
+      el.classList.add('is-pinching');
     }
-    zoom.set(next);
+    s.oy = oy;
+    const next = clamp(s.start * scale);
+    if (!s.frame) {
+      s.frame = requestAnimationFrame(() => {
+        s.frame = 0;
+        const prev = s.px;
+        const target = clamp(s.start * scale);
+        if (target === prev) return;
+        const grid = el.querySelector('.grid') as HTMLElement | null;
+        const scroller = el.closest('.shell__main') as HTMLElement | null;
+        // Keep the hour under the fingers where it is while the hours stretch
+        const offset = grid ? s.oy - grid.getBoundingClientRect().top : 0;
+        el.style.setProperty('--hour', `${target}px`);
+        if (scroller) scroller.scrollTop += offset * (target / prev - 1);
+        if (zoomLevel(target) !== zoomLevel(prev)) haptic.select();
+        s.px = target;
+      });
+    }
     if (last) {
+      cancelAnimationFrame(s.frame);
+      s.frame = 0;
+      el.style.setProperty('--hour', `${next}px`);
+      s.px = next;
+      el.classList.remove('is-pinching');
+      zoom.set(next);
       zoom.save();
       track(next);
     }
-    return next;
-  }, { target: ref, scaleBounds: { min: ZOOM.min / ZOOM.max, max: ZOOM.max / ZOOM.min }, from: () => [1, 0], eventOptions: { passive: false } });
+  }, {
+    target: ref,
+    scaleBounds: () => ({ min: ZOOM.min / zoom.get(), max: ZOOM.max / zoom.get() }),
+    rubberband: 0.15,
+    from: () => [1, 0],
+    eventOptions: { passive: false },
+  });
 
-  // Double tap: compact ↔ detailed
+  // Double tap: compact ↔ detailed, animated by the --hour transition
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -72,7 +95,8 @@ export function usePinchZoom(ref: RefObject<HTMLDivElement | null>, zoom: Zoom) 
       if (e.pointerType === 'mouse' || (e.target as HTMLElement).closest('button')) return;
       const t = e.timeStamp;
       if (t - lastTap < 300) {
-        zoom.set(zoomLevel(zoom.px) === 'detailed' ? ZOOM.min + 8 : ZOOM.detailedFrom + 10);
+        haptic.select();
+        zoom.set(zoomLevel(zoom.get()) === 'detailed' ? 40 : 120);
         zoom.save();
         lastTap = 0;
       } else lastTap = t;

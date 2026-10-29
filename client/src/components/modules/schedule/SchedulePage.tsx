@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useDrag } from '@use-gesture/react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Bell, BookOpen, CalendarCheck, ChevronLeft, ChevronRight, Minus, Plus, RefreshCw, Search, UserPlus, Users } from 'lucide-react';
 import { RemindSheet, shortWhen } from '../../ui/RemindSheet';
 import { inviteFriend } from '../../../lib/invite';
@@ -168,8 +167,6 @@ export function SchedulePage() {
     setDay(next);
   };
 
-  // Swipe the list sideways for the neighbouring day
-  const bind = useDrag(({ swipe: [sx], touches }) => { if (sx && touches < 2) go(addDays(day, -sx)); }, { axis: 'x', filterTaps: true, swipe: { distance: 40, velocity: 0.3 } });
 
   const refresh = async () => {
     setRefreshing(true);
@@ -295,7 +292,8 @@ export function SchedulePage() {
 
       {pals.notice && <p className="note" style={{ paddingTop: 0, paddingBottom: 8 }} onClick={pals.clearNotice}>{pals.notice}</p>}
 
-      <div {...bind()} style={{ touchAction: 'pan-y' }}>
+      {/* Days change with the strip above; the grid itself only scrolls and pinches */}
+      <div>
         <div key={day} className={dir ? `slide-${dir}` : undefined}>
           {!week && weekQ.error ? (
             <ErrorState error={weekQ.error} onRetry={weekQ.refresh} />
@@ -304,11 +302,10 @@ export function SchedulePage() {
           ) : empty && pals.mode !== 'shared' ? (
             <EmptyDay day={day} today={today} deadlines={dueToday} />
           ) : (
-            <div ref={gridRef}>
+            <div ref={gridRef} className="grid-zoom" style={{ '--hour': `${zoom.px}px` } as CSSProperties}>
               {pals.mode === 'shared' && empty && <p className="note" style={{ padding: '0 0 8px' }}>{tr('Цього дня спільних пар немає', 'No shared classes this day')}</p>}
               <DayGrid day={day} columns={columns} shared={pals.mode === 'shared'} busy={busy} deadlines={dueToday} hourPx={zoom.px}
                 onOpen={(e) => { haptic.tap(); setOpen(e); }}
-                onWindow={(at) => { haptic.tap(); useUi.getState().openRoomsAt(at.toISOString()); }}
                 onDeadline={(id) => { haptic.tap(); useUi.getState().openDeadline(id); }} />
             </div>
           )}

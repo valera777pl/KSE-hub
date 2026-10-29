@@ -528,19 +528,34 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
 .grid-who__cell { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
 .grid-who__cell em { font-style: normal; font-size: 12px; font-weight: 500; color: var(--text-secondary); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.grid { position: relative; touch-action: pan-y; margin-top: 8px; transition: height 120ms var(--ease); }
-.grid__hour { position: absolute; left: 0; right: 0; height: 0; }
+/* --hour (px per hour) is set on the grid's parent; a pinch changes only it. Registered so a double tap can animate it */
+@property --hour { syntax: '<length>'; inherits: true; initial-value: 64px; }
+.grid-zoom { transition: --hour 260ms cubic-bezier(0.32, 0.72, 0, 1); }
+.grid-zoom.is-pinching { transition: none; }
+.grid { position: relative; touch-action: pan-y; margin-top: 8px; height: calc(var(--len) * var(--hour)); }
+.grid__hour { position: absolute; left: 0; right: 0; height: 0; top: calc(var(--at) * var(--hour)); }
 .grid__hour::after { content: ''; position: absolute; left: 48px; right: 0; top: 0; border-top: 1px solid var(--separator); }
 .grid__hour span { position: absolute; left: 0; top: -7px; width: 38px; text-align: right; font-size: 11px; font-weight: 500; line-height: 14px; color: var(--text-tertiary); }
 .grid__cols { position: absolute; top: 0; bottom: 0; left: 48px; right: 0; display: grid; gap: 4px; }
 .grid__col { position: relative; min-width: 0; }
 
-.gblock { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 10px;
+.gblock { position: absolute; left: 0; right: 0; top: calc(var(--at) * var(--hour) + 1px); height: max(16px, calc(var(--len) * var(--hour) - 2px));
+  display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 10px; container-type: size;
   background: var(--surface); text-align: left; overflow: hidden; z-index: 1; }
 .gblock__line { font-size: 15px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .gblock__line b { font-weight: 600; }
 .gblock__line small, .gblock__line span { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
 .gblock__meta { font-size: 13px; line-height: 1.3; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Normal height: code, section, room. The inline time and the range wait for their sizes */
+.gblock__t, .gblock__range { display: none; }
+@container (max-height: 46px) {
+  .gblock__line { position: absolute; left: 10px; right: 10px; top: 50%; transform: translateY(-50%); }
+  .gblock__sec, .gblock__place, .gblock__friends, .gblock__progress { display: none; }
+  .gblock__t { display: inline; }
+}
+@container (max-height: 22px) { .gblock__line { font-size: 12px; } .gblock__line span { font-size: 11px; } }
+@container (min-height: 92px) { .gblock__range { display: block; } }
+.gblock--code .gblock__sec, .gblock--code .gblock__t, .gblock--code .gblock__meta { display: none; }
 .gblock--past .gblock__line, .gblock--past .gblock__line small, .gblock--past .gblock__meta { color: var(--text-tertiary); }
 .gblock--now .gblock__line b { color: var(--accent); }
 .gblock--theirs { background: transparent; box-shadow: inset 0 0 0 1px var(--separator); }
@@ -552,18 +567,11 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
 .gblock__friends .avatar { border: 2px solid var(--surface); margin-left: -6px; box-sizing: content-box; }
 .gblock__friends .avatar:first-child { margin-left: 0; }
 
-.gwindow { position: absolute; left: 48px; right: 0; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 10px;
-  border: 1px dashed var(--text-tertiary); color: var(--text-secondary); font-size: 13px; text-align: left; overflow: hidden; z-index: 1; }
-.gwindow svg { width: 16px; height: 16px; flex: none; }
-.gwindow > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gwindow--compact { font-size: 12px; }
-.gwindow--compact svg { display: none; }
-
 /* Under the blocks: inside a class the progress bar says it; across gaps and the axis the line does */
-.grid__now { position: absolute; left: 44px; right: 0; height: 0; border-top: 2px solid var(--accent); z-index: 0; pointer-events: none; }
+.grid__now { position: absolute; left: 44px; right: 0; height: 0; top: calc(var(--at) * var(--hour)); border-top: 2px solid var(--accent); z-index: 0; pointer-events: none; }
 .grid__now::before { content: ''; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .grid__now span { position: absolute; left: -44px; top: -8px; width: 38px; text-align: right; font-size: 11px; font-weight: 600; line-height: 14px; color: var(--accent); }
-@media (prefers-reduced-motion: reduce) { .grid { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .grid-zoom { transition: none; } }
 
 /* ─── Glow: one per screen, behind the top (DESIGN.md → Glow) ─── */
 .has-glow { position: relative; isolation: isolate; overflow-x: clip; }

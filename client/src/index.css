@@ -31,8 +31,8 @@
   --warning: #AB5800;
   --danger: #D52828;
   --danger-fill: #D52828;
-  --glow: rgba(43, 59, 214, 0.11);
-  --glow-mid: rgba(43, 59, 214, 0.04);
+  --glow: rgba(43, 59, 214, 0.22);
+  --glow-mid: rgba(43, 59, 214, 0.09);
 
   --app-height: var(--tg-viewport-stable-height, 100dvh);
   /* Telegram's own inset counts in fullscreen, the browser's elsewhere */

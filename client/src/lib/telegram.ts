@@ -70,7 +70,7 @@ const TOKENS = {
     '--brand-card': '#070F6B', '--brand-text-2': '#C9D2FF', '--tabbar-bg': '#FFFFFF', '--tab-inactive': '#6B7280',
     '--avatar-bg': '#D9DCE3', '--success': '#1E7C4F', '--success-fill': '#1E7C4F', '--warning': '#AB5800',
     '--danger': '#D52828', '--danger-fill': '#D52828',
-    '--glow': 'rgba(43, 59, 214, 0.11)', '--glow-mid': 'rgba(43, 59, 214, 0.04)',
+    '--glow': 'rgba(43, 59, 214, 0.22)', '--glow-mid': 'rgba(43, 59, 214, 0.09)',
   },
 } as const;
 

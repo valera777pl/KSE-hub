@@ -15,9 +15,6 @@ interface UiState {
   eventId: number | null;
   /** The course page over the current tab: "ECON100" */
   courseCode: string | null;
-  /** A window in the schedule grid asked Кімнати for this start (ISO) */
-  roomsAt: string | null;
-  openRoomsAt: (iso: string) => void;
   openCourse: (code: string) => void;
   closeCourse: () => void;
   setOppsView: (v: OppsView) => void;
@@ -39,8 +36,6 @@ export const useUi = create<UiState>((set) => ({
   oppId: null,
   eventId: null,
   courseCode: null,
-  roomsAt: null,
-  openRoomsAt: (roomsAt) => set({ tab: 'rooms', roomsAt }),
   openCourse: (courseCode) => set({ courseCode }),
   closeCourse: () => set({ courseCode: null }),
   setOppsView: (oppsView) => set({ oppsView }),
