@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { isReadOnly } from '../services/moodleGradesService.js';
 import { courseByCode, courseMaterials, type WsSection } from '../utils/moodleWs.js';
 import { courseCodeIn } from '../utils/moodleGroups.js';
+import { CLIENT_EVENTS } from '../services/analyticsService.js';
 
 // Short names as KSE Moodle has them
 const courses = [
@@ -45,4 +46,9 @@ test('materials: what the student can open, section by section, links to Moodle 
     { id: 135076, name: '(L) 01.10.2026 Online EC', kind: 'url', url: 'https://teaching.kse.org.ua/mod/url/view.php?id=135076' },
   ]);
   for (const s of out) for (const m of s.items) assert.doesNotMatch(m.url, /token|pluginfile/);
+});
+
+test('the course list and the course page report their taps', () => {
+  for (const e of ['courses.open', 'course.material_open', 'deadline.grade_open', 'course.open']) assert.match(e, CLIENT_EVENTS);
+  assert.doesNotMatch('course.delete', CLIENT_EVENTS);
 });

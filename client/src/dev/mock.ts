@@ -411,6 +411,11 @@ const routes: [string, RegExp, Handler][] = [
   ['DELETE', /^\/moodle\/grades$/, () => { GRADES.connected = false; return { connected: false }; }],
   ['GET', /^\/moodle\/grades$/, () => (GRADES.connected ? { connected: true, courses: GRADES.courses, deadlinesSyncedAt: hours(-0.1) } : { connected: false, courses: [], deadlinesSyncedAt: null })],
   ['GET', /^\/moodle\/grades\/(\d+)$/, () => GRADES.items],
+  ['GET', /^\/moodle\/course\/(\w+)$/, (m) => {
+    if (!GRADES.connected) return { connected: false };
+    if (!GRADES.courses.some((c) => c.code === m[1])) throw Object.assign(new Error('Цього курсу немає в твоєму Moodle'), { status: 404 });
+    return { ...MOODLE_COURSE, name: GRADES.courses.find((c) => c.code === m[1])!.name };
+  }],
   ['GET', /^\/slack\/feed$/, () => ({ summaries: empty ? [] : SLACK_FEED })],
   ['GET', /^\/slack\/subscriptions$/, () => ({ slots: user.slackDigestSlots ?? ['evening'], channels: empty ? [] : SLACK_SUBS })],
   ['PUT', /^\/slack\/subscriptions$/, (_m, _u, b) => {
@@ -464,12 +469,40 @@ const GRADES = {
     { courseId: 101, code: 'MATH101', name: 'Introduction to Mathematics', grade: '78,40' },
     { courseId: 102, code: 'ECON100', name: 'Principles of Economics (BE)', grade: '91,00' },
     { courseId: 103, code: 'ENG111', name: 'English for Professional and Study Purposes I (BE, EBD)', grade: null },
+    { courseId: 104, code: 'MATH111', name: 'Introduction to Calculus', grade: '22,00' },
+    { courseId: 90, code: 'KSE100', name: 'Welcome Week 2026', grade: '100,00', ended: true },
   ],
   items: { total: '78,40', items: [
     { id: 1, name: 'Квіз 1 · Заняття 3', grade: '8,00', percent: '80,00 %', feedback: null, gradedAt: hours(-200) },
     { id: 2, name: 'Problem set 2', grade: '17,50', percent: '87,50 %', feedback: 'Добре розписано, але в завданні 3 не розглянули випадок a = 0.', gradedAt: hours(-50) },
     { id: 3, name: 'Midterm', grade: null, percent: null, feedback: null, gradedAt: null },
   ] },
+};
+
+/* Навчання → Курси → a course: grades with feedback and materials by section, as Moodle lays them out */
+const MOODLE_COURSE = {
+  connected: true, courseId: 101, name: 'Introduction to Mathematics', url: 'https://teaching.kse.org.ua/course/view.php?id=4198',
+  grades: { total: '78,40', items: [
+    { id: 1, name: 'Квіз 1 · Заняття 3', grade: '8,00', percent: '80,00 %', feedback: null },
+    { id: 2, name: 'Problem set 2', grade: '17,50', percent: '87,50 %', feedback: 'Добре розписано, але в завданні 3 не розглянули випадок a = 0. Перевір також крок 2: там знак переходить неправильно, і через це відповідь у пункті (b) не збігається з графіком. Решта — акуратно.' },
+    { id: 3, name: 'Квіз 2 · Заняття 6', grade: '9,50', percent: '95,00 %', feedback: null },
+    { id: 4, name: 'Problem set 3', grade: '15,00', percent: '75,00 %', feedback: 'Чисто, але без пояснень до другої частини.' },
+    { id: 5, name: 'Квіз 3 · Заняття 9', grade: '7,00', percent: '70,00 %', feedback: null },
+    { id: 6, name: 'Midterm', grade: null, percent: null, feedback: null },
+    { id: 7, name: 'Problem set 4', grade: null, percent: null, feedback: null },
+  ] },
+  sections: [
+    { name: 'Загальне', items: [{ id: 11, name: 'Syllabus MATH101', kind: 'resource', url: 'https://teaching.kse.org.ua/mod/resource/view.php?id=11' }] },
+    { name: 'Тиждень 1 · Множини й функції', items: [
+      { id: 12, name: 'Лекція 1 — слайди', kind: 'resource', url: 'https://teaching.kse.org.ua/mod/resource/view.php?id=12' },
+      { id: 13, name: '(L) 01.10.2026 Запис лекції', kind: 'url', url: 'https://teaching.kse.org.ua/mod/url/view.php?id=13' },
+      { id: 14, name: 'Квіз 1 · Заняття 3', kind: 'quiz', url: 'https://teaching.kse.org.ua/mod/quiz/view.php?id=14' },
+    ] },
+    { name: 'Тиждень 2 · Границі', items: [
+      { id: 15, name: 'Лекції', kind: 'folder', url: 'https://teaching.kse.org.ua/mod/folder/view.php?id=15' },
+      { id: 16, name: 'Problem set 2', kind: 'assign', url: 'https://teaching.kse.org.ua/mod/assign/view.php?id=16' },
+    ] },
+  ],
 };
 
 /* Навчання → Slack: what the student's channels said (published summaries) and their channel switches */

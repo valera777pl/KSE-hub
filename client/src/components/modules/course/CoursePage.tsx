@@ -14,10 +14,12 @@ import { Sheet } from '../../ui/Sheet';
 import { AskPanel } from '../../ui/AskPanel';
 import { RemindSheet, shortWhen } from '../../ui/RemindSheet';
 import { DoneToast, useDoneFlow } from '../../ui/doneFlow';
+import { CourseMoodle } from './CourseMoodle';
 
 /**
  * One course in one place (level 2, nothing deeper): my sections, the next class, my group's deadlines,
- * the Slack channel, friends on the course, its recent emails, and Copilot with the course as context.
+ * the Slack channel, grades and materials from Moodle (owner's test), friends on the course, its recent emails,
+ * and Copilot with the course as context.
  */
 export function CoursePage({ code, onClose }: { code: string; onClose: () => void }) {
   const [data, setData] = useState<CoursePageData | null>(null);
@@ -115,6 +117,8 @@ export function CoursePage({ code, onClose }: { code: string; onClose: () => voi
                 )}
               </div>
             )}
+
+            <CourseMoodle code={code} />
 
             {data.friends.length > 0 && (
               <>
