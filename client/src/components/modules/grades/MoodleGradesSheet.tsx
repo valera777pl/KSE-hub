@@ -5,37 +5,42 @@ import { tr } from '../../../lib/i18n';
 import { haptic, openExternal, useMainButton } from '../../../lib/telegram';
 import { Sheet } from '../../ui/Sheet';
 import { EmptyState } from '../../ui/States';
+import { useAuthStore } from '../../../stores/authStore';
+import { dayKey, hm, todayKey } from '../../../lib/time';
 
 type Course = { courseId: number; code: string | null; name: string; grade: string | null };
+type State = { connected: boolean; courses: Course[]; deadlinesSyncedAt?: string | null };
 type Item = { id: number; name: string; grade: string | null; percent: string | null; feedback: string | null; gradedAt: string | null };
 
 const looksLikeLink = (s: string) => /token=[A-Za-z0-9+/=_-]{20,}/.test(s);
 
 /**
- * Профіль → «Оцінки з Moodle» — an owner-only test. Moodle's own app sign-in page gives the student their token
- * after the Google sign-in; they copy its «open in the app» link here. Read-only: courses and grades.
- * Not for students until KSE IT agrees.
+ * Профіль → «Moodle» — an owner-only test. Moodle's own app sign-in page gives the student their token
+ * after the Google sign-in; they copy its «open in the app» link here. Read-only: courses, grades and deadlines
+ * (the deadlines replace the calendar link). Not for students until the owner opens it to everyone.
  */
 export function MoodleGradesSheet({ onClose }: { onClose: () => void }) {
-  const [state, setState] = useState<{ connected: boolean; courses: Course[] } | null>(null);
+  const [state, setState] = useState<State | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = () => api.get<{ connected: boolean; courses: Course[] }>('/moodle/grades')
+  const load = () => api.get<State>('/moodle/grades')
     .then((r) => { setState(r); setError(null); })
     .catch((e) => setError(errorText(e)));
+  // Connected or not changes the Profile row and where deadlines come from
+  const reload = () => { load(); useAuthStore.getState().fetchUser(); };
   useEffect(() => { load(); }, []);
 
   return (
-    <Sheet onClose={onClose} label={tr('Оцінки з Moodle', 'Moodle grades')}>
-      <div className="sheet__title">{tr('Оцінки з Moodle', 'Moodle grades')}</div>
-      <div className="sheet__sub">{tr('Тест: бачиш лише ти. Перед тим як відкрити всім, питаємо ІТ KSE.', 'Test: only you see it. Before opening it to everyone we ask KSE IT.')}</div>
+    <Sheet onClose={onClose} label="Moodle">
+      <div className="sheet__title">Moodle</div>
+      <div className="sheet__sub">{tr('Оцінки й дедлайни напряму з Moodle. Тест: бачиш лише ти.', 'Grades and deadlines straight from Moodle. Test: only you see it.')}</div>
       {!state && !error && <div className="group" aria-busy="true" style={{ marginTop: 16 }}><div className="row"><div className="skel" style={{ height: 16, width: '55%' }} /></div><div className="row"><div className="skel" style={{ height: 16, width: '40%' }} /></div></div>}
       {error && !state && <p className="note" style={{ color: 'var(--danger)' }}>{error}</p>}
-      {state && !state.connected && <Connect onDone={load} />}
-      {state?.connected && <Grades courses={state.courses} onDisconnect={async () => {
+      {state && !state.connected && <Connect onDone={reload} />}
+      {state?.connected && <Grades courses={state.courses} syncedAt={state.deadlinesSyncedAt ?? null} onDisconnect={async () => {
         haptic.select();
         await api.delete('/moodle/grades').catch(() => {});
-        load();
+        reload();
       }} />}
     </Sheet>
   );
@@ -94,13 +99,13 @@ function Connect({ onDone }: { onDone: () => void }) {
       <p className="note" style={{ color: error || (link && !ready) ? 'var(--danger)' : undefined }}>
         {error ?? (link && !ready
           ? tr('Це не те посилання: воно починається з moodlemobile://token=', 'Not that link: it starts with moodlemobile://token=')
-          : tr('KSE Hub лише читає курси й оцінки, зберігає доступ зашифрованим і видаляє його, коли відключиш.', 'KSE Hub only reads courses and grades, keeps the access encrypted and deletes it when you disconnect.'))}
+          : tr('KSE Hub лише читає курси, оцінки й дедлайни, зберігає доступ зашифрованим і видаляє його, коли відключиш.', 'KSE Hub only reads courses, grades and deadlines, keeps the access encrypted and deletes it when you disconnect.'))}
       </p>
     </>
   );
 }
 
-function Grades({ courses, onDisconnect }: { courses: Course[]; onDisconnect: () => void }) {
+function Grades({ courses, syncedAt, onDisconnect }: { courses: Course[]; syncedAt: string | null; onDisconnect: () => void }) {
   const [open, setOpen] = useState<number | null>(null);
   const [items, setItems] = useState<Record<number, { total: string | null; items: Item[] } | 'error'>>({});
 
@@ -147,7 +152,14 @@ function Grades({ courses, onDisconnect }: { courses: Course[]; onDisconnect: ()
           );
         })}
       </div>
-      <button className="link-btn" style={{ color: 'var(--danger)', display: 'block', margin: '8px auto 0', minHeight: 44 }} onClick={onDisconnect}>{tr('Відключити оцінки', 'Disconnect grades')}</button>
+      <p className="note num">
+        {syncedAt
+          ? (dayKey(new Date(syncedAt)) === todayKey()
+            ? tr(`Дедлайни оновлено о ${hm(syncedAt)}.`, `Deadlines updated at ${hm(syncedAt)}.`)
+            : tr('Дедлайни оновлюються кожні 15 хв.', 'Deadlines update every 15 min.'))
+          : tr('Дедлайни зʼявляться за кілька хвилин.', 'Deadlines will show up in a few minutes.')}
+      </p>
+      <button className="link-btn" style={{ color: 'var(--danger)', display: 'block', margin: '8px auto 0', minHeight: 44 }} onClick={onDisconnect}>{tr('Відключити Moodle', 'Disconnect Moodle')}</button>
     </>
   );
 }

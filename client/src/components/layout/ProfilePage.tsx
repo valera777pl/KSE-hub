@@ -213,13 +213,15 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
               ? <button className="link-btn" style={{ color: 'var(--danger)' }} onClick={disconnectMail}>{tr('Відключити', 'Disconnect')}</button>
               : <button className="link-btn" onClick={connectMail}>{tr('Підключити', 'Connect')}</button>}
           </Row>
-          <Row title="Moodle" sub={user.calendarUrl ? tr('Дедлайни підтягуються', 'Deadlines are syncing') : tr('Не підключено', 'Not connected')} onClick={() => setMoodle(true)}>
-            <span className="row__value">{user.calendarUrl ? tr('Змінити', 'Change') : tr('Підключити', 'Connect')}</span>
-            <ChevronRight className="chev" strokeWidth={1.75} />
-          </Row>
-          {/* Owner-only test until KSE IT agrees */}
-          {user.isAdmin && (
-            <Row title={tr('Оцінки з Moodle', 'Moodle grades')} sub={tr('Тест · бачиш лише ти', 'Test · only you see it')} onClick={() => { haptic.tap(); setGrades(true); }}>
+          {/* Owner-only test: one Moodle connection brings grades and deadlines, no calendar link */}
+          {user.isAdmin ? (
+            <Row title="Moodle" sub={user.moodleConnected ? tr('Оцінки й дедлайни · тест', 'Grades and deadlines · test') : tr('Не підключено · тест', 'Not connected · test')} onClick={() => { haptic.tap(); setGrades(true); }}>
+              {!user.moodleConnected && <span className="row__value">{tr('Підключити', 'Connect')}</span>}
+              <ChevronRight className="chev" strokeWidth={1.75} />
+            </Row>
+          ) : (
+            <Row title="Moodle" sub={user.calendarUrl ? tr('Дедлайни підтягуються', 'Deadlines are syncing') : tr('Не підключено', 'Not connected')} onClick={() => setMoodle(true)}>
+              <span className="row__value">{user.calendarUrl ? tr('Змінити', 'Change') : tr('Підключити', 'Connect')}</span>
               <ChevronRight className="chev" strokeWidth={1.75} />
             </Row>
           )}
