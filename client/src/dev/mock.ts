@@ -8,6 +8,7 @@
  * In the console, tgScheme('dark') fires Telegram's themeChanged.
  *   &onboarding=1       a student who hasn't finished sign-up
  *   &startapp=day_2026-10-27   deep link, as from a bot button
+ *   &admin=1 &grades=1   an admin (owner-only tests show), Moodle grades already connected
  * Loaded from main.tsx behind import.meta.env.DEV, so none of this reaches the production bundle.
  */
 
@@ -215,7 +216,7 @@ const user = {
   moodleToken: null, calendarUrl: 'https://teaching.kse.org.ua/calendar/export_execute.php?mock',
   studentType: 'contract', faculty: null, year: 2026, languagePref: (q.get('lang') === 'en' ? 'en' : 'uk'), digestSources: ['moodle', 'gmail', 'slack'],
   digestHour: 8, scheduleVisible: true, onboardedAt: q.get('onboarding') ? null : iso(new Date(NOW.getTime() - 3 * DAY)),
-  notifyScheduleChanges: true, classReminders: true, isAdmin: false, program: 'BE',
+  notifyScheduleChanges: true, classReminders: true, isAdmin: q.get('admin') === '1', program: 'BE',
   createdAt: iso(new Date(NOW.getTime() - 3 * DAY)), updatedAt: iso(NOW),
 };
 
@@ -392,6 +393,11 @@ const routes: [string, RegExp, Handler][] = [
   }],
   ['DELETE', /^\/friends\/(\d+)$/, (m) => { FRIENDS.friends = FRIENDS.friends.filter((f) => f.userId !== Number(m[1])); return { ok: true }; }],
   ['GET', /^\/admin\/analytics$/, (_m, url) => adminAnalytics(Number(url.searchParams.get('days')) || 7)],
+  ['GET', /^\/moodle\/grades\/start$/, () => ({ url: 'https://teaching.kse.org.ua/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=mock&confirmed=1', passport: 'mock' })],
+  ['POST', /^\/moodle\/grades\/connect$/, () => { GRADES.connected = true; return { connected: true, name: 'Valerii Pletmintsev' }; }],
+  ['DELETE', /^\/moodle\/grades$/, () => { GRADES.connected = false; return { connected: false }; }],
+  ['GET', /^\/moodle\/grades$/, () => (q.get('grades') === '1' || GRADES.connected ? { connected: true, courses: GRADES.courses } : { connected: false, courses: [] })],
+  ['GET', /^\/moodle\/grades\/(\d+)$/, () => GRADES.items],
   ['GET', /^\/slack\/feed$/, () => ({ summaries: empty ? [] : SLACK_FEED })],
   ['GET', /^\/slack\/subscriptions$/, () => ({ slots: user.slackDigestSlots ?? ['evening'], channels: empty ? [] : SLACK_SUBS })],
   ['PUT', /^\/slack\/subscriptions$/, (_m, _u, b) => {
@@ -437,6 +443,21 @@ const EVENTS = [
     description: null, registrationUrl: 'https://ksestudents.slack.com/archives/C06KXECQQFQ/p1793200085849049', personal: false, reminded: false,
     slackChannel: '#event', createdAt: iso(NOW) },
 ];
+
+/* Профіль → Оцінки з Moodle (owner-only test): ?mock=1&grades=1 starts connected */
+const GRADES = {
+  connected: false,
+  courses: [
+    { courseId: 101, code: 'MATH101', name: 'Introduction to Mathematics', grade: '78,40' },
+    { courseId: 102, code: 'ECON100', name: 'Principles of Economics (BE)', grade: '91,00' },
+    { courseId: 103, code: 'ENG111', name: 'English for Professional and Study Purposes I (BE, EBD)', grade: null },
+  ],
+  items: { total: '78,40', items: [
+    { id: 1, name: 'Квіз 1 · Заняття 3', grade: '8,00', percent: '80,00 %', feedback: null, gradedAt: hours(-200) },
+    { id: 2, name: 'Problem set 2', grade: '17,50', percent: '87,50 %', feedback: 'Добре розписано, але в завданні 3 не розглянули випадок a = 0.', gradedAt: hours(-50) },
+    { id: 3, name: 'Midterm', grade: null, percent: null, feedback: null, gradedAt: null },
+  ] },
+};
 
 /* Навчання → Slack: what the student's channels said (published summaries) and their channel switches */
 const SLACK_FEED = [

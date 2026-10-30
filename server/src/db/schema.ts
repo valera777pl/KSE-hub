@@ -609,3 +609,14 @@ export const userSlackChannels = pgTable('user_slack_channels', {
   channelId: varchar('channel_id', { length: 20 }).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [primaryKey({ columns: [table.userId, table.channelId] })]);
+
+/* ───────────── MOODLE GRADES, owner-only experiment (019) ───────────── */
+
+/** The student's token from Moodle's app sign-in page, AES-encrypted; only read-only web service calls use it. */
+export const moodleWsTokens = pgTable('moodle_ws_tokens', {
+  userId: integer('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  tokenEnc: text('token_enc').notNull(),
+  moodleUserId: integer('moodle_user_id').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  lastOkAt: timestamp('last_ok_at'),
+});

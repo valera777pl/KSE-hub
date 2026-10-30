@@ -14,6 +14,7 @@ import { MoodleConnectForm } from '../modules/deadlines/MoodleConnect';
 import { FriendsGroup } from './FriendsGroup';
 import { RemindersGroup } from './RemindersGroup';
 import { SlackChannelsSheet } from '../modules/slack/SlackChannelsSheet';
+import { MoodleGradesSheet } from '../modules/grades/MoodleGradesSheet';
 
 /** What the pinned line in the bot chat can show: one short line each */
 const pinnedOptions = () => [
@@ -60,6 +61,7 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const [moodle, setMoodle] = useState(false);
   const [slack, setSlack] = useState(false);
+  const [grades, setGrades] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useBackButton(onClose);
@@ -215,6 +217,12 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
             <span className="row__value">{user.calendarUrl ? tr('Змінити', 'Change') : tr('Підключити', 'Connect')}</span>
             <ChevronRight className="chev" strokeWidth={1.75} />
           </Row>
+          {/* Owner-only test until KSE IT agrees */}
+          {user.isAdmin && (
+            <Row title={tr('Оцінки з Moodle', 'Moodle grades')} sub={tr('Тест · бачиш лише ти', 'Test · only you see it')} onClick={() => { haptic.tap(); setGrades(true); }}>
+              <ChevronRight className="chev" strokeWidth={1.75} />
+            </Row>
+          )}
         </div>
 
         <div className="caption">{tr('Тема', 'Theme')}</div>
@@ -260,6 +268,7 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
           </div>
         </Sheet>
       )}
+      {grades && <MoodleGradesSheet onClose={() => setGrades(false)} />}
       {slack && <SlackChannelsSheet onClose={() => { setSlack(false); useAuthStore.getState().fetchUser().catch(() => {}); }} />}
       {moodle && (
         <Sheet onClose={() => setMoodle(false)} label={tr('Дедлайни з Moodle', 'Deadlines from Moodle')}>

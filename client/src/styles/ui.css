@@ -583,6 +583,19 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
 .slack-guide li + li { border-top: 0.5px solid var(--separator); }
 .slack-guide__lead { padding-top: 0; margin-top: -2px; margin-bottom: 8px; }
 
+/* ─── Профіль → Оцінки з Moodle (owner-only test) ─── */
+.grades__course + .grades__course { border-top: 0.5px solid var(--separator); margin-left: 16px; }
+.grades__course + .grades__course > .row { padding-left: 0; }
+.grades__none { color: var(--text-tertiary); }
+.grades__chev { transition: transform 200ms var(--ease); }
+.grades__course .row[aria-expanded='true'] .grades__chev { transform: rotate(180deg); }
+.grades__items { padding: 0 16px 12px; display: flex; flex-direction: column; gap: 10px; }
+.grades__item { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; font-size: 14px; }
+.grades__name { color: var(--text); line-height: 1.35; }
+.grades__grade { font-weight: 600; text-align: right; white-space: nowrap; }
+.grades__grade small { font-weight: 400; color: var(--text-secondary); }
+.grades__feedback { grid-column: 1 / -1; margin-top: 3px; font-size: 13px; color: var(--text-secondary); line-height: 1.4; }
+
 /* ─── «Нагадати…» sheet ─── */
 .remind-done { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 28px 0 12px; font-size: 17px; font-weight: 600; color: var(--success); }
 .remind-done svg { width: 22px; height: 22px; }
