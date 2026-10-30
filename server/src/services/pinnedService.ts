@@ -64,10 +64,10 @@ export class PinnedService {
     await db.update(users).set({ pinnedMessageId: msg.message_id, pinnedText: text }).where(eq(users.id, user.id));
   }
 
-  /** Cron: everyone with a pinned message on (or one left to take down). */
+  /** Cron: everyone with a pinned message on (or one left to take down); not before sign-up is done — there's no schedule yet. */
   static async tick(now = new Date()) {
     const due = await db.select().from(users)
-      .where(and(eq(users.botBlocked, false), or(ne(users.pinnedKind, 'off'), isNotNull(users.pinnedMessageId))));
+      .where(and(eq(users.botBlocked, false), or(and(ne(users.pinnedKind, 'off'), isNotNull(users.onboardedAt)), isNotNull(users.pinnedMessageId))));
     let updated = 0;
     for (const user of due) {
       try {

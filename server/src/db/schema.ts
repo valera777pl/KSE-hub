@@ -70,7 +70,8 @@ export const users = pgTable('users', {
   // 011: who sent the invite link this student came from
   invitedBy: integer('invited_by'),
   // 015: the live pinned message in the bot chat — what it shows, its id, its current text
-  pinnedKind: varchar('pinned_kind', { length: 10 }).$type<PinnedKind>().default('off').notNull(),
+  // 018: on for new students — the next class at the top of the chat
+  pinnedKind: varchar('pinned_kind', { length: 10 }).$type<PinnedKind>().default('next').notNull(),
   pinnedMessageId: integer('pinned_message_id'),
   pinnedText: text('pinned_text'),
   // 016: when the Slack digest comes — morning (09:00), evening (20:00) or both
