@@ -22,6 +22,8 @@ export interface User {
   /** When the Slack digest comes: 09:00, 20:00 or both */
   slackDigestSlots?: SlackSlot[];
   isAdmin: boolean;
+  /** Owner-only test: Moodle itself is connected (grades and deadlines through the student's token) */
+  moodleConnected?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -95,6 +97,23 @@ export interface MoodleAssignment {
   submittedAt?: string | null;
   /** From Moodle's feedback email: the teacher (or Grader AI) replied */
   feedbackAt?: string | null;
+  /** Read from Moodle itself (owner-only test); null for rows from the calendar link */
+  moodle?: MoodleExtra | null;
+}
+
+/** What Moodle says beyond the date. ISO dates. */
+export interface MoodleExtra {
+  /** Assignment: after this Moodle takes nothing */
+  cutoff?: string | null;
+  /** Assignment: the due date before the extension (dueDate is the extension) */
+  extendedFrom?: string | null;
+  /** Quiz */
+  opensAt?: string | null;
+  attemptsUsed?: number;
+  /** 0 = unlimited */
+  attemptsAllowed?: number;
+  /** "17,5 / 20", as Moodle shows it */
+  grade?: string | null;
 }
 
 export interface DeadlineWithCourse {

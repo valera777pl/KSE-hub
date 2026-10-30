@@ -94,7 +94,7 @@ export function TodayPage() {
       )}
       {deadlinesFailed ? null : deadlines === null ? (
         <div className="group"><div className="row"><div className="row__main"><div className="skel" style={{ height: 14, width: '55%' }} /><div className="skel" style={{ height: 12, width: '30%', marginTop: 6 }} /></div></div></div>
-      ) : !user?.calendarUrl && deadlines.length === 0 ? (
+      ) : !user?.calendarUrl && !user?.moodleConnected && deadlines.length === 0 ? (
         <div className="group">
           <button className="row press" onClick={() => useUi.getState().openProfile()}>
             <div className="row__main"><div className="row__title">{tr('Додати дедлайни з Moodle', 'Add deadlines from Moodle')}</div><div className="row__meta">{tr('Хвилина — і нагадаємо за 24 і за 3 години', 'One minute, and we\'ll remind you 24 and 3 hours before')}</div></div>

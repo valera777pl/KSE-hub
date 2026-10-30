@@ -8,7 +8,7 @@
  * In the console, tgScheme('dark') fires Telegram's themeChanged.
  *   &onboarding=1       a student who hasn't finished sign-up
  *   &startapp=day_2026-10-27   deep link, as from a bot button
- *   &admin=1 &grades=1   an admin (owner-only tests show), Moodle grades already connected
+ *   &admin=1 &grades=1   an admin (owner-only tests show), Moodle already connected: grades, and deadlines with Moodle's facts
  * Loaded from main.tsx behind import.meta.env.DEV, so none of this reaches the production bundle.
  */
 
@@ -217,10 +217,20 @@ const user = {
   studentType: 'contract', faculty: null, year: 2026, languagePref: (q.get('lang') === 'en' ? 'en' : 'uk'), digestSources: ['moodle', 'gmail', 'slack'],
   digestHour: 8, scheduleVisible: true, onboardedAt: q.get('onboarding') ? null : iso(new Date(NOW.getTime() - 3 * DAY)),
   notifyScheduleChanges: true, classReminders: true, isAdmin: q.get('admin') === '1', program: 'BE',
+  get moodleConnected() { return this.isAdmin && GRADES.connected; },
   createdAt: iso(new Date(NOW.getTime() - 3 * DAY)), updatedAt: iso(NOW),
 };
 
 const hours = (h: number) => iso(new Date(NOW.getTime() + h * 3_600_000));
+/* Connected to Moodle itself (owner-only test): what Moodle says beyond the date, per deadline id */
+const MOODLE_ON = q.get('admin') === '1' && q.get('grades') === '1';
+const MOODLE_FACTS: Record<number, object> = {
+  11: { cutoff: hours(44), extendedFrom: null, grade: null },
+  12: { opensAt: hours(-20), attemptsUsed: 0, attemptsAllowed: 2, grade: null },
+  13: { cutoff: null, extendedFrom: hours(52), grade: null },
+  16: { cutoff: null, extendedFrom: null, grade: '17,5 / 20' },
+  17: { opensAt: hours(-30), attemptsUsed: 1, attemptsAllowed: 0, grade: '0,91 / 1' },
+};
 const DEADLINES = [
   { id: 11, title: 'Problem set 4', courseName: 'ECON100 Principles of Economics', due: hours(20), type: 'assignment' },
   { id: 12, title: 'Quiz 3: Limits', courseName: 'MATH111 Introduction to Calculus', due: hours(46), type: 'quiz' },
@@ -229,9 +239,12 @@ const DEADLINES = [
   { id: 15, title: 'Writing task 2', courseName: 'ENG111 English for Professional and Study Purposes I', due: hours(-30), type: 'assignment' },
   // Handed in yesterday evening (Moodle receipt), Grader AI already replied
   { id: 16, title: 'Homework 1', courseName: 'MATH111 Introduction to Calculus', due: hours(26), type: 'assignment', submittedAt: hours(-14), feedbackAt: hours(-2) },
+  // Only Moodle itself knows these (&grades=1): a quiz taken this morning
+  ...(MOODLE_ON ? [{ id: 17, title: 'Week 9 closes', courseName: 'ENG111 English for Professional and Study Purposes I', due: hours(150), type: 'quiz', submittedAt: hours(-5) }] : []),
 ].map((d) => ({
   assignment: { id: d.id, userId: 1, courseId: null, externalId: null, title: d.title, dueDate: d.due, sourceUrl: 'https://teaching.kse.org.ua/mod/assign/view.php?id=1',
-    isCompleted: !!d.submittedAt, type: d.type, createdAt: iso(NOW), submittedAt: d.submittedAt ?? null, feedbackAt: d.feedbackAt ?? null },
+    isCompleted: !!d.submittedAt, type: d.type, createdAt: iso(NOW), submittedAt: d.submittedAt ?? null, feedbackAt: d.feedbackAt ?? null,
+    moodle: MOODLE_ON ? MOODLE_FACTS[d.id] ?? {} : null },
   courseName: d.courseName,
 }));
 
@@ -396,7 +409,7 @@ const routes: [string, RegExp, Handler][] = [
   ['GET', /^\/moodle\/grades\/start$/, () => ({ url: 'https://teaching.kse.org.ua/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=mock&confirmed=1&oauthsso=2' })],
   ['POST', /^\/moodle\/grades\/connect$/, () => { GRADES.connected = true; return { connected: true, name: 'Valerii Pletmintsev' }; }],
   ['DELETE', /^\/moodle\/grades$/, () => { GRADES.connected = false; return { connected: false }; }],
-  ['GET', /^\/moodle\/grades$/, () => (q.get('grades') === '1' || GRADES.connected ? { connected: true, courses: GRADES.courses } : { connected: false, courses: [] })],
+  ['GET', /^\/moodle\/grades$/, () => (GRADES.connected ? { connected: true, courses: GRADES.courses, deadlinesSyncedAt: hours(-0.1) } : { connected: false, courses: [], deadlinesSyncedAt: null })],
   ['GET', /^\/moodle\/grades\/(\d+)$/, () => GRADES.items],
   ['GET', /^\/slack\/feed$/, () => ({ summaries: empty ? [] : SLACK_FEED })],
   ['GET', /^\/slack\/subscriptions$/, () => ({ slots: user.slackDigestSlots ?? ['evening'], channels: empty ? [] : SLACK_SUBS })],
@@ -446,7 +459,7 @@ const EVENTS = [
 
 /* Профіль → Оцінки з Moodle (owner-only test): ?mock=1&grades=1 starts connected */
 const GRADES = {
-  connected: false,
+  connected: q.get('grades') === '1',
   courses: [
     { courseId: 101, code: 'MATH101', name: 'Introduction to Mathematics', grade: '78,40' },
     { courseId: 102, code: 'ECON100', name: 'Principles of Economics (BE)', grade: '91,00' },

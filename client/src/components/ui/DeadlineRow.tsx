@@ -25,8 +25,8 @@ export function DeadlineRow({ d, onOpen, onCheck, phase = null }: {
   const late = due.getTime() < now().getTime() && !a.isCompleted;
   const k = dayKey(due);
   const when = a.type === 'event' ? hm(due) : `${tr('до', 'by')} ${hm(due)}`;
-  // Handed in (from Moodle's receipt): said quietly in the caption, in green
-  const submitted = a.submittedAt ? `${tr('здано', 'submitted')} ✓ ${hm(a.submittedAt)}` : null;
+  // Handed in (from Moodle's receipt, or Moodle itself; a quiz is "taken"): said quietly in the caption, in green
+  const submitted = a.submittedAt ? `${a.type === 'quiz' ? tr('пройдено', 'taken') : tr('здано', 'submitted')} ✓ ${hm(a.submittedAt)}` : null;
   // While completing, the circle and the strike are animated by .dl-wrap--completing, not switched on at once
   const done = !!a.isCompleted;
 

@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Bell, BookCheck, BookOpen, CheckCheck, ChevronDown, ChevronRight, Link2 } from 'lucide-react';
 import { DoneToast, Tick, useAutoDone, useDoneFlow, type DoneVia } from '../../ui/doneFlow';
 import { Glow } from '../../ui/Glow';
 import { RemindSheet, shortWhen } from '../../ui/RemindSheet';
 import { api, track } from '../../../api/client';
-import type { DeadlineWithCourse } from '../../../types';
+import type { DeadlineWithCourse, MoodleExtra } from '../../../types';
 import { addDays, dayKey, dayTitle, hm, mondayOf, now, plural, spanText, todayKey } from '../../../lib/time';
 import { cloud, haptic, openExternal, useMainButton } from '../../../lib/telegram';
 import { useAuthStore } from '../../../stores/authStore';
@@ -13,6 +13,7 @@ import { Sheet } from '../../ui/Sheet';
 import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from '../../ui/States';
 import { useCached } from '../../../lib/cache';
 import { MoodleConnectForm } from './MoodleConnect';
+import { MoodleGradesSheet } from '../grades/MoodleGradesSheet';
 import { AskPanel } from '../../ui/AskPanel';
 import { DeadlineRow } from '../../ui/DeadlineRow';
 import { tr } from '../../../lib/i18n';
@@ -99,7 +100,9 @@ export function DeadlinesPage() {
   if (!all) return <SkeletonRows rows={4} />;
   const stale = q.staleAt ? <StaleBanner at={q.staleAt} error={q.error} busy={q.loading} onRetry={q.refresh} /> : null;
 
-  if (!user?.calendarUrl && all.length === 0) {
+  // Connected to Moodle itself (owner-only test): no calendar link to add or change
+  const direct = !!user?.moodleConnected;
+  if (!user?.calendarUrl && !direct && all.length === 0) {
     return (
       <>
         {stale}
@@ -174,8 +177,10 @@ export function DeadlinesPage() {
       )}
 
       <p className="note" style={{ paddingTop: 16 }}>
-        {tr('З календаря Moodle, оновлюється кожні 10 хв.', 'From your Moodle calendar, refreshed every 10 min.')}{' '}
-        <button className="link-btn" style={{ padding: 0, fontSize: 13 }} onClick={() => setConnecting(true)}>{tr('Змінити посилання', 'Change link')}</button>
+        {direct ? tr('Напряму з Moodle, оновлюється кожні 15 хв.', 'Straight from Moodle, refreshed every 15 min.') : <>
+          {tr('З календаря Moodle, оновлюється кожні 10 хв.', 'From your Moodle calendar, refreshed every 10 min.')}{' '}
+          <button className="link-btn" style={{ padding: 0, fontSize: 13 }} onClick={() => setConnecting(true)}>{tr('Змінити посилання', 'Change link')}</button>
+        </>}
       </p>
 
       {opened && <DeadlineSheet d={opened} onClose={() => setOpenId(null)} onToggle={() => { toggle(opened.assignment.id); setOpenId(null); }} />}
@@ -188,6 +193,7 @@ export function DeadlinesPage() {
 
 function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClose: () => void; onToggle: () => void }) {
   const { assignment: a } = d;
+  const m = a.moodle;
   const due = new Date(a.dueDate!);
   const left = due.getTime() - now().getTime();
   const late = left < 0;
@@ -221,7 +227,7 @@ function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClos
     <Sheet onClose={onClose} label={a.title}>
       {a.isCompleted ? (
         <div className="sheet__label" style={a.submittedAt ? { color: 'var(--success)' } : undefined}>
-          {a.submittedAt ? `${tr('Здано', 'Submitted')} ✓ ${dayTitle(dayKey(new Date(a.submittedAt)))}, ${hm(a.submittedAt)}` : tr('Зроблено', 'Done')}
+          {a.submittedAt ? `${a.type === 'quiz' ? tr('Пройдено', 'Taken') : tr('Здано', 'Submitted')} ✓ ${dayTitle(dayKey(new Date(a.submittedAt)))}, ${hm(a.submittedAt)}` : tr('Зроблено', 'Done')}
         </div>
       ) : (
         <>
@@ -234,6 +240,14 @@ function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClos
 
       <div className="group" style={{ marginTop: 16 }}>
         <div className="row"><div className="row__main"><div className="row__title num cap-first" style={{ fontWeight: 500 }}>{dayTitle(dayKey(due))}, {hm(due)}</div><div className="row__meta">{typeLabel()[a.type] ?? tr('Завдання', 'Assignment')}</div></div></div>
+        {m && <MoodleFacts m={m} done={!!a.isCompleted} />}
+        {m?.grade && (
+          <button className="row press" disabled={!a.sourceUrl} onClick={() => { track('deadline.grade_open'); openExternal(a.sourceUrl!); }}>
+            <div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Оцінка', 'Grade')}</div></div>
+            <span className="row__value num">{m.grade}</span>
+            {a.sourceUrl && <ChevronRight className="chev" />}
+          </button>
+        )}
         {/^[A-Z]{2,6}\d{3}/.test(code ?? '') && (
           <button className="row press" onClick={() => { haptic.tap(); onClose(); useUi.getState().openCourse(code!.match(/^[A-Z]{2,6}\d{3}[A-Z]?/)![0]); }}>
             <BookOpen className="row-icon" strokeWidth={1.7} />
@@ -248,7 +262,7 @@ function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClos
             <ChevronRight className="chev" />
           </button>
         )}
-        {a.feedbackAt && (
+        {a.feedbackAt && !m?.grade && (
           <button className="row press" disabled={!a.sourceUrl} aria-label={tr('Відкрити відгук у Moodle', 'Open feedback in Moodle')}
             onClick={() => { track('deadline.feedback_open'); openExternal(a.sourceUrl!); }}>
             <div className="row__main">
@@ -271,7 +285,40 @@ function DeadlineSheet({ d, onClose, onToggle }: { d: DeadlineWithCourse; onClos
   );
 }
 
+/** What Moodle itself says beyond the date (owner-only test): extension, cut-off, quiz opening and attempts. */
+function MoodleFacts({ m, done }: { m: MoodleExtra; done: boolean }) {
+  // "Неділя, 1 листопада, 07:45", capitalised like the date row above
+  const when = (iso: string) => { const t = `${dayTitle(dayKey(new Date(iso)))}, ${hm(iso)}`; return t[0].toUpperCase() + t.slice(1); };
+  const opens = m.opensAt && new Date(m.opensAt).getTime() > now().getTime() ? m.opensAt : null;
+  const attempts = m.attemptsUsed !== undefined && m.attemptsAllowed !== undefined
+    ? (m.attemptsAllowed ? tr(`${m.attemptsUsed} з ${m.attemptsAllowed}`, `${m.attemptsUsed} of ${m.attemptsAllowed}`) : tr(`${m.attemptsUsed} · без обмежень`, `${m.attemptsUsed} · unlimited`))
+    : null;
+  return (
+    <>
+      {m.extendedFrom && <Fact label={tr('Продовжено', 'Extended')} meta={tr(`Було: ${when(m.extendedFrom)}`, `Was: ${when(m.extendedFrom)}`)} />}
+      {m.cutoff && !done && <Fact label={tr('Жорсткий дедлайн', 'Hard cut-off')} meta={tr(`${when(m.cutoff)} — після нього Moodle не прийме`, `${when(m.cutoff)}, Moodle takes nothing after it`)} />}
+      {opens && <Fact label={tr('Відкривається', 'Opens')} meta={when(opens)} />}
+      {attempts && <Fact label={tr('Спроби', 'Attempts')} value={attempts} />}
+    </>
+  );
+}
+
+function Fact({ label, meta, value }: { label: string; meta?: ReactNode; value?: ReactNode }) {
+  return (
+    <div className="row">
+      <div className="row__main">
+        <div className="row__title" style={{ fontWeight: 500 }}>{label}</div>
+        {meta && <div className="row__meta num">{meta}</div>}
+      </div>
+      {value && <span className="row__value num">{value}</span>}
+    </div>
+  );
+}
+
 function ConnectSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const user = useAuthStore((s) => s.user);
+  // Owner-only test: one Moodle connection brings grades and deadlines, no calendar link
+  if (user?.isAdmin) return <MoodleGradesSheet onClose={onSaved} />;
   return (
     <Sheet onClose={onClose} label={tr('Дедлайни з Moodle', 'Deadlines from Moodle')}>
       <div className="sheet__title">{tr('Дедлайни з Moodle', 'Deadlines from Moodle')}</div>
