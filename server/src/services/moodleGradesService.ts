@@ -4,7 +4,7 @@ import { googleAccounts, moodleAssignments, moodleCourses, moodleWsTokens, users
 import { AppError } from '../middleware/errorHandler.js';
 import { decrypt, encrypt, verifyState, windowState } from '../utils/crypto.js';
 import { MOODLE_URL, cleanGrade, courseCodeOf, launchUrl, parseLaunchLink } from '../utils/moodleToken.js';
-import { goneRows, toDeadline, type WsAssign, type WsAttempt, type WsDeadline, type WsEvent, type WsQuiz, type WsSubmissionStatus } from '../utils/moodleWs.js';
+import { courseByCode, courseMaterials, goneRows, toDeadline, type WsAssign, type WsCourse, type WsSection, type WsAttempt, type WsDeadline, type WsEvent, type WsQuiz, type WsSubmissionStatus } from '../utils/moodleWs.js';
 import { MoodleService } from './moodleService.js';
 import { AnalyticsService } from './analyticsService.js';
 
@@ -28,7 +28,7 @@ const passports = (userId: number) => [0, 1].map((back) => windowState(userId, P
 const READ_ONLY = [
   'core_webservice_get_site_info', 'core_enrol_get_users_courses', 'gradereport_overview_get_course_grades', 'gradereport_user_get_grade_items',
   'core_calendar_get_calendar_events', 'mod_assign_get_assignments', 'mod_assign_get_submission_status',
-  'mod_quiz_get_quizzes_by_courses', 'mod_quiz_get_user_attempts',
+  'mod_quiz_get_quizzes_by_courses', 'mod_quiz_get_user_attempts', 'core_course_get_contents',
 ] as const;
 type Fn = (typeof READ_ONLY)[number];
 export const isReadOnly = (fn: string): fn is Fn => (READ_ONLY as readonly string[]).includes(fn);
@@ -61,6 +61,28 @@ const STATUS_CALLS = 30;
 const STATUS_CONCURRENCY = 4;
 /** What the calendar link calls events outside any course (DeadlinesPage folds them away) */
 const GENERAL = 'General / University';
+
+/** Every graded item of one course with its grade, percentage and the teacher's feedback; the course total apart. */
+async function gradeItems(token: string, moodleUserId: number, courseId: number) {
+  const r = await ws<{ usergrades: { gradeitems: {
+    id: number; itemname: string | null; itemtype: string; gradeformatted?: string; percentageformatted?: string;
+    feedback?: string; gradedatesubmitted?: number | null; gradedategraded?: number | null;
+  }[] }[] }>(token, 'gradereport_user_get_grade_items', { courseid: courseId, userid: moodleUserId });
+  const items = r.usergrades[0]?.gradeitems ?? [];
+  // The user report writes "29.28" where the overview writes "29,28": one way in the app
+  const grade = (g: string | undefined) => cleanGrade(g)?.replace(/(\d)\.(\d)/g, '$1,$2') ?? null;
+  return {
+    total: grade(items.find((i) => i.itemtype === 'course')?.gradeformatted),
+    items: items.filter((i) => i.itemtype !== 'course' && i.itemtype !== 'category').map((i) => ({
+      id: i.id,
+      name: i.itemname ?? '',
+      grade: grade(i.gradeformatted),
+      percent: grade(i.percentageformatted),
+      feedback: cleanGrade(i.feedback),
+      gradedAt: i.gradedategraded ? new Date(i.gradedategraded * 1000).toISOString() : null,
+    })),
+  };
+}
 
 async function inBatches<T, R>(items: T[], size: number, fn: (item: T) => Promise<R>) {
   const out: R[] = [];
@@ -132,7 +154,7 @@ export class MoodleGradesService {
   static async overview(userId: number) {
     const out = await this.call(userId, async ({ token, moodleUserId }) => {
       const [courses, grades] = await Promise.all([
-        ws<{ id: number; shortname: string; fullname: string }[]>(token, 'core_enrol_get_users_courses', { userid: moodleUserId }),
+        ws<WsCourse[]>(token, 'core_enrol_get_users_courses', { userid: moodleUserId }),
         ws<{ grades: { courseid: number; grade: string; rawgrade: string | null }[] }>(token, 'gradereport_overview_get_course_grades', { userid: moodleUserId }),
       ]);
       const byId = new Map(grades.grades.map((g) => [g.courseid, g]));
@@ -141,6 +163,8 @@ export class MoodleGradesService {
         code: courseCodeOf(c.shortname, c.fullname),
         name: c.fullname,
         grade: cleanGrade(byId.get(c.id)?.grade),
+        // Moodle's end date passed: folded under «Минулі курси»
+        ended: !!c.enddate && c.enddate * 1000 < Date.now(),
       })).sort((a, b) => Number(!!b.grade) - Number(!!a.grade) || a.name.localeCompare(b.name));
     });
     if (!out) return { connected: false, courses: [], deadlinesSyncedAt: null };
@@ -263,26 +287,27 @@ export class MoodleGradesService {
 
   /** One course: every graded item with its grade, percentage and the teacher's feedback. */
   static async course(userId: number, courseId: number) {
-    const out = await this.call(userId, async ({ token, moodleUserId }) => {
-      const r = await ws<{ usergrades: { gradeitems: {
-        id: number; itemname: string | null; itemtype: string; gradeformatted?: string; percentageformatted?: string;
-        feedback?: string; gradedatesubmitted?: number | null; gradedategraded?: number | null;
-      }[] }[] }>(token, 'gradereport_user_get_grade_items', { courseid: courseId, userid: moodleUserId });
-      const items = r.usergrades[0]?.gradeitems ?? [];
-      return {
-        total: cleanGrade(items.find((i) => i.itemtype === 'course')?.gradeformatted),
-        items: items.filter((i) => i.itemtype !== 'course' && i.itemtype !== 'category').map((i) => ({
-          id: i.id,
-          name: i.itemname ?? '',
-          grade: cleanGrade(i.gradeformatted),
-          percent: cleanGrade(i.percentageformatted),
-          feedback: cleanGrade(i.feedback),
-          gradedAt: i.gradedategraded ? new Date(i.gradedategraded * 1000).toISOString() : null,
-        })),
-      };
-    });
+    const out = await this.call(userId, ({ token, moodleUserId }) => gradeItems(token, moodleUserId, courseId));
     if (!out) throw new AppError('Moodle відключено. Підключи ще раз.', 404);
     return out;
+  }
+
+  /** Навчання → Курси → a course: its grades with feedback and its materials, section by section. */
+  static async coursePage(userId: number, code: string) {
+    const out = await this.call(userId, async ({ token, moodleUserId }) => {
+      const course = courseByCode(await ws<WsCourse[]>(token, 'core_enrol_get_users_courses', { userid: moodleUserId }), code);
+      // Not in this student's Moodle: undefined, apart from null = not connected
+      if (!course) return undefined;
+      const [grades, contents] = await Promise.all([
+        gradeItems(token, moodleUserId, course.id),
+        // excludecontents: the outline without file lists, so no file URL (and no token) ever comes back
+        ws<WsSection[]>(token, 'core_course_get_contents', { courseid: course.id, 'options[0][name]': 'excludecontents', 'options[0][value]': 1 }),
+      ]);
+      return { courseId: course.id, name: course.fullname, url: `${MOODLE_URL}/course/view.php?id=${course.id}`, grades, sections: courseMaterials(contents) };
+    });
+    if (out === null) return { connected: false as const };
+    if (!out) throw new AppError('Цього курсу немає в твоєму Moodle', 404);
+    return { connected: true as const, ...out };
   }
 }
 

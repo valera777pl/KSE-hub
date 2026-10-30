@@ -34,7 +34,10 @@ export class CourseService {
     const deadlines = (await MoodleService.getDeadlines(userId, true))
       .filter(({ assignment: a, courseName }) => courseCodeIn(courseName) === code && a.dueDate
         && a.dueDate.getTime() > now.getTime() - 7 * DAY);
-    if (!mine.length && !deadlines.length) throw new AppError('Цього курсу немає в твоєму розкладі', 404);
+    // A Moodle course that isn't in the schedule (ENG111 has no classes there) still has a page
+    const moodleCourse = mine.length || deadlines.length ? null
+      : (await MoodleService.getUserCourses(userId)).find((c) => courseCodeIn(c.courseName) === code) ?? null;
+    if (!mine.length && !deadlines.length && !moodleCourse) throw new AppError('Цього курсу немає в твоєму розкладі', 404);
 
     const [link] = await db.select().from(courseLinks).where(eq(courseLinks.courseCode, code)).limit(1);
 
@@ -57,7 +60,7 @@ export class CourseService {
 
     return {
       code,
-      title: mine[0]?.title ?? deadlines[0]?.courseName?.replace(code, '').trim() ?? null,
+      title: mine[0]?.title ?? (deadlines[0]?.courseName ?? moodleCourse?.courseName)?.replace(code, '').trim() ?? null,
       sections: [...new Set(mine.map((c) => c.section).filter(Boolean))].sort(),
       nextClass,
       deadlines,

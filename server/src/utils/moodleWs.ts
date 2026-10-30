@@ -1,5 +1,5 @@
 import type { MoodleExtra } from '../db/schema.js';
-import { MOODLE_URL, cleanGrade } from './moodleToken.js';
+import { MOODLE_URL, cleanGrade, courseCodeOf } from './moodleToken.js';
 
 /*
  * Deadlines straight from Moodle through the student's own token (owner-only for now). Moodle's calendar
@@ -107,4 +107,36 @@ export function toDeadline(ev: WsEvent, ctx: { assign?: WsAssign; status?: WsSub
 export function goneRows<T extends { id: number; externalId: string | null; dueDate: Date | null }>(rows: T[], seen: Set<string>, now: Date) {
   if (!seen.size) return [];
   return rows.filter((r) => r.dueDate && r.dueDate > now && !seen.has(r.externalId ?? ''));
+}
+
+/* ─── The course page: the student's course by its code, and its materials section by section ─── */
+
+export type WsCourse = { id: number; shortname: string; fullname: string; enddate?: number };
+
+/** "MATH101" → the Moodle course whose short or full name carries that code (MATH101 is not MATH111) */
+export const courseByCode = <T extends WsCourse>(courses: T[], code: string) =>
+  courses.find((c) => courseCodeOf(c.shortname, c.fullname) === code) ?? null;
+
+export type WsModule = { id: number; name: string; modname: string; uservisible?: boolean; noviewlink?: boolean };
+export type WsSection = { id: number; name: string; section: number; uservisible?: boolean; modules: WsModule[] };
+export type Material = { id: number; name: string; kind: string; url: string };
+
+/** Teachers start names with emoji ("🧑‍🏫 (L) 01.10 Online"); the app shows the words */
+const stripLeadingEmoji = (s: string) => s.replace(/^[\p{Extended_Pictographic}\p{Emoji_Modifier}‍️\s]+/u, '').trim() || s.trim();
+
+/**
+ * Moodle's course outline → what the student can open: sections with their files, links, pages and activities.
+ * Text labels, things hidden from the student and empty sections are left out. Every link is the activity's
+ * own Moodle page (the student signs in there as usual): never a file URL with the token in it.
+ */
+export function courseMaterials(sections: WsSection[], wwwroot = MOODLE_URL) {
+  return sections
+    .filter((s) => s.uservisible !== false)
+    .map((s) => ({
+      name: s.name.trim(),
+      items: s.modules
+        .filter((m) => m.modname !== 'label' && m.uservisible !== false && !m.noviewlink)
+        .map((m): Material => ({ id: m.id, name: stripLeadingEmoji(m.name), kind: m.modname, url: `${wwwroot}/mod/${m.modname}/view.php?id=${m.id}` })),
+    }))
+    .filter((s) => s.items.length);
 }

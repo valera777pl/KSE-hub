@@ -83,6 +83,14 @@ moodleRoutes.get('/grades/:courseId', async (c) => {
   return c.json(await MoodleGradesService.course(user.id, id));
 });
 
+// GET /moodle/course/MATH101 — Навчання → Курси → the course: grades with feedback, materials by section
+moodleRoutes.get('/course/:code', async (c) => {
+  const user = adminOnly(c);
+  const code = c.req.param('code');
+  if (!/^[A-Z]{2,6}\d{3}[A-Z]?$/.test(code)) throw new AppError('Невідомий курс', 400);
+  return c.json(await MoodleGradesService.coursePage(user.id, code));
+});
+
 // DELETE /moodle/grades — forget the token
 moodleRoutes.delete('/grades', async (c) => c.json(await MoodleGradesService.disconnect(adminOnly(c).id)));
 
