@@ -11,13 +11,20 @@ import { AnalyticsService, CLIENT_EVENTS, cleanProps } from '../services/analyti
 import { AppError } from '../middleware/errorHandler.js';
 import { FriendService } from '../services/friendService.js';
 import { PinnedService } from '../services/pinnedService.js';
+import { MoodleGradesService } from '../services/moodleGradesService.js';
 
 const userRoutes = new Hono();
+
+/** The profile as the app sees it: plus whether Moodle itself is connected (owner-only test, always false for students) */
+const withMoodle = async (user: typeof users.$inferSelect) => ({
+  ...user,
+  moodleConnected: user.isAdmin ? await MoodleGradesService.isConnected(user.id) : false,
+});
 
 // GET /users/me — Get current user profile
 userRoutes.get('/me', async (c) => {
   const user = c.get('dbUser');
-  return c.json({ user });
+  return c.json({ user: await withMoodle(user) });
 });
 
 // PATCH /users/me — Update profile
@@ -41,7 +48,7 @@ userRoutes.patch('/me', async (c) => {
     AnalyticsService.track(currentUser.id, 'pinned.set', { kind: data.pinnedKind });
     await PinnedService.refresh(updated).catch((err) => console.error('Pinned message failed:', err));
   }
-  return c.json({ user: updated });
+  return c.json({ user: await withMoodle(updated) });
 });
 
 // POST /users/me/onboarding — finish sign-up; requires a connected KSE mail
@@ -59,7 +66,7 @@ userRoutes.post('/me/onboarding', async (c) => {
     const hour = kyivHour();
     await PushService.send(user, 'onboarding', onboardedText(user.languagePref === 'en' ? 'en' : 'uk', user.digestHour, hour), appButton(user.languagePref === 'en' ? 'Open KSE Hub' : 'Відкрити KSE Hub', 'today', 'onboarding'));
   }
-  return c.json({ user: updated });
+  return c.json({ user: await withMoodle(updated) });
 });
 
 // POST /users/me/events — the mini app reports screen views ({ event: "tab.view", props: { tab: "schedule" } })

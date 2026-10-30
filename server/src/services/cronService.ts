@@ -1,9 +1,10 @@
 import { db } from '../db/connection.js';
-import { bookings, chatMessages, classReminders, deadlineReminders, googleAccounts, moodleAssignments, moodleCourses, opportunities, rooms, savedOpportunities, users } from '../db/schema.js';
+import { bookings, chatMessages, classReminders, deadlineReminders, googleAccounts, moodleAssignments, moodleCourses, moodleWsTokens, opportunities, rooms, savedOpportunities, users } from '../db/schema.js';
 import { InlineKeyboard } from 'grammy';
 import { BookingService, EXTEND_MINUTES, extendBlocker } from './bookingService.js';
-import { and, asc, eq, gt, gte, isNotNull, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, isNotNull, isNull, lt, lte, ne, notExists, or, sql } from 'drizzle-orm';
 import { MoodleService } from './moodleService.js';
+import { MoodleGradesService } from './moodleGradesService.js';
 import { DigestService } from './digestService.js';
 import { GmailService } from './gmailService.js';
 import { AnalyticsService } from './analyticsService.js';
@@ -37,6 +38,7 @@ const GMAIL_CONCURRENCY = 3;
 export class CronService {
   static async tick() {
     const calendars = await this.syncCalendars();
+    const moodle = await MoodleGradesService.syncDueDeadlines().catch((err) => { console.error('Moodle deadlines failed:', err); return 0; });
     const emails = await this.syncGmail();
     const google = !!process.env.GOOGLE_CLIENT_ID;
     const schedules = google ? await ScheduleService.syncDueAccounts() : 0;
@@ -51,7 +53,7 @@ export class CronService {
     const ownReminders = await ReminderService.sendDue();
     const pinned = await PinnedService.tick();
     const cleaned = await this.cleanup();
-    return { calendars, emails, schedules, courseCalendars, classReminders, reminders, digests, slackDigests, weekly, savedOpps, bookingEnds, ownReminders, pinned, cleaned };
+    return { calendars, moodle, emails, schedules, courseCalendars, classReminders, reminders, digests, slackDigests, weekly, savedOpps, bookingEnds, ownReminders, pinned, cleaned };
   }
 
   /**
@@ -122,7 +124,7 @@ export class CronService {
     return stored;
   }
 
-  /** Re-sync the Moodle calendars that are the most out of date. */
+  /** Re-sync the Moodle calendars that are the most out of date. Students connected through Moodle itself don't need the link. */
   static async syncCalendars() {
     const staleBefore = new Date(Date.now() - CALENDAR_SYNC_EVERY);
     const due = await db
@@ -132,7 +134,8 @@ export class CronService {
         and(
           isNotNull(users.calendarUrl),
           eq(users.botBlocked, false),
-          or(isNull(users.calendarSyncedAt), lt(users.calendarSyncedAt, staleBefore))
+          or(isNull(users.calendarSyncedAt), lt(users.calendarSyncedAt, staleBefore)),
+          notExists(db.select({ one: sql`1` }).from(moodleWsTokens).where(eq(moodleWsTokens.userId, users.id)))
         )
       )
       .orderBy(sql`${users.calendarSyncedAt} asc nulls first`)

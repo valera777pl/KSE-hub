@@ -280,6 +280,21 @@ export const moodleCourses = pgTable('moodle_courses', {
   syncedAt: timestamp('synced_at').defaultNow(),
 });
 
+/** What Moodle itself says about a deadline, beyond its date. Dates are ISO strings. */
+export type MoodleExtra = {
+  /** Assignment: after this Moodle takes nothing */
+  cutoff?: string | null;
+  /** Assignment: the due date before the student's extension (the row's due date is the extension) */
+  extendedFrom?: string | null;
+  /** Quiz */
+  opensAt?: string | null;
+  attemptsUsed?: number;
+  /** 0 = unlimited */
+  attemptsAllowed?: number;
+  /** "17,5 / 20", as Moodle shows it to the student */
+  grade?: string | null;
+};
+
 export const moodleAssignments = pgTable('moodle_assignments', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -297,6 +312,8 @@ export const moodleAssignments = pgTable('moodle_assignments', {
   // 010: from Moodle's receipt and feedback emails
   submittedAt: timestamp('submitted_at'),
   feedbackAt: timestamp('feedback_at'),
+  // 020: read through the student's own Moodle token (utils/moodleWs.ts); null for calendar-only rows
+  moodle: jsonb('moodle').$type<MoodleExtra>(),
 }, (table) => [
   index('assignments_user_due_idx').on(table.userId, table.dueDate),
 ]);
@@ -619,4 +636,6 @@ export const moodleWsTokens = pgTable('moodle_ws_tokens', {
   moodleUserId: integer('moodle_user_id').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   lastOkAt: timestamp('last_ok_at'),
+  // 020: deadlines read through this token
+  deadlinesSyncedAt: timestamp('deadlines_synced_at'),
 });
