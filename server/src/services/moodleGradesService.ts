@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { googleAccounts, moodleWsTokens } from '../db/schema.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { decrypt, encrypt, signState, verifyState } from '../utils/crypto.js';
+import { decrypt, encrypt, verifyState, windowState } from '../utils/crypto.js';
 import { MOODLE_URL, cleanGrade, courseCodeOf, launchUrl, parseLaunchLink } from '../utils/moodleToken.js';
 
 /*
@@ -11,6 +11,13 @@ import { MOODLE_URL, cleanGrade, courseCodeOf, launchUrl, parseLaunchLink } from
  */
 
 const PASSPORT_PURPOSE = 'moodle-passport';
+/** A sign-in started in this window or the one before still fits: 30–60 minutes to copy the link */
+const PASSPORT_WINDOW = 30 * 60;
+/**
+ * Moodle's passport for this student, recomputed by the server rather than kept by the app: Telegram may reload
+ * the mini app while the student is in the browser, and anything kept there is gone.
+ */
+const passports = (userId: number) => [0, 1].map((back) => windowState(userId, PASSPORT_WINDOW, PASSPORT_PURPOSE, back));
 /** These and nothing else: reading the student's own courses and grades */
 const READ_ONLY = ['core_webservice_get_site_info', 'core_enrol_get_users_courses', 'gradereport_overview_get_course_grades', 'gradereport_user_get_grade_items'] as const;
 type Fn = (typeof READ_ONLY)[number];
@@ -37,18 +44,19 @@ type SiteInfo = { userid: number; username: string; fullname: string; siteurl: s
 export class MoodleGradesService {
   /** The sign-in page link, with a passport tied to this student for 30 minutes. */
   static start(userId: number) {
-    const passport = signState(userId, 30 * 60, PASSPORT_PURPOSE);
-    return { url: launchUrl(passport), passport };
+    return { url: launchUrl(passports(userId)[0]) };
   }
 
   /** The link the student copied → a checked token: right site, right person, then stored encrypted. */
-  static async connect(userId: number, link: string, passport: string) {
-    if (verifyState(passport, PASSPORT_PURPOSE) !== userId) throw new AppError('Посилання застаріло. Відкрий Moodle ще раз із KSE Hub.', 400);
-    const parsed = parseLaunchLink(link, passport);
+  static async connect(userId: number, link: string, legacyPassport?: string) {
+    // This student's passports for now and the window before; an older app may still send the one it kept
+    const candidates = [...passports(userId), ...(legacyPassport && verifyState(legacyPassport, PASSPORT_PURPOSE) === userId ? [legacyPassport] : [])];
+    const results = candidates.map((p) => parseLaunchLink(link, p));
+    const parsed = results.find((r) => 'token' in r) ?? results[0];
     if ('error' in parsed) {
       throw new AppError(parsed.error === 'other_site'
-        ? 'Це посилання не з того входу. Відкрий Moodle ще раз саме з KSE Hub.'
-        : 'Не бачу токена в посиланні. Скопіюй посилання «Відкрити в застосунку» цілком.', 400);
+        ? 'Посилання з іншого входу або вже застаріло. Натисни «Відкрити Moodle» ще раз і скопіюй нове.'
+        : 'Не бачу токена в посиланні. Скопіюй посилання «Натисніть тут…» цілком.', 400);
     }
     const info = await ws<SiteInfo>(parsed.token, 'core_webservice_get_site_info').catch(() => {
       throw new AppError('Moodle не прийняв цей вхід. Спробуй ще раз.', 400);

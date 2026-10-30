@@ -9,7 +9,6 @@ import { EmptyState } from '../../ui/States';
 type Course = { courseId: number; code: string | null; name: string; grade: string | null };
 type Item = { id: number; name: string; grade: string | null; percent: string | null; feedback: string | null; gradedAt: string | null };
 
-const PASSPORT_KEY = 'kse_moodle_passport';
 const looksLikeLink = (s: string) => /token=[A-Za-z0-9+/=_-]{20,}/.test(s);
 
 /**
@@ -60,25 +59,20 @@ function Connect({ onDone }: { onDone: () => void }) {
     return () => document.removeEventListener('visibilitychange', onBack);
   }, []);
 
+  // The server knows this student's sign-in passport itself: nothing to keep while they're in the browser
   const openMoodle = async () => {
     setError(null);
     try {
-      const { url, passport } = await api.get<{ url: string; passport: string }>('/moodle/grades/start');
-      try { sessionStorage.setItem(PASSPORT_KEY, passport); } catch { /* kept in memory below */ }
-      (window as unknown as { __moodlePassport?: string }).__moodlePassport = passport;
+      const { url } = await api.get<{ url: string }>('/moodle/grades/start');
       openExternal(url);
     } catch (e) { haptic.error(); setError(errorText(e)); }
   };
 
   const connect = async () => {
-    let passport: string | null = null;
-    try { passport = sessionStorage.getItem(PASSPORT_KEY); } catch { /* storage blocked */ }
-    passport ??= (window as unknown as { __moodlePassport?: string }).__moodlePassport ?? null;
-    if (!passport) { setError(tr('Спершу відкрий Moodle кнопкою нижче.', 'Open Moodle with the button below first.')); return; }
     setBusy(true);
     setError(null);
     try {
-      await api.post('/moodle/grades/connect', { link: link.trim(), passport });
+      await api.post('/moodle/grades/connect', { link: link.trim() });
       haptic.success();
       onDone();
     } catch (e) { haptic.error(); setError(errorText(e)); }

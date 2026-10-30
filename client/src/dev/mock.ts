@@ -393,7 +393,7 @@ const routes: [string, RegExp, Handler][] = [
   }],
   ['DELETE', /^\/friends\/(\d+)$/, (m) => { FRIENDS.friends = FRIENDS.friends.filter((f) => f.userId !== Number(m[1])); return { ok: true }; }],
   ['GET', /^\/admin\/analytics$/, (_m, url) => adminAnalytics(Number(url.searchParams.get('days')) || 7)],
-  ['GET', /^\/moodle\/grades\/start$/, () => ({ url: 'https://teaching.kse.org.ua/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=mock&confirmed=1', passport: 'mock' })],
+  ['GET', /^\/moodle\/grades\/start$/, () => ({ url: 'https://teaching.kse.org.ua/admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=mock&confirmed=1&oauthsso=2' })],
   ['POST', /^\/moodle\/grades\/connect$/, () => { GRADES.connected = true; return { connected: true, name: 'Valerii Pletmintsev' }; }],
   ['DELETE', /^\/moodle\/grades$/, () => { GRADES.connected = false; return { connected: false }; }],
   ['GET', /^\/moodle\/grades$/, () => (q.get('grades') === '1' || GRADES.connected ? { connected: true, courses: GRADES.courses } : { connected: false, courses: [] })],

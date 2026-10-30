@@ -48,3 +48,12 @@ test('grades are owner-only for now', async () => {
   const { default: app } = await import('../index.js');
   assert.equal((await app.request('/api/moodle/grades')).status, 401);
 });
+
+test('the passport is recomputed by the server, so the app keeps nothing between Moodle and back', async () => {
+  process.env.TOKEN_ENC_KEY ??= 'a'.repeat(64);
+  const { windowState } = await import('../utils/crypto.js');
+  const now = windowState(7, 1800, 'moodle-passport');
+  assert.equal(windowState(7, 1800, 'moodle-passport'), now, 'same within the window');
+  assert.notEqual(windowState(8, 1800, 'moodle-passport'), now, 'another student, another passport');
+  assert.notEqual(windowState(7, 1800, 'moodle-passport', 1), now, 'the previous window differs');
+});

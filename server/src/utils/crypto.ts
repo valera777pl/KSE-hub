@@ -47,6 +47,16 @@ export function verifyState(state: string, purpose = 'oauth'): number | null {
 }
 
 /**
+ * The same signed state for anyone who asks within one time window, so nobody has to keep it: the server
+ * recomputes it. `windowsBack` = 1 is the previous window (a sign-in that started just before the turn).
+ */
+export function windowState(userId: number, windowSeconds: number, purpose: string, windowsBack = 0): string {
+  const end = (Math.floor(Date.now() / 1000 / windowSeconds) + 1 - windowsBack) * windowSeconds;
+  const body = `${userId}.${end}`;
+  return `${body}.${createHmac('sha256', key()).update(`${purpose}:${body}`).digest('base64url')}`;
+}
+
+/**
  * Short code for an invite link, t.me/<bot>?start=inv_<code> (Telegram allows 64 chars of [A-Za-z0-9_-]).
  * Signed, so nobody can claim to have been invited by someone else; doesn't expire.
  */

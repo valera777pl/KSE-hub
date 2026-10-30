@@ -62,7 +62,7 @@ const adminOnly = (c: Context) => {
   if (!user.isAdmin) throw new AppError('Поки що це тест і він вимкнений', 403);
   return user;
 };
-const connectSchema = z.object({ link: z.string().min(10).max(4000), passport: z.string().min(10).max(500) });
+const connectSchema = z.object({ link: z.string().min(10).max(4000), passport: z.string().max(500).optional() });
 
 // GET /moodle/grades/start — Moodle's sign-in page link for this student
 moodleRoutes.get('/grades/start', (c) => c.json(MoodleGradesService.start(adminOnly(c).id)));
