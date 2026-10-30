@@ -9,9 +9,16 @@ import { createHash } from 'crypto';
 
 export const MOODLE_URL = 'https://teaching.kse.org.ua';
 
-/** The page that hands out the student's own token after they sign in; `confirmed=1` shows the link instead of jumping. */
+/** KSE Moodle's Google sign-in (identityproviders in tool_mobile_get_public_config: auth/oauth2/login.php?id=2) */
+export const MOODLE_GOOGLE_ISSUER = 2;
+
+/**
+ * The page that hands out the student's own token after they sign in; `confirmed=1` shows the link instead of jumping.
+ * `oauthsso` sends them through the Google sign-in first: KSE Moodle gives a token only right after a sign-in
+ * ("Плагін не ввімкнено або не налаштовано" for an already open session).
+ */
 export function launchUrl(passport: string, wwwroot = MOODLE_URL) {
-  const q = new URLSearchParams({ service: 'moodle_mobile_app', passport, urlscheme: 'moodlemobile', confirmed: '1' });
+  const q = new URLSearchParams({ service: 'moodle_mobile_app', passport, urlscheme: 'moodlemobile', confirmed: '1', oauthsso: String(MOODLE_GOOGLE_ISSUER) });
   return `${wwwroot}/admin/tool/mobile/launch.php?${q}`;
 }
 

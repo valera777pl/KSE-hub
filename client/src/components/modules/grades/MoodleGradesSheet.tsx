@@ -92,7 +92,7 @@ function Connect({ onDone }: { onDone: () => void }) {
     <>
       <ol className="group steps" style={{ marginTop: 16 }}>
         <li className="row"><span className="steps__n">1</span><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('«Відкрити Moodle» — увійди через пошту KSE', '“Open Moodle” — sign in with your KSE mail')}</div></div></li>
-        <li className="row"><span className="steps__n">2</span><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('На сторінці буде посилання «Відкрити в застосунку». Натисни й утримуй → «Скопіювати»', 'The page shows an “open in the app” link. Press and hold → Copy')}</div></div></li>
+        <li className="row"><span className="steps__n">2</span><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Внизу посилання «Натисніть тут, якщо додаток не відкривається…» — не тисни його, а утримуй → «Скопіювати»', 'At the bottom: «Натисніть тут, якщо додаток не відкривається…». Don\'t tap it — press and hold → Copy')}</div></div></li>
         <li className="row"><span className="steps__n">3</span><div className="row__main"><div className="row__title" style={{ fontWeight: 500 }}>{tr('Повернись сюди — вставимо самі', 'Come back here — we\'ll paste it')}</div></div></li>
       </ol>
       <input className="field" style={{ marginTop: 12 }} value={link} onChange={(e) => setLink(e.target.value)}
