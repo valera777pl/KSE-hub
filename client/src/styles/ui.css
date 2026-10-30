@@ -19,6 +19,9 @@ body { font-family: var(--font-family); font-size: 15px; line-height: 1.4; }
 /* Three titles next to the avatar fit a 375 px phone only a little smaller: 22 px there, 26 px at 430 */
 .title-tabs--3 { gap: 14px; }
 .title-tabs--3 .title-tab { font-size: clamp(20px, 6vw, 28px); }
+/* Four (the owner's «Курси» test): 18 px on a 375 px phone, 22 px at 430 */
+.title-tabs--4 { gap: 12px; }
+.title-tabs--4 .title-tab { font-size: clamp(17px, 5vw, 24px); }
 .title-tab { color: var(--title-inactive); padding: 6px 0; min-height: 44px; transition: color 150ms var(--ease); }
 .fade-in { animation: fade 150ms var(--ease); }
 .title-tab[aria-selected='true'] { color: var(--text); }
@@ -722,3 +725,17 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 14px; resize: non
   .dl-wrap--completing, .dl-wrap--entering, .dl-wrap--completing .done-check path, .dl-wrap--completing .dl__title, .tick, .toast { animation: none; }
 }
 
+
+/* Course page → Moodle (owner's test): grades with feedback, materials section by section */
+.clamp3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.course-grade { align-items: flex-start; text-align: left; }
+.course-grade__value { font-weight: 600; color: var(--text); padding-top: 1px; }
+.course-grade__value.grades__none { font-weight: 400; color: var(--text-tertiary); }
+.course-grade__feedback { margin-top: 4px; line-height: 1.4; white-space: pre-line; }
+.course-grade__total { font-weight: 600; color: var(--text); }
+.course-mats + .course-mats { border-top: 0.5px solid var(--separator); margin-left: 16px; }
+.course-mats + .course-mats > .row:first-child { padding-left: 0; }
+.course-mats__chev { transition: transform 200ms var(--ease); }
+.course-mats .row[aria-expanded='true'] .course-mats__chev { transform: rotate(180deg); }
+.course-mats__item { padding-left: 32px; }
+.course-mats__item .row__title { font-weight: 400; }

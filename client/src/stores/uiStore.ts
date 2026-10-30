@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { ClassEvent, TabId } from '../types';
 
 export type OppsView = 'forYou' | 'events' | 'startups' | 'people';
-export type StudyView = 'schedule' | 'deadlines' | 'slack';
+export type StudyView = 'schedule' | 'deadlines' | 'courses' | 'slack';
 
 /** App-level navigation: which tab is open and what a deep link asked for. */
 interface UiState {
